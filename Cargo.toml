@@ -1,0 +1,16 @@
+[package]
+name = "railmap"
+version = "0.1.0"
+authors = ["Martin Hoffmann <hn@nvnc.de>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cairo-rs = { version = "0.8.1", features = ["png", "svg"] }
+hyper =   "0.13"
+tokio = { version = "0.2", features = ["macros"] }
+
+[[bin]]
+name = "railmap"
+doc = false
