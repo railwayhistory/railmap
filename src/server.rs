@@ -1,16 +1,33 @@
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::path::Path;
+use std::sync::Arc;
 use hyper::{Body, Request, Response};
 use hyper::service::{make_service_fn, service_fn};
+use crate::feature::FeatureSet;
 use crate::tile::{Tile, TileId};
+use crate::path::PathSet;
 
 #[derive(Clone)]
-pub struct Server;
+pub struct Server {
+    features: Arc<FeatureSet>,
+}
 
 
 impl Server {
-    pub fn new() -> Server {
-        Server
+    pub fn new(
+        path_dir: impl AsRef<Path>,
+        _feature_dir: impl AsRef<Path>,
+    ) -> Result<Server, Failed> {
+        let paths = match PathSet::load(path_dir) {
+            Ok(paths) => paths,
+            Err(err) => {
+                eprintln!("{}", err);
+                return Err(Failed)
+            }
+        };
+        let features = Arc::new(FeatureSet::load(&paths));
+        Ok(Server { features })
     }
 
     pub async fn run(&self, addr: SocketAddr) {
@@ -39,8 +56,10 @@ impl Server {
     ) -> Result<Response<Body>, Infallible> {
         if request.uri().path() == "/" {
             return Ok(Response::builder()
-                .header("Contet-Type", "text/html")
-                .body(Body::from(include_bytes!("../html/index.html").as_ref()))
+                .header("Content-Type", "text/html")
+                .body(From::<&'static [u8]>::from(
+                        include_bytes!("../html/index.html").as_ref()
+                ))
                 .unwrap()
             )
         }
@@ -63,8 +82,11 @@ impl Server {
         let tile = Tile::new(tile);
         Response::builder()
             .header("Content-Type", tile.content_type())
-            .body(tile.into_body())
+            .body(tile.render(&self.features))
             .unwrap()
     }
 }
+
+
+pub struct Failed;
 

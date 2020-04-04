@@ -1,6 +1,8 @@
 use std::{fmt, ops};
 use std::str::FromStr;
+use std::f64::consts::PI;
 use hyper::Body;
+use crate::feature::FeatureSet;
 
 /// The maximum zoom level we support.
 ///
@@ -26,16 +28,22 @@ impl Tile {
         }
     }
 
-    pub fn into_body(self) -> Body {
+    pub fn render(&self, features: &FeatureSet) -> Body {
         let surface = Surface::new(self.id.format);
-        self.render(&surface);
+        self.render_surface(&surface, features);
         surface.into_body()
     }
 
-    fn render(&self, surface: &cairo::Surface) {
+    fn render_surface(
+        &self, surface: &cairo::Surface, features: &FeatureSet
+    ) {
         let context = cairo::Context::new(surface);
-        context.set_source_rgba(1., 0., 0., 0.2);
-        context.paint();
+
+        for feature in features.locate(
+            self.id.zoom, self.id.lon(), self.id.lat()
+        ) {
+            feature.render(&context, &self.id);
+        }
     }
 }
 
@@ -104,6 +112,51 @@ impl TileId {
     /// Any coordinate must be less (!) than this value.
     fn coord_end(zoom: u8) -> u32 {
         1 << usize::from(zoom)
+    }
+
+    fn n(&self) -> f64 {
+        f64::from(Self::coord_end(self.zoom))
+    }
+
+    fn _lon(n: f64, x: f64) -> f64 {
+        x / n * 360.0 - 180.0
+    }
+
+    pub fn w_lon(&self) -> f64 {
+        Self::_lon(self.n(), f64::from(self.x))
+    }
+
+    pub fn lon(&self) -> [f64; 2] {
+        [
+            Self::_lon(self.n(), f64::from(self.x)),
+            Self::_lon(self.n(), f64::from(self.x + 1))
+        ]
+    }
+
+    fn _lat(n: f64, y: f64) -> f64 {
+        (PI * (1. - 2. * y / n)).sinh().atan().to_degrees()
+    }
+
+    pub fn n_lat(&self) -> f64 {
+        Self::_lat(self.n(), f64::from(self.y))
+    }
+
+    pub fn lat(&self) -> [f64; 2] {
+        [
+            Self::_lat(self.n(), f64::from(self.y)),
+            Self::_lat(self.n(), f64::from(self.y + 1))
+        ]
+    }
+
+    pub fn proj(&self, lon: f64, lat: f64) -> (f64, f64) {
+        // Naive implementation: scale up the non-integer tile number.
+        (
+            (((lon + 180.) / 360. * self.n()) - f64::from(self.x))
+                * 512.,
+            ((1.0 - lat.to_radians().tan().asinh() / PI) / 2.0 * self.n()
+                - f64::from(self.y))
+                * 512.
+        )
     }
 }
 
