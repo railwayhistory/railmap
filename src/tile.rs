@@ -2,6 +2,7 @@ use std::{fmt, ops};
 use std::str::FromStr;
 use std::f64::consts::PI;
 use hyper::Body;
+use kurbo::Vec2;
 use crate::feature::FeatureSet;
 
 /// The maximum zoom level we support.
@@ -148,9 +149,9 @@ impl TileId {
         ]
     }
 
-    pub fn proj(&self, lon: f64, lat: f64) -> (f64, f64) {
+    pub fn proj(&self, (lon, lat): (f64, f64)) -> Vec2 {
         // Naive implementation: scale up the non-integer tile number.
-        (
+        Vec2::new(
             (((lon + 180.) / 360. * self.n()) - f64::from(self.x))
                 * 512.,
             ((1.0 - lat.to_radians().tan().asinh() / PI) / 2.0 * self.n()

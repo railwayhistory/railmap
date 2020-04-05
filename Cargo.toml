@@ -10,6 +10,7 @@ edition = "2018"
 cairo-rs = { version = "0.8.1", features = ["png", "svg"] }
 hyper =   "0.13"
 ignore = "0.4.14"
+kurbo = "0.5.11"
 osmxml = { git = "https://github.com/partim/osmxml.git" }
 rstar = "0.7.1"
 tokio = { version = "0.2", features = ["macros"] }

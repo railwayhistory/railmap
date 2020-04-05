@@ -1,7 +1,9 @@
 /// Features are things that should be shown on the map.
 use std::sync::Arc;
 use rstar::{AABB, RTree, RTreeObject};
+use crate::mp_path;
 use crate::path::{Path, PathSet};
+//use crate::render::Curve;
 use crate::tile::TileId;
 
 //------------ FeatureSet ----------------------------------------------------
@@ -63,20 +65,9 @@ impl Feature {
     }
 
     pub fn render(&self, context: &cairo::Context, tile: &TileId) {
-        let mut nodes = self.path.nodes().iter();
-
-        let first = match nodes.next() {
-            Some(node) => node,
-            None => return
-        };
-        let (x, y) = tile.proj(first.lon, first.lat);
-        context.move_to(x, y);
-
-        for node in nodes {
-            let (x, y) = tile.proj(node.lon, node.lat);
-            context.line_to(x, y);
-        }
-
+        context.set_source_rgb(0., 0., 0.);
+        // Curve::new(&self.path, tile).apply(context);
+        mp_path::render(&self.path, context, tile);
         context.stroke();
     }
 }

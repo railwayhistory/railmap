@@ -22,9 +22,11 @@
       var map = new ol.Map({
         target: 'map',
         layers: [
+          /*
           new ol.layer.Tile({
             source: new ol.source.OSM()
           }),
+          */
           new ol.layer.Tile({
             source: new ol.source.OSM({
               url: "/{z}/{x}/{y}.png",
@@ -33,8 +35,8 @@
           })
         ],
         view: new ol.View({
-          center: ol.proj.fromLonLat([8.82, 47.41]),
-          zoom: 6
+          center: ol.proj.fromLonLat([9.4014, 54.7613]),
+          zoom: 15
         }),
       });
     </script>

@@ -110,6 +110,18 @@ impl Path {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+
+    pub fn node(&self, i: usize) -> &Node {
+        &self.nodes[i]
+    }
+
     pub fn nodes(&self) -> &[Node] {
         &self.nodes
     }
@@ -276,6 +288,10 @@ pub struct Node {
 impl Node {
     pub fn new(lon: f64, lat: f64, pre: f64, post: f64) -> Self {
         Node { lon, lat, pre, post }
+    }
+
+    pub fn lonlat(&self) -> (f64, f64) {
+        (self.lon, self.lat)
     }
 }
 
