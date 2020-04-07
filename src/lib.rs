@@ -1,5 +1,9 @@
 pub use self::server::Server;
 
+pub mod canvas;
+
+//--- Old stuff
+
 pub mod feature;
 pub mod path;
 pub mod render;

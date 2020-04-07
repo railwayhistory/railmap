@@ -1,13 +1,17 @@
 use std::{fmt, io, mem, path};
 use std::collections::{HashMap, HashSet};
 use std::f64::INFINITY;
+use std::f64::consts::PI;
 use std::fs::File;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use ignore::{WalkBuilder, WalkState};
 use ignore::types::TypesBuilder;
+use kurbo::Vec2;
 use osmxml::elements::{MemberType, Osm, Relation};
 use osmxml::read::read_xml;
+use crate::mp_path;
+use crate::render::Curve;
 
 
 //------------ PathSet -------------------------------------------------------
@@ -98,6 +102,7 @@ impl PathSet {
 pub struct Path {
     name: Option<String>,
     nodes: Vec<Node>,
+    curve: Option<Curve>,
     node_names: Vec<(String, usize)>,
 }
 
@@ -106,6 +111,7 @@ impl Path {
         Path {
             name: None,
             nodes: Vec::new(),
+            curve: None,
             node_names: Vec::new(),
         }
     }
@@ -124,6 +130,10 @@ impl Path {
 
     pub fn nodes(&self) -> &[Node] {
         &self.nodes
+    }
+
+    pub fn curve(&self) -> &Curve {
+        self.curve.as_ref().unwrap()
     }
 }
 
@@ -150,6 +160,8 @@ impl Path {
         path.load_nodes(&mut relation, osm, &mut err);
 
         err.check()?;
+
+        path.create_curve();
         Ok((key, path))
     }
 
@@ -272,6 +284,18 @@ impl Path {
             have_post
         )
     }
+
+    fn create_curve(&mut self) {
+        let segment = mp_path::Segment::from_vec(
+            self.nodes().iter().map(|node| {
+                mp_path::Knot::new(
+                    node.normalized(),
+                    node.pre, node.post
+                )
+            }).collect()
+        );
+        self.curve = Some(segment.to_curve())
+    }
 }
 
 
@@ -292,6 +316,13 @@ impl Node {
 
     pub fn lonlat(&self) -> (f64, f64) {
         (self.lon, self.lat)
+    }
+
+    pub fn normalized(&self) -> Vec2 {
+        Vec2::new(
+            (self.lon + 180.) / 360.,
+            (1.0 - self.lat.to_radians().tan().asinh() / PI) / 2.0
+        )
     }
 }
 

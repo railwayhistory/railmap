@@ -1,29 +1,6 @@
 use std::f64::consts::SQRT_2;
-use kurbo::{BezPath, PathEl, Vec2};
-use crate::path::Path;
-use crate::tile::TileId;
-
-
-pub fn render(path: &Path, context: &cairo::Context, tile: &TileId) {
-    let segment = Segment::from_vec(
-        path.nodes().iter().map(|node| {
-            Knot::new(
-                tile.proj((node.lon, node.lat)),
-                node.pre, node.post
-            )
-        }).collect()
-    );
-    let bez = segment.to_bez_path();
-    for el in bez.iter() {
-        match el {
-            PathEl::MoveTo(ref pt) => context.move_to(pt.x, pt.y),
-            PathEl::CurveTo(ref p1, ref p2, ref p3) => {
-                context.curve_to(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y)
-            }
-            _ => unimplemented!()
-        }
-    }
-}
+use kurbo::Vec2;
+use crate::render::{Curve, CurveBuilder};
 
 
 
@@ -52,9 +29,17 @@ impl Segment {
         Segment { knots }
     }
 
-    pub fn to_bez_path(&self) -> BezPath {
+    pub fn to_curve(&self) -> Curve {
         if self.knots.len() < 3 {
-            return BezPath::new()
+            let mut res = CurveBuilder::new(self.knots[0].point.to_point());
+            if self.knots.len() == 2 {
+                res.curve_to(
+                    self.knots[0].point.to_point(),
+                    self.knots[1].point.to_point(),
+                    self.knots[1].point.to_point(),
+                )
+            }
+            return res.finish()
         }
 
         // This is a special case of the generic Hobby’s Spline algorithm:
@@ -150,8 +135,7 @@ impl Segment {
             theta[k] = vv[k] - theta[k+1] * uu[k];
         }
 
-        let mut res = BezPath::new();
-        res.move_to(self.knots[0].point.to_point());
+        let mut res = CurveBuilder::new(self.knots[0].point.to_point());
         for k in 0..n {
             let s = &self.knots[k];
             let t = &self.knots[k + 1];
@@ -162,7 +146,7 @@ impl Segment {
             );
             res.curve_to(left.to_point(), right.to_point(), t.point.to_point());
         }
-        res
+        res.finish()
     }
 
     fn get_controls(

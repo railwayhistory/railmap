@@ -1,9 +1,9 @@
 use std::{fmt, ops};
 use std::str::FromStr;
-use std::f64::consts::PI;
 use hyper::Body;
-use kurbo::Vec2;
+use kurbo::Point;
 use crate::feature::FeatureSet;
+use crate::canvas::Canvas;
 
 /// The maximum zoom level we support.
 ///
@@ -36,15 +36,18 @@ impl Tile {
     }
 
     fn render_surface(
-        &self, surface: &cairo::Surface, features: &FeatureSet
+        &self, surface: &Surface, features: &FeatureSet
     ) {
-        let context = cairo::Context::new(surface);
-
-        for feature in features.locate(
-            self.id.zoom, self.id.lon(), self.id.lat()
-        ) {
-            feature.render(&context, &self.id);
-        }
+        let size = surface.size();
+        let canvas = Canvas::new(
+            surface,
+            Point::new(size, size),
+            surface.canvas_bp(),
+            self.id.nw(),
+            size * self.id.n(),
+            self.id.zoom,
+        );
+        features.render(&canvas);
     }
 }
 
@@ -115,48 +118,14 @@ impl TileId {
         1 << usize::from(zoom)
     }
 
-    fn n(&self) -> f64 {
+    pub fn n(&self) -> f64 {
         f64::from(Self::coord_end(self.zoom))
     }
 
-    fn _lon(n: f64, x: f64) -> f64 {
-        x / n * 360.0 - 180.0
-    }
-
-    pub fn w_lon(&self) -> f64 {
-        Self::_lon(self.n(), f64::from(self.x))
-    }
-
-    pub fn lon(&self) -> [f64; 2] {
-        [
-            Self::_lon(self.n(), f64::from(self.x)),
-            Self::_lon(self.n(), f64::from(self.x + 1))
-        ]
-    }
-
-    fn _lat(n: f64, y: f64) -> f64 {
-        (PI * (1. - 2. * y / n)).sinh().atan().to_degrees()
-    }
-
-    pub fn n_lat(&self) -> f64 {
-        Self::_lat(self.n(), f64::from(self.y))
-    }
-
-    pub fn lat(&self) -> [f64; 2] {
-        [
-            Self::_lat(self.n(), f64::from(self.y)),
-            Self::_lat(self.n(), f64::from(self.y + 1))
-        ]
-    }
-
-    pub fn proj(&self, (lon, lat): (f64, f64)) -> Vec2 {
-        // Naive implementation: scale up the non-integer tile number.
-        Vec2::new(
-            (((lon + 180.) / 360. * self.n()) - f64::from(self.x))
-                * 512.,
-            ((1.0 - lat.to_radians().tan().asinh() / PI) / 2.0 * self.n()
-                - f64::from(self.y))
-                * 512.
+    pub fn nw(&self) -> Point {
+        Point::new(
+            f64::from(self.x) / self.n(),
+            f64::from(self.y) / self.n(),
         )
     }
 }
@@ -222,6 +191,20 @@ impl Surface {
                     192., 192., Vec::new()
                 ).unwrap())
             }
+        }
+    }
+
+    fn size(&self) -> f64 {
+        match *self {
+            Surface::Png(_) => 512.,
+            Surface::Svg(_) => 192.,
+        }
+    }
+    
+    fn canvas_bp(&self) -> f64 {
+        match *self {
+            Surface::Png(_) => 192./72.,
+            Surface::Svg(_) => 1.,
         }
     }
 
