@@ -1,6 +1,5 @@
 use std::f64::consts::SQRT_2;
-use kurbo::Vec2;
-use crate::render::{Curve, CurveBuilder};
+use kurbo::{BezPath, Vec2};
 
 
 
@@ -29,9 +28,10 @@ impl Segment {
         Segment { knots }
     }
 
-    pub fn to_curve(&self) -> Curve {
+    pub fn to_bez_path(&self) -> BezPath {
         if self.knots.len() < 3 {
-            let mut res = CurveBuilder::new(self.knots[0].point.to_point());
+            let mut res = BezPath::new();
+            res.move_to(self.knots[0].point.to_point());
             if self.knots.len() == 2 {
                 res.curve_to(
                     self.knots[0].point.to_point(),
@@ -39,7 +39,7 @@ impl Segment {
                     self.knots[1].point.to_point(),
                 )
             }
-            return res.finish()
+            return res
         }
 
         // This is a special case of the generic Hobby’s Spline algorithm:
@@ -135,7 +135,8 @@ impl Segment {
             theta[k] = vv[k] - theta[k+1] * uu[k];
         }
 
-        let mut res = CurveBuilder::new(self.knots[0].point.to_point());
+        let mut res = BezPath::new();
+        res.move_to(self.knots[0].point.to_point());
         for k in 0..n {
             let s = &self.knots[k];
             let t = &self.knots[k + 1];
@@ -146,7 +147,7 @@ impl Segment {
             );
             res.curve_to(left.to_point(), right.to_point(), t.point.to_point());
         }
-        res.finish()
+        res
     }
 
     fn get_controls(

@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::f64::INFINITY;
 use std::f64::consts::PI;
 use std::fs::File;
+use std::path::Path as FsPath;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use ignore::{WalkBuilder, WalkState};
@@ -10,18 +11,18 @@ use ignore::types::TypesBuilder;
 use kurbo::Vec2;
 use osmxml::elements::{MemberType, Osm, Relation};
 use osmxml::read::read_xml;
-use crate::mp_path;
-use crate::render::Curve;
+use crate::features::path::Path;
+use super::mp_path;
 
 
 //------------ PathSet -------------------------------------------------------
 
 pub struct PathSet {
-    paths: HashMap<String, Arc<Path>>,
+    paths: HashMap<String, ImportPath>,
 }
 
 impl PathSet {
-    pub fn load(path: impl AsRef<path::Path>) -> Result<Self, PathSetError> {
+    pub fn load(path: &FsPath) -> Result<Self, PathSetError> {
         let mut types = TypesBuilder::new();
         types.add("osm", "*.osm").unwrap();
         let walk = WalkBuilder::new(path)
@@ -67,9 +68,9 @@ impl PathSet {
                 let mut relations = HashSet::new();
                 mem::swap(osm.relations_mut(), &mut relations);
                 for relation in relations.drain() {
-                    match Path::from_osm(relation, &osm) {
+                    match ImportPath::from_osm(relation, &osm) {
                         Ok((key, path)) => {
-                            map.lock().unwrap().insert(key, Arc::new(path));
+                            map.lock().unwrap().insert(key, path);
                         }
                         Err(err) => {
                             errors.lock().unwrap().add(path, err);
@@ -85,60 +86,39 @@ impl PathSet {
         Ok(PathSet { paths: map.into_inner().unwrap() })
     }
 
-    pub fn get(&self, key: &str) -> Option<Arc<Path>> {
+    pub fn get(&self, key: &str) -> Option<ImportPath> {
         self.paths.get(key).cloned()
     }
 
     pub fn iter<'a>(
         &'a self
-    ) -> impl Iterator<Item = (&'a String, &'a Arc<Path>)> {
+    ) -> impl Iterator<Item = (&'a String, &'a ImportPath)> {
         self.paths.iter()
     }
 }
 
-//------------ Path ----------------------------------------------------------
+
+//------------ ImportPath ----------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct Path {
-    name: Option<String>,
-    nodes: Vec<Node>,
-    curve: Option<Curve>,
-    node_names: Vec<(String, usize)>,
+pub struct ImportPath {
+    path: Path,
+    len: usize,
+    node_names: HashMap<String, usize>,
 }
 
-impl Path {
-    pub fn new() -> Self {
-        Path {
-            name: None,
-            nodes: Vec::new(),
-            curve: None,
-            node_names: Vec::new(),
-        }
-    }
-
+impl ImportPath {
     pub fn len(&self) -> usize {
-        self.nodes.len()
+        self.len
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
-    }
-
-    pub fn node(&self, i: usize) -> &Node {
-        &self.nodes[i]
-    }
-
-    pub fn nodes(&self) -> &[Node] {
-        &self.nodes
-    }
-
-    pub fn curve(&self) -> &Curve {
-        self.curve.as_ref().unwrap()
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 }
 
 
-impl Path {
+impl ImportPath {
     pub fn from_osm(
         mut relation: Relation,
         osm: &Osm,
@@ -155,22 +135,29 @@ impl Path {
                 String::new()
             }
         };
-        
-        let mut path = Path::new();
-        path.load_nodes(&mut relation, osm, &mut err);
-
+        let (nodes, node_names) = Self::load_nodes(
+            &mut relation, osm, &mut err
+        );
         err.check()?;
 
-        path.create_curve();
-        Ok((key, path))
+        Ok((
+            key,
+            ImportPath {
+                len: nodes.len(),
+                path: Self::create_final_path(&nodes),
+                node_names
+            }
+        ))
     }
 
     fn load_nodes(
-        &mut self,
         relation: &mut Relation,
         osm: &Osm,
         err: &mut PathError,
-    ) {
+    ) -> (Vec<Node>, HashMap<String, usize>) {
+        let mut nodes = Vec::new();
+        let mut node_names = HashMap::new();
+
         let mut last_id = None;
         let mut last_tension = false; // last node has explicit post tension
         for member in relation.members() {
@@ -214,34 +201,28 @@ impl Path {
                         way: way.id()
                     });
                     // That’s the end of this relation, really.
-                    return 
+                    return (nodes, node_names)
                 }
                 if !last_tension {
-                    self.nodes.last_mut().unwrap().post = tension;
+                    nodes.last_mut().unwrap().post = tension;
                 }
             }
             for id in way_nodes {
                 let (node, name, post_tension)
                     = Self::load_node(*id, osm, tension, err);
                 if let Some(name) = name {
-                    self.node_names.push((name, self.nodes.len()));
+                    if node_names.insert(name.clone(), nodes.len()).is_some() {
+                        err.add(Error::DuplicateName {
+                            rel: relation.id(), name
+                        });
+                    }
                 }
-                self.nodes.push(node);
+                nodes.push(node);
                 last_tension = post_tension;
                 last_id = Some(id);
             }
         }
-        self.node_names.sort_by(|x, y| x.0.cmp(&y.0));
-
-        let mut remaining: &[_] = self.node_names.as_ref();
-        while remaining.len() > 1 {
-            if remaining[0].0 == remaining[1].0 {
-                err.add(Error::DuplicateName {
-                    rel: relation.id(), name: remaining[0].0.clone()
-                });
-            }
-            remaining = &remaining[1..]
-        }
+        (nodes, node_names)
     }
 
     fn load_node(
@@ -285,16 +266,16 @@ impl Path {
         )
     }
 
-    fn create_curve(&mut self) {
+    fn create_final_path(nodes: &[Node]) -> Path {
         let segment = mp_path::Segment::from_vec(
-            self.nodes().iter().map(|node| {
+            nodes.iter().map(|node| {
                 mp_path::Knot::new(
                     node.normalized(),
                     node.pre, node.post
                 )
             }).collect()
         );
-        self.curve = Some(segment.to_curve())
+        Path::Simple(Arc::new(segment.to_bez_path()))
     }
 }
 

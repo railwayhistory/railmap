@@ -6,22 +6,15 @@ async fn main() {
     let mut args = std::env::args();
     let name = args.next().unwrap(); // Skip own name.
 
-    let path_dir = match args.next() {
+    let import_dir = match args.next() {
         Some(path) => path,
         None => {
-            eprintln!("Usage: {} <path-dir> <feature-dir>", name);
-            std::process::exit(1)
-        }
-    };
-    let feature_dir = match args.next() {
-        Some(path) => path,
-        None => {
-            eprintln!("Usage: {} <path-dir> <feature-dir>", name);
+            eprintln!("Usage: {} <import-dir>", name);
             std::process::exit(1)
         }
     };
 
-    let server = match Server::new(path_dir, feature_dir) {
+    let server = match Server::new(import_dir) {
         Ok(server) => server,
         Err(_) => std::process::exit(1)
     };

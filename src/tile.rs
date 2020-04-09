@@ -2,7 +2,7 @@ use std::{fmt, ops};
 use std::str::FromStr;
 use hyper::Body;
 use kurbo::Point;
-use crate::feature::FeatureSet;
+use crate::features::FeatureSet;
 use crate::canvas::Canvas;
 
 /// The maximum zoom level we support.

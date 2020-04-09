@@ -4,9 +4,9 @@ use std::path::Path;
 use std::sync::Arc;
 use hyper::{Body, Request, Response};
 use hyper::service::{make_service_fn, service_fn};
-use crate::feature::FeatureSet;
+use crate::features::FeatureSet;
+use crate::import;
 use crate::tile::{Tile, TileId};
-use crate::path::PathSet;
 
 #[derive(Clone)]
 pub struct Server {
@@ -16,17 +16,15 @@ pub struct Server {
 
 impl Server {
     pub fn new(
-        path_dir: impl AsRef<Path>,
-        _feature_dir: impl AsRef<Path>,
+        import_dir: impl AsRef<Path>,
     ) -> Result<Server, Failed> {
-        let paths = match PathSet::load(path_dir) {
-            Ok(paths) => paths,
-            Err(err) => {
-                eprintln!("{}", err);
+        let features = match import::load(import_dir.as_ref()) {
+            Ok(features) => Arc::new(features),
+            Err(_err) => {
+                // XXX print errors.
                 return Err(Failed)
             }
         };
-        let features = Arc::new(FeatureSet::load(&paths));
         Ok(Server { features })
     }
 
@@ -43,7 +41,7 @@ impl Server {
 
         let server = hyper::Server::bind(&addr).serve(make_svc);
 
-        // Run this server for... forever!
+        // Run this server for ... ever!
         if let Err(e) = server.await {
             eprintln!("server error: {}", e);
         }
