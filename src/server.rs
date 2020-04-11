@@ -17,15 +17,10 @@ pub struct Server {
 impl Server {
     pub fn new(
         import_dir: impl AsRef<Path>,
-    ) -> Result<Server, Failed> {
-        let features = match import::load(import_dir.as_ref()) {
-            Ok(features) => Arc::new(features),
-            Err(_err) => {
-                // XXX print errors.
-                return Err(Failed)
-            }
-        };
-        Ok(Server { features })
+    ) -> Result<Server, import::ImportError> {
+        import::load(import_dir.as_ref()).map(|features| {
+            Server { features: Arc::new(features) }
+        })
     }
 
     pub async fn run(&self, addr: SocketAddr) {

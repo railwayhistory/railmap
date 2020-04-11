@@ -1,27 +1,158 @@
 
+use std::{fmt, fs, io};
 use std::path::Path as FsPath;
 use crate::features::FeatureSet;
-use crate::features::{Color, Contour};
 use super::path::PathSet;
+use super::ast::StatementList;
+use super::eval::Scope;
 
 
 pub fn load(
-    _feature_dir: &FsPath, paths: &PathSet
+    feature_dir: &FsPath, paths: &PathSet
 ) -> Result<FeatureSet, FeatureSetError> {
     let mut features = FeatureSet::new();
+    let mut err = FeatureSetError::default();
+    
+    load_dir(feature_dir, Scope::new(paths), &mut features, &mut err);
 
-    for (_, path) in paths.iter() {
-        features.insert(
-            Contour::simple(path.path().clone(), Color::RED, 0.2),
-            (0, 20)
-        )
+    err.check()?;
+    Ok(features)
+}
+
+fn load_dir(
+    path: &FsPath,
+    mut context: Scope,
+    target: &mut FeatureSet,
+    err: &mut FeatureSetError,
+) {
+    // Before we do anything else, we run init.map if it is present on the
+    // context so that it can make global definitions.
+    let init = path.join("init.map");
+    if fs::metadata(&init)
+        .map(|meta| meta.is_file())
+        .unwrap_or(false)
+    {
+        load_file(&init, &mut context, target, err);
     }
 
-    Ok(features)
+    // Now we walk over the directory and load directories and all .map files.
+    let dir = match fs::read_dir(path) {
+        Ok(dir) => dir,
+        Err(e) => {
+            err.push(path, e);
+            return;
+        }
+    };
+    for entry in dir {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) => continue, // Silently skip these errors.
+        };
+        let ftype = match entry.file_type() {
+            Ok(ftype) => ftype,
+            Err(_) => continue, // And these, too.
+        };
+        if ftype.is_dir() {
+            load_dir(&entry.path(), context.clone(), target, err);
+        }
+        else if ftype.is_file() {
+            let path = entry.path();
+            if let Some(name) = path.file_name() {
+                let name = name.to_str().unwrap_or(&"");
+                if name.starts_with(".") || name == "init.map" {
+                    continue
+                }
+            }
+            if path.extension().and_then(|s| s.to_str()) == Some("map") {
+                load_file(&path, &mut context.clone(), target, err);
+            }
+        }
+    }
+}
+
+fn load_file(
+    path: &FsPath,
+    _context: &mut Scope,
+    _target: &mut FeatureSet,
+    err: &mut FeatureSetError,
+) {
+    eprintln!("\n---- {}", path.display());
+    let data = match fs::read_to_string(path) {
+        Ok(data) => data,
+        Err(e) => {
+            err.push(path, e);
+            return
+        }
+    };
+    let stm = StatementList::parse_str(&data);
+    eprintln!("{:#?}", stm);
+    /*
+    if let Err(e) = context.execute_str(&data, target) {
+        err.push(path, e);
+    }
+    */
 }
 
 
 //------------ FeatureSetError -----------------------------------------------
 
-pub struct FeatureSetError;
+#[derive(Default)]
+pub struct FeatureSetError(Vec<(String, Error)>);
+
+impl FeatureSetError {
+    fn push(&mut self, path: &FsPath, err: impl Into<Error>) {
+        self.0.push((path.to_string_lossy().into(), err.into()))
+    }
+
+    fn check(self) -> Result<(), Self> {
+        if self.0.is_empty() {
+            Ok(())
+        }
+        else {
+            Err(self)
+        }
+    }
+}
+
+impl fmt::Display for FeatureSetError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for &(ref path, ref err) in &self.0 {
+            match *err {
+                /*
+                Error::Lang(ref err_set) => {
+                    for err in err_set.iter() {
+                        writeln!(f, "{}: {}", path, err)?;
+                    }
+                }
+                */
+                Error::Io(ref err) => {
+                    writeln!(f, "{}: {}", path, err)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+
+//------------ Error ---------------------------------------------------------
+
+enum Error {
+    //Lang(LangError),
+    Io(io::Error)
+}
+
+/*
+impl From<LangError> for Error {
+    fn from(err: LangError) -> Error {
+        Error::Lang(err)
+    }
+}
+*/
+
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Error {
+        Error::Io(err)
+    }
+}
 

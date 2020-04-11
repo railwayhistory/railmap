@@ -2,7 +2,8 @@
 ///
 
 pub use self::color::Color;
-pub use self::contour::Contour;
+pub use self::contour::{Contour, RenderContour};
+pub use self::path::Path;
 
 pub mod color;
 pub mod contour;
@@ -27,8 +28,15 @@ impl FeatureSet {
         Default::default()
     }
 
-    pub fn insert(&mut self, feature: impl Into<Feature>, detail: (u8, u8)) {
-        self.features.insert(StoredFeature::new(feature.into(), detail))
+    pub fn insert(
+        &mut self,
+        feature: impl Into<Feature>,
+        detail: (u8, u8),
+        layer: f64
+    ) {
+        self.features.insert(
+            StoredFeature::new(feature.into(), detail, layer)
+        )
     }
 
     pub fn render(&self, canvas: &Canvas) {
@@ -41,10 +49,16 @@ impl FeatureSet {
         &'a self, detail: u8, bounds: Rect,
     ) -> impl Iterator<Item = &'a StoredFeature> {
         let detail = f64::from(detail);
-        self.features.locate_in_envelope_intersecting(&AABB::from_corners(
-            [detail - 0.2, bounds.x0, bounds.y0],
-            [detail + 0.2, bounds.x1, bounds.y1]
-        ))
+        let mut res: Vec<_> = self.features.locate_in_envelope_intersecting(
+            &AABB::from_corners(
+                [detail - 0.2, bounds.x0, bounds.y0],
+                [detail + 0.2, bounds.x1, bounds.y1]
+            )
+        ).collect();
+        res.sort_unstable_by(|left, right| {
+            left.layer.partial_cmp(&right.layer).unwrap()
+        });
+        res.into_iter()
     }
 }
 
@@ -53,11 +67,12 @@ impl FeatureSet {
 
 pub struct StoredFeature {
     feature: Feature,
+    layer: f64,
     bounds: AABB<[f64; 3]>
 }
 
 impl StoredFeature {
-    pub fn new(feature: Feature, detail: (u8, u8)) -> Self {
+    pub fn new(feature: Feature, detail: (u8, u8), layer: f64) -> Self {
         let bounds = feature.bounding_box();
         let detail = if detail.0 < detail.1 {
             (f64::from(detail.0), f64::from(detail.1))
@@ -67,6 +82,7 @@ impl StoredFeature {
         };
         StoredFeature {
             feature,
+            layer,
             bounds: AABB::from_corners(
                 [detail.0 - 0.5, bounds.x0, bounds.y0],
                 [detail.1 + 0.5, bounds.x1, bounds.y1]

@@ -5,18 +5,19 @@ use std::f64::consts::PI;
 use std::fs::File;
 use std::path::Path as FsPath;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Mutex};
 use ignore::{WalkBuilder, WalkState};
 use ignore::types::TypesBuilder;
 use kurbo::Vec2;
 use osmxml::elements::{MemberType, Osm, Relation};
 use osmxml::read::read_xml;
-use crate::features::path::Path;
+use crate::features::path::BasePath;
 use super::mp_path;
 
 
 //------------ PathSet -------------------------------------------------------
 
+#[derive(Clone, Debug)]
 pub struct PathSet {
     paths: HashMap<String, ImportPath>,
 }
@@ -86,8 +87,8 @@ impl PathSet {
         Ok(PathSet { paths: map.into_inner().unwrap() })
     }
 
-    pub fn get(&self, key: &str) -> Option<ImportPath> {
-        self.paths.get(key).cloned()
+    pub fn get(&self, key: &str) -> Option<&ImportPath> {
+        self.paths.get(key)
     }
 
     pub fn iter<'a>(
@@ -102,9 +103,9 @@ impl PathSet {
 
 #[derive(Clone, Debug)]
 pub struct ImportPath {
-    path: Path,
+    path: BasePath,
     len: usize,
-    node_names: HashMap<String, usize>,
+    node_names: HashMap<String, u32>,
 }
 
 impl ImportPath {
@@ -112,8 +113,12 @@ impl ImportPath {
         self.len
     }
 
-    pub fn path(&self) -> &Path {
+    pub fn path(&self) -> &BasePath {
         &self.path
+    }
+
+    pub fn get_named(&self, name: &str) -> Option<u32> {
+        self.node_names.get(name).cloned()
     }
 }
 
@@ -154,7 +159,7 @@ impl ImportPath {
         relation: &mut Relation,
         osm: &Osm,
         err: &mut PathError,
-    ) -> (Vec<Node>, HashMap<String, usize>) {
+    ) -> (Vec<Node>, HashMap<String, u32>) {
         let mut nodes = Vec::new();
         let mut node_names = HashMap::new();
 
@@ -211,7 +216,9 @@ impl ImportPath {
                 let (node, name, post_tension)
                     = Self::load_node(*id, osm, tension, err);
                 if let Some(name) = name {
-                    if node_names.insert(name.clone(), nodes.len()).is_some() {
+                    if node_names.insert(
+                        name.clone(), nodes.len() as u32
+                    ).is_some() {
                         err.add(Error::DuplicateName {
                             rel: relation.id(), name
                         });
@@ -266,7 +273,7 @@ impl ImportPath {
         )
     }
 
-    fn create_final_path(nodes: &[Node]) -> Path {
+    fn create_final_path(nodes: &[Node]) -> BasePath {
         let segment = mp_path::Segment::from_vec(
             nodes.iter().map(|node| {
                 mp_path::Knot::new(
@@ -275,7 +282,7 @@ impl ImportPath {
                 )
             }).collect()
         );
-        Path::Simple(Arc::new(segment.to_bez_path()))
+        BasePath::new(segment.to_bez_path())
     }
 }
 
@@ -384,6 +391,7 @@ impl From<io::Error> for PathError {
         PathError(vec![Error::Io(err)])
     }
 }
+
 
 
 //------------ Error ---------------------------------------------------------

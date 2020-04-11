@@ -16,7 +16,10 @@ async fn main() {
 
     let server = match Server::new(import_dir) {
         Ok(server) => server,
-        Err(_) => std::process::exit(1)
+        Err(err) => {
+            eprintln!("{}", err);
+            std::process::exit(1)
+        }
     };
     eprintln!("Server ready.");
     server.run(
