@@ -417,9 +417,14 @@ impl Function {
 /// segments are then connected into a path according to the path connectors.
 #[derive(Clone, Debug)]
 pub struct Path {
-    first: Expression,
-    others: Vec<(PathConnector, Expression)>,
-    pos: Pos,
+    /// The first segment of the path.
+    pub first: Expression,
+
+    /// All following segments of the path and how they are connected.
+    pub others: Vec<(PathConnector, Expression)>,
+
+    /// The start of the path expression in the source.
+    pub pos: Pos,
 }
 
 impl Path {
@@ -685,15 +690,13 @@ impl PathConnector {
         ))(input)
     }
 
-    /*
-    fn tension(self) -> (f64, f64) {
+    pub fn tension(self) -> (f64, f64) {
         let res = match self {
             PathConnector::Straight => std::f64::INFINITY,
             PathConnector::Smooth => 1.
         };
         (res, res)
     }
-    */
 }
 
 

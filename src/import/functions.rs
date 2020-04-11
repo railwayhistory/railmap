@@ -6,7 +6,7 @@ pub fn eval(
     _name: String,
     _args: eval::ArgumentList,
     _err: &mut eval::Error,
-) -> Option<eval::Expression> {
+) -> Option<eval::ExprVal> {
     None
 }
 

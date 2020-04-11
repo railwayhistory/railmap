@@ -2,6 +2,7 @@ use std::ops;
 use std::convert::TryInto;
 use std::collections::HashMap;
 use std::str::FromStr;
+use crate::features::path;
 use crate::features::{FeatureSet, Path};
 use crate::features::contour::{Contour, ContourRule};
 use crate::import::functions;
@@ -15,7 +16,7 @@ use super::ast;
 #[derive(Clone, Debug)]
 pub struct Scope<'a> {
     paths: &'a PathSet,
-    variables: HashMap<String, Expression>,
+    variables: HashMap<String, ExprVal>,
     params: RenderParams,
 }
 
@@ -32,11 +33,11 @@ impl<'a> Scope<'a> {
         self.paths.get(name.as_ref())
     }
 
-    pub fn get_var(&self, ident: &str) -> Option<Expression> {
+    pub fn get_var(&self, ident: &str) -> Option<ExprVal> {
         self.variables.get(ident).cloned()
     }
 
-    pub fn set_var(&mut self, ident: String, value: Expression) {
+    pub fn set_var(&mut self, ident: String, value: ExprVal) {
         self.variables.insert(ident.clone(), value);
     }
 }
@@ -61,13 +62,13 @@ impl RenderParams {
     ) {
         let res = match target {
             "detail" => {
-                match value {
-                    Expression::Number(number) => {
+                match value.value {
+                    ExprVal::Number(number) => {
                         number.into_u8().map(|num| {
                             self.detail = Some((num, num));
                         })
                     }
-                    Expression::Range(range) => {
+                    ExprVal::Range(range) => {
                         range.into_u8().map(|num| {
                             self.detail = Some(num);
                         })
@@ -78,8 +79,8 @@ impl RenderParams {
                 }
             }
             "layer" => {
-                match value {
-                    Expression::Number(val) => {
+                match value.value {
+                    ExprVal::Number(val) => {
                         self.layer = val.into_f64();
                         Ok(())
                     }
@@ -103,12 +104,50 @@ impl RenderParams {
 ///
 /// The variants are the concrete types that we have.
 #[derive(Clone, Debug)]
-pub enum Expression {
+pub struct Expression {
+    value: ExprVal,
+    pos: ast::Pos
+}
+
+/// The value of a resolved expression.
+///
+/// This has a shorthand name because we are going to type it a lot.
+#[derive(Clone, Debug)]
+pub enum ExprVal {
     Distance(Distance),
     Range(Range),
     Number(Number),
     Text(String),
     ContourRule(ContourRule),
+    Path(path::Segment),
+}
+
+impl Expression {
+    fn new(value: ExprVal, pos: ast::Pos) -> Self {
+        Expression { value, pos }
+    }
+
+    pub fn into_contour_rule(self, err: &mut Error) -> Option<ContourRule> {
+        match self.value {
+            ExprVal::ContourRule(rule) => Some(rule),
+            _ => {
+                err.add(self.pos, "expected contour rule");
+                None
+            }
+        }
+    }
+
+    pub fn into_path(
+        self, err: &mut Error
+    ) -> Option<path::Segment> {
+        match self.value {
+            ExprVal::Path(path) => Some(path),
+            _ => {
+                err.add(self.pos, "expected path segment");
+                None
+            }
+        }
+    }
 }
 
 
@@ -286,20 +325,8 @@ impl ast::Contour {
             value.eval_params(&mut params, scope, err);
         }
 
-        // Get the rendering rule.
-        //
-        // Keep going if we don’t get one to evaluate the path, too.
-        let pos = self.rule.pos();
-        let rule = match self.rule.eval(scope, err) {
-            Some(Expression::ContourRule(rule)) => Some(rule),
-            Some(_) => {
-                err.add(pos, "expected contour rule");
-                None
-            }
-            None => None
-        };
-
-        // Get the path.
+        // Get all the parts.
+        let rule = self.rule.eval_contour_rule(scope, err);
         let path = self.path.eval(scope, err);
 
         // If we don’t have a detail, complain.
@@ -340,18 +367,19 @@ impl ast::Distance {
 
 impl ast::Expression {
     fn eval(self, scope: &Scope, err: &mut Error) -> Option<Expression> {
-        match self {
+        let pos = self.pos();
+        let res = match self {
             ast::Expression::Distance(distance) => {
-                distance.eval(err).map(Expression::Distance)
+                distance.eval(err).map(ExprVal::Distance)
             }
             ast::Expression::Range(range) => {
-                Some(Expression::Range(range.eval()))
+                Some(ExprVal::Range(range.eval()))
             }
             ast::Expression::Number(number) => {
-                Some(Expression::Number(number.eval()))
+                Some(ExprVal::Number(number.eval()))
             }
             ast::Expression::Text(text) => {
-                Some(Expression::Text(text.eval()))
+                Some(ExprVal::Text(text.eval()))
             }
             ast::Expression::Function(function) => {
                 function.eval(scope, err)
@@ -370,12 +398,25 @@ impl ast::Expression {
                     }
                 }
             }
-        }
+        };
+        res.map(|val| Expression::new(val, pos))
+    }
+
+    fn eval_contour_rule(
+        self, scope: &Scope, err: &mut Error
+    ) -> Option<ContourRule> {
+        self.eval(scope, err).and_then(|expr| expr.into_contour_rule(err))
+    }
+
+    fn eval_path(
+        self, scope: &Scope, err: &mut Error
+    ) -> Option<path::Segment> {
+        self.eval(scope, err).and_then(|expr| expr.into_path(err))
     }
 }
 
 impl ast::Function {
-    fn eval(self, scope: &Scope, err: &mut Error) -> Option<Expression> {
+    fn eval(self, scope: &Scope, err: &mut Error) -> Option<ExprVal> {
         let name = self.name.eval();
         let args = match self.args {
             Some(args) => args.eval(scope, err)?,
@@ -399,7 +440,7 @@ impl ast::Let {
                 Some(expression) => expression,
                 None => continue,
             };
-            scope.set_var(target, expression);
+            scope.set_var(target, expression.value);
         }
     }
 }
@@ -421,7 +462,16 @@ impl ast::Number {
 
 impl ast::Path {
     fn eval(self, scope: &mut Scope, err: &mut Error) -> Option<Path> {
-        unimplemented!()
+        let mut path = self.first.eval_path(scope, err).map(Path::new);
+        for (conn, expr) in self.others {
+            let (post, pre) = conn.tension();
+            if let Some(seg) = expr.eval_path(scope, err) {
+                if let Some(path) = path.as_mut() {
+                    path.push(post, pre, seg)
+                }
+            }
+        }
+        path
     }
 }
 
