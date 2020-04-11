@@ -256,6 +256,15 @@ pub struct ArgumentList {
     arguments: Vec<(Option<String>, Expression)>,
 }
 
+impl IntoIterator for ArgumentList {
+    type Item = (Option<String>, Expression);
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.arguments.into_iter()
+    }
+}
+
 
 //============ Evaluations for AST Types =====================================
 //

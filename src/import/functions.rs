@@ -10,3 +10,14 @@ pub fn eval(
     None
 }
 
+
+/// Resolve a base path.
+///
+/// ```ignore
+/// fn path(name: string) -> path::Segment
+/// ```
+fn path(
+    args: eval::ArgumentList, err: &mut eval::Error
+) -> Option<path::ExprValue> {
+}
+
