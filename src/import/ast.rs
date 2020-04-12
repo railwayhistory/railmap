@@ -402,7 +402,7 @@ impl Function {
 }
 
 
-//============ Other Things ==================================================
+//============ Path Constructions ============================================
 
 
 //------------ Path ----------------------------------------------------------
@@ -410,7 +410,7 @@ impl Function {
 /// A path expression connects expressions with path connectors.
 ///
 /// ```text
-/// path ::= expression *(path-connector expression)
+/// path ::= sement *(path-connector segment)
 /// ```
 ///
 /// When evaluated, the expressions need to evaluate to path segments. These
@@ -418,10 +418,10 @@ impl Function {
 #[derive(Clone, Debug)]
 pub struct Path {
     /// The first segment of the path.
-    pub first: Expression,
+    pub first: Segment,
 
     /// All following segments of the path and how they are connected.
-    pub others: Vec<(PathConnector, Expression)>,
+    pub others: Vec<(PathConnector, Segment)>,
 
     /// The start of the path expression in the source.
     pub pos: Pos,
@@ -430,17 +430,161 @@ pub struct Path {
 impl Path {
     fn parse(input: Span) -> IResult<Span, Self> {
         let pos = Pos::capture(&input);
-        let (input, first) = Expression::parse(input)?;
+        let (input, first) = Segment::parse(input)?;
         let (input, others) = many0(
             tuple((
                 opt_ws(PathConnector::parse),
-                opt_ws(Expression::parse),
+                opt_ws(Segment::parse),
             ))
         )(input)?;
         Ok((input, Path { first, others, pos }))
     }
 }
 
+
+//------------ Segment -------------------------------------------------------
+
+/// A segment expression describes a segment on a path.
+///
+/// ```text
+/// segment ::= path:expression
+///             ["[" start:location [ "," end:location ] "]" ]
+///             [ offset ]
+/// ```
+#[derive(Clone, Debug)]
+pub struct Segment {
+    /// The path the segment refers to.
+    pub path: Expression,
+
+    /// The optional start location.
+    pub start: Option<Location>,
+
+    /// The optional end location.
+    pub end: Option<Location>,
+
+    /// The optional offset.
+    pub offset: Option<Offset>,
+
+    /// The start of the segment in the source
+    pub pos: Pos
+}
+
+impl Segment {
+    fn parse(input: Span) -> IResult<Span, Self> {
+        let pos = Pos::capture(&input);
+        let (input, path) = Expression::parse(input)?;
+        let (input, startend) = opt(
+            terminated(
+                preceded(
+                    opt_ws(tag_char('[')),
+                    tuple((
+                        opt_ws(Location::parse),
+                        opt(
+                            preceded(
+                                opt_ws(tag_char(',')),
+                                opt_ws(Location::parse)
+                            )
+                        )
+                    ))
+                ),
+                opt_ws(tag_char(']'))
+            )
+        )(input)?;
+        let (input, offset) = opt(opt_ws(Offset::parse))(input)?;
+
+        let (start, end) = match startend {
+            Some((start, end)) => (Some(start), end),
+            None => (None, None)
+        };
+        Ok((input, Segment { path, start, end, offset, pos }))
+    }
+}
+
+
+//------------ Location ------------------------------------------------------
+
+/// A location on a path.
+///
+/// ```text
+/// location ::= name:identifier [("+" | "-") distance ]
+/// ```
+#[derive(Clone, Debug)]
+pub struct Location {
+    /// The name of a point.
+    pub name: Identifier,
+
+    /// The optional distance.
+    pub distance: Option<(AddSub, Distance)>,
+
+    /// The start of the location in the source.
+    pub pos: Pos
+}
+
+impl Location {
+    fn parse(input: Span) -> IResult<Span, Self> {
+        let pos = Pos::capture(&input);
+        let (input, name) = Identifier::parse(input)?;
+        let (input, distance) = opt(tuple((
+            AddSub::parse, opt_ws(Distance::parse)
+        )))(input)?;
+        Ok((input, Location { name, distance, pos }))
+    }
+}
+
+
+//------------ Offset --------------------------------------------------------
+
+/// An offset sideways from a path.
+///
+/// ```text
+/// offset ::= direction distance
+/// ```
+#[derive(Clone, Debug)]
+pub struct Offset {
+    /// The direction of the offset.
+    pub direction: Direction,
+
+    /// The distance of the offset.
+    pub distance: Distance,
+
+    /// The start of the location in the source
+    pub pos: Pos,
+}
+
+impl Offset {
+    fn parse(input: Span) -> IResult<Span, Self> {
+        let pos = Pos::capture(&input);
+        let (input, direction) = Direction::parse(input)?;
+        let (input, distance) = opt_ws(Distance::parse)(input)?;
+        Ok((input, Offset { direction, distance, pos }))
+    }
+}
+
+
+//------------ Direction -----------------------------------------------------
+
+/// A direction operator indicating left or right.
+///
+/// ```text
+/// direction ::= "<<" | ">>"
+/// ```
+#[derive(Clone, Copy, Debug)]
+pub enum Direction {
+    Left,
+    Right,
+}
+
+impl Direction {
+    fn parse(input: Span) -> IResult<Span, Self> {
+        alt((
+            map(tag("<<"), |_| Direction::Left),
+            map(tag(">>"), |_| Direction::Right),
+        ))(input)
+    }
+}
+
+
+//============ Other Things ==================================================
 
 //------------ AssignmentList ------------------------------------------------
 

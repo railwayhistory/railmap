@@ -2,6 +2,6 @@ let flwhag = path("path.de.1000");
 
 with detail = 0->20 {
     contour hauptb:
-        subpath(flwhag, flw.f, hag)
+	flwhag[flw.f, hag] >> .5dt
     ;
 }

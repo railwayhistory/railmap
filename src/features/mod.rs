@@ -3,7 +3,7 @@
 
 pub use self::color::Color;
 pub use self::contour::{Contour, RenderContour};
-pub use self::path::Path;
+pub use self::path::{Distance, Path};
 
 pub mod color;
 pub mod contour;

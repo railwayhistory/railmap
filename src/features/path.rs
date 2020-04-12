@@ -1,22 +1,23 @@
 /// Paths.
 
-use std::convert::TryFrom;
+use std::ops;
+//use std::convert::TryFrom;
 use std::sync::Arc;
 use kurbo::{
-    BezPath, CubicBez, ParamCurve, ParamCurveArclen, ParamCurveDeriv,
-    PathEl, PathSeg, Point, Rect, Vec2
+    BezPath, //CubicBez, ParamCurve, ParamCurveArclen, ParamCurveDeriv,
+    /*PathEl, PathSeg, Point,*/ Rect, //Vec2
 };
 use crate::canvas::Canvas;
 
 
 //------------ Configuration Constants ---------------------------------------
 
+/*
 /// Accuracy for Kurbo arclen calculations in storage coordinates.
 ///
 /// This value should provide centimetre accuracy in storage coordinates.
 const STORAGE_ACCURACY: f64 = 1E-10;
 
-/*
 /// Accuracy for Kurbo arclen calculations in canvas coordinates.
 ///
 /// This value assumes about 192 dpi device resolution.
@@ -52,36 +53,6 @@ impl Path {
 }
 
 
-//------------ Segment -------------------------------------------------------
-
-
-/// A segment in a constructed path.
-#[derive(Clone, Debug)]
-pub enum Segment {
-    Path(BasePath),
-    Subpath(Subpath),
-    Point(Position),
-}
-
-impl Segment {
-    pub fn apply_start(&self, canvas: &Canvas) {
-        match *self {
-            Segment::Path(ref path) => path.apply_start(canvas),
-            Segment::Subpath(ref path) => path.apply_start(canvas),
-            Segment::Point(ref path) => path.apply_start(canvas),
-        }
-    }
-
-    pub fn apply_tail(&self, canvas: &Canvas) {
-        match *self {
-            Segment::Path(ref path) => path.apply_tail(canvas),
-            Segment::Subpath(ref path) => path.apply_tail(canvas),
-            Segment::Point(_) => { }
-        }
-    }
-}
-
-
 //------------ BasePath ------------------------------------------------------
 
 /// A basic path.
@@ -93,6 +64,7 @@ impl BasePath {
         BasePath(Arc::new(path))
     }
 
+    /*
     /// Returns the segment ending at `idx`.
     ///
     /// In other words, the segment will cover the time values between
@@ -169,6 +141,57 @@ impl BasePath {
             }
         }
     }
+    */
+}
+
+
+//------------ Segment -------------------------------------------------------
+
+
+/// A segment in a constructed path.
+#[derive(Clone, Debug)]
+pub enum Segment {
+    Subpath(Subpath),
+    Point(Position),
+}
+
+impl Segment {
+    pub fn eval_full(_path: BasePath, _offset: Option<Distance>) -> Self {
+        unimplemented!()
+    }
+
+    pub fn eval_subpath(
+        _path: BasePath,
+        _start_node: u32, _start_distance: Distance,
+        _end_time: u32, _end_distance: Distance,
+        _offset: Option<Distance>
+    ) -> Self {
+        unimplemented!()
+    }
+
+    pub fn eval_point(
+        _path: BasePath,
+        _node: u32, _distance: Distance,
+        _offset: Option<Distance>
+    ) -> Self {
+        unimplemented!()
+    }
+
+    /*
+    pub fn apply_start(&self, canvas: &Canvas) {
+        match *self {
+            Segment::Subpath(ref path) => path.apply_start(canvas),
+            Segment::Point(ref path) => path.apply_start(canvas),
+        }
+    }
+
+    pub fn apply_tail(&self, canvas: &Canvas) {
+        match *self {
+            Segment::Subpath(ref path) => path.apply_tail(canvas),
+            Segment::Point(_) => { }
+        }
+    }
+    */
 }
 
 
@@ -193,18 +216,21 @@ pub struct Subpath {
 
     /// Offset from the original path.
     ///
-    /// Given in canvas coordinates. Positive values are to the right of the
-    /// path as seen ‘in the direction of travel.’
-    offset: Option<f64>,
+    /// Given in canvas coordinates. Positive values are to the left of the
+    /// path. I.e., this is the length of a tangent vector rotated 90°.
+    offset: Option<Distance>,
 }
 
 impl Subpath {
     pub fn new(
-        path: BasePath, start: Location, end: Location, offset: Option<f64>
+        path: BasePath,
+        start: Location, end: Location,
+        offset: Option<Distance>
     ) -> Self {
         Subpath { path, start, end, offset }
     }
 
+    /*
     pub fn apply_start(&self, canvas: &Canvas) {
         let p = self.start_point(canvas);
         canvas.move_to(p.x, p.y)
@@ -236,7 +262,6 @@ impl Subpath {
         }
     }
 
-    /*
     fn resolve_end(&self, _canvas: &Canvas) -> (u32, f64) {
         unimplemented!()
     }
@@ -264,8 +289,8 @@ pub struct Position {
 
     /// Offset from the original path.
     ///
-    /// Given in canvas coordinates. Positive values are to the right of the
-    /// path as seen ‘in the direction of travel.’
+    /// Given in canvas coordinates. Positive values are to the left of the
+    /// path. I.e., this is the length of a tangent vector rotated 90°.
     offset: Option<f64>
 }
 
@@ -282,6 +307,90 @@ impl Position {
 }
 
 
+//------------ Distance ------------------------------------------------------
+
+/// Describes a distance from a point.
+///
+/// In feature definitions, locations on paths are defined relative to named
+/// points on the path. They are described as a distance from well-defined
+/// points which is combined from a world distance and a map distance. Thus
+/// way we can create schematic representations that are pleasing at a range
+/// of scales.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Distance {
+    /// The world component of the distance.
+    ///
+    /// This is not yet scaled to storage coordinates, i.e., this value is the
+    /// acutal distance along the face of the Earth in _bp._
+    pub world: Option<f64>,
+
+    /// The canvas component of the distance.
+    ///
+    /// This is the distance along the canvas in _bp._
+    pub canvas: Option<f64>,
+}
+
+impl Distance {
+    /// Creates a new distance from the world and canvas components.
+    pub fn new(world: Option<f64>, canvas: Option<f64>) -> Self {
+        Distance { world, canvas }
+    }
+}
+
+impl ops::AddAssign for Distance {
+    fn add_assign(&mut self, other: Distance) {
+        if let Some(o) = other.world {
+            if let Some(s) = self.world.as_mut() {
+                *s += o
+            }
+            else {
+                self.world = Some(o)
+            }
+        }
+        if let Some(o) = other.canvas {
+            if let Some(s) = self.canvas.as_mut() {
+                *s += o
+            }
+            else {
+                self.canvas = Some(o)
+            }
+        }
+    }
+}
+
+impl ops::SubAssign for Distance {
+    fn sub_assign(&mut self, other: Distance) {
+        if let Some(o) = other.world {
+            if let Some(s) = self.world.as_mut() {
+                *s -= o
+            }
+            else {
+                self.world = Some(-o)
+            }
+        }
+        if let Some(o) = other.canvas {
+            if let Some(s) = self.canvas.as_mut() {
+                *s -= o
+            }
+            else {
+                self.canvas = Some(-o)
+            }
+        }
+    }
+}
+
+impl ops::Neg for Distance {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Distance {
+            world: self.world.map(|val| -val),
+            canvas: self.canvas.map(|val| -val),
+        }
+    }
+}
+
+
 //------------ Location ------------------------------------------------------
 
 /// Description of a location.
@@ -291,23 +400,23 @@ impl Position {
 /// the segment while the fractional part describes how far between start and
 /// end point of the segment the location can be found.
 ///
-/// In the feature definition, locations are defined relative to named points
-/// on the path. These points are always nodes on the path, so they have a
-/// integral time value. The relative location is described as a distance from
-/// that point and is combined from a world distance and a map distance. This
-/// way we can create schematic representations that are pleasing at a range
-/// of scales.
+/// Typically, locations are defined as [distances][`Distance`] from a known
+/// point on a path specified by its time value. Because distances contain a
+/// world and canvas component, we can only calculate the time value of the
+/// location during rendering.
 ///
-/// Since storage coordinates currently are only a scaled value of canvas
-/// coordinates, we can calculate the time value for the world distance part
-/// of the relative location during compilation. The map distance part then
-/// needs to be added during rendering.
+/// However, since storage coordinates currently are only a scaled value of
+/// canvas coordinates, we can calculate the time value for the world distance
+/// part of the relative location during evaluation. The map distance part
+/// then needs to be added during rendering.
 ///
 /// Thus, the location is described by two values: the time value of the point
 /// including relative world distance and the relative distance from that
 /// point on the canvas expressed in the standard canvas unit of _bp._ These
 /// two values are represented by the fields `world`  and `canvas`
 /// respectively.
+///
+/// [`Distance`]: struct.Distance.html
 #[derive(Clone, Copy, Debug)]
 pub struct Location {
     /// The time value of the world location.

@@ -1,9 +1,8 @@
-use std::ops;
 use std::convert::TryInto;
 use std::collections::HashMap;
 use std::str::FromStr;
 use crate::features::path;
-use crate::features::{FeatureSet, Path};
+use crate::features::{Distance, FeatureSet, Path};
 use crate::features::contour::{Contour, ContourRule};
 use crate::import::functions;
 use crate::import::units;
@@ -29,8 +28,8 @@ impl<'a> Scope<'a> {
         }
     }
 
-    pub fn get_path(&self, name: &str) -> Option<&ImportPath> {
-        self.paths.get(name.as_ref())
+    pub fn paths(&self) -> &PathSet {
+        &self.paths
     }
 
     pub fn get_var(&self, ident: &str) -> Option<ExprVal> {
@@ -105,21 +104,8 @@ impl RenderParams {
 /// The variants are the concrete types that we have.
 #[derive(Clone, Debug)]
 pub struct Expression {
-    value: ExprVal,
-    pos: ast::Pos
-}
-
-/// The value of a resolved expression.
-///
-/// This has a shorthand name because we are going to type it a lot.
-#[derive(Clone, Debug)]
-pub enum ExprVal {
-    Distance(Distance),
-    Range(Range),
-    Number(Number),
-    Text(String),
-    ContourRule(ContourRule),
-    Path(path::Segment),
+    pub value: ExprVal,
+    pub pos: ast::Pos
 }
 
 impl Expression {
@@ -137,13 +123,35 @@ impl Expression {
         }
     }
 
-    pub fn into_path(
+    pub fn into_distance(
         self, err: &mut Error
-    ) -> Option<path::Segment> {
+    ) -> Option<Distance> {
         match self.value {
-            ExprVal::Path(path) => Some(path),
+            ExprVal::Distance(path) => Some(path),
+            _ => {
+                err.add(self.pos, "expected distance");
+                None
+            }
+        }
+    }
+
+    pub fn into_path<'s>(
+        self, scope: &'s Scope, err: &mut Error
+    ) -> Option<&'s ImportPath> {
+        match self.value {
+            ExprVal::Path(path) => Some(scope.paths().get(path).unwrap()),
             _ => {
                 err.add(self.pos, "expected path segment");
+                None
+            }
+        }
+    }
+
+    pub fn into_text(self, err: &mut Error) -> Option<String> {
+        match self.value {
+            ExprVal::Text(val) => Some(val),
+            _ => {
+                err.add(self.pos, "expected text");
                 None
             }
         }
@@ -151,42 +159,19 @@ impl Expression {
 }
 
 
-//------------ Distance ------------------------------------------------------
+//------------ ExprVal -------------------------------------------------------
 
-/// An evaluated distance.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Distance {
-    /// The world component of the distance.
-    ///
-    /// This is not yet scaled to storage coordinates, i.e., this value is the
-    /// acutal distance along the face of the Earth in _bp._
-    world: f64,
-
-    /// The canvas component of the distance.
-    ///
-    /// This is the distance along the canvas in _bp._
-    canvas: f64,
-}
-
-impl Distance {
-    /// Creates a new distance from the world and canvas components.
-    fn new(world: f64, canvas: f64) -> Self {
-        Distance { world, canvas }
-    }
-}
-
-impl ops::AddAssign for Distance {
-    fn add_assign(&mut self, other: Distance) {
-        self.world += other.world;
-        self.canvas += other.canvas;
-    }
-}
-
-impl ops::SubAssign for Distance {
-    fn sub_assign(&mut self, other: Distance) {
-        self.world -= other.world;
-        self.canvas -= other.canvas;
-    }
+/// The value of a resolved expression.
+///
+/// This has a shorthand name because we are going to type it a lot.
+#[derive(Clone, Debug)]
+pub enum ExprVal {
+    Distance(Distance),
+    Range(Range),
+    Number(Number),
+    Text(String),
+    ContourRule(ContourRule),
+    Path(usize),
 }
 
 
@@ -247,13 +232,51 @@ impl Number {
 //------------ ArgumentList --------------------------------------------------
 
 /// Evaluated arguments of a function.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct ArgumentList {
     /// The list of arguments.
     ///
     /// The first element is the keyword if this is a keyword argument.
     /// Otherwise it is a positional argument.
     arguments: Vec<(Option<String>, Expression)>,
+
+    /// The position of argument list.
+    pos: ast::Pos,
+}
+
+impl ArgumentList {
+    fn new(pos: ast::Pos) -> Self {
+        ArgumentList {
+            arguments: Vec::new(),
+            pos
+        }
+    }
+
+    /// Returns an iterator for a list of positional arguments only.
+    pub fn into_pos_iter(
+        self, err: &mut Error
+    ) -> Option<impl Iterator<Item = Expression>> {
+        for item in &self.arguments {
+            if item.0.is_some() {
+                err.add(item.1.pos, "expected positiona arguments only");
+                return None
+            }
+        }
+        Some(self.arguments.into_iter().map(|item| item.1))
+    }
+
+    /// Converts the list into its sole positional argument or errors.
+    pub fn single_pos(self, err: &mut Error) -> Option<Expression> {
+        if self.arguments.len() != 1 {
+            err.add(self.pos, "expected a single positional argument");
+            return None
+        }
+        if self.arguments[0].0.is_some() {
+            err.add(self.pos, "expected a single positional argument");
+            return None
+        }
+        Some(self.arguments.into_iter().next().unwrap().1)
+    }
 }
 
 impl IntoIterator for ArgumentList {
@@ -273,7 +296,7 @@ impl IntoIterator for ArgumentList {
 impl ast::ArgumentList {
     fn eval(self, scope: &Scope, err: &mut Error) -> Option<ArgumentList> {
         let mut good = true;
-        let mut res = ArgumentList::default();
+        let mut res = ArgumentList { arguments: Vec::new(), pos: self.pos };
         for argument in self.arguments {
             match argument {
                 ast::Argument::Keyword(assignment) => {
@@ -417,10 +440,10 @@ impl ast::Expression {
         self.eval(scope, err).and_then(|expr| expr.into_contour_rule(err))
     }
 
-    fn eval_path(
-        self, scope: &Scope, err: &mut Error
-    ) -> Option<path::Segment> {
-        self.eval(scope, err).and_then(|expr| expr.into_path(err))
+    fn eval_path<'s>(
+        self, scope: &'s Scope, err: &mut Error
+    ) -> Option<&'s ImportPath> {
+        self.eval(scope, err).and_then(|expr| expr.into_path(scope, err))
     }
 }
 
@@ -429,9 +452,9 @@ impl ast::Function {
         let name = self.name.eval();
         let args = match self.args {
             Some(args) => args.eval(scope, err)?,
-            None => Default::default()
+            None => ArgumentList::new(self.pos)
         };
-        functions::eval(name, args, err)
+        functions::eval(self.pos, name, args, scope, err)
     }
 }
 
@@ -454,6 +477,36 @@ impl ast::Let {
     }
 }
 
+impl ast::Location {
+    fn eval(
+        self, path: &ImportPath, err: &mut Error
+    ) -> Option<(u32, Distance)> {
+        let name = self.name.eval();
+        let name = match path.get_named(&name) {
+            Some(name) => Some(name),
+            None => {
+                err.add(
+                    self.pos,
+                    format!("unresolved path point '{}'", name)
+                );
+                None
+            }
+        };
+        let distance = match self.distance {
+            Some((addsub, distance)) => {
+                let distance = distance.eval(err)?;
+                match addsub {
+                    ast::AddSub::Add => distance,
+                    ast::AddSub::Sub => -distance,
+                }
+            }
+            None => Distance::default()
+        };
+        let name = name?;
+        Some((name, distance))
+    }
+}
+
 impl ast::Number {
     fn eval(self) -> Number {
         if let Ok(value) = i32::from_str(&self.value) {
@@ -469,12 +522,22 @@ impl ast::Number {
     }
 }
 
+impl ast::Offset {
+    fn eval(self, err: &mut Error) -> Option<Distance> {
+        let distance = self.distance.eval(err)?;
+        match self.direction {
+            ast::Direction::Left => Some(distance),
+            ast::Direction::Right => Some(-distance),
+        }
+    }
+}
+
 impl ast::Path {
     fn eval(self, scope: &mut Scope, err: &mut Error) -> Option<Path> {
-        let mut path = self.first.eval_path(scope, err).map(Path::new);
+        let mut path = self.first.eval(scope, err).map(Path::new);
         for (conn, expr) in self.others {
             let (post, pre) = conn.tension();
-            if let Some(seg) = expr.eval_path(scope, err) {
+            if let Some(seg) = expr.eval(scope, err) {
                 if let Some(path) = path.as_mut() {
                     path.push(post, pre, seg)
                 }
@@ -490,6 +553,53 @@ impl ast::Range {
             first: self.first.eval(),
             second: self.second.eval()
         }
+    }
+}
+
+impl ast::Segment {
+    fn eval(
+        self, scope: &mut Scope, err: &mut Error
+    ) -> Option<path::Segment> {
+        let path = self.path.eval_path(scope, err)?;
+
+        let start = match self.start {
+            Some(val) => val.eval(path, err).map(Some),
+            None => Some(None)
+        };
+        let end = match self.end {
+            Some(val) => val.eval(path, err).map(Some),
+            None => Some(None)
+        };
+        let offset = match self.offset {
+            Some(val) => val.eval(err).map(Some),
+            None => Some(None)
+        };
+        let start = start?;
+        let end = end?;
+        let offset = offset?;
+
+        Some(match (start, end)  {
+            (Some(start), Some(end)) => {
+                path::Segment::eval_subpath(
+                    path.path(),
+                    start.0, start.1, end.0, end.1,
+                    offset
+                )
+            }
+            (Some(start), None) => {
+                path::Segment::eval_point(
+                    path.path(),
+                    start.0, start.1,
+                    offset
+                )
+            }
+            (None, _) => {
+                path::Segment::eval_full(
+                    path.path(),
+                    offset
+                )
+            }
+        })
     }
 }
 
@@ -542,14 +652,14 @@ impl ast::UnitNumber {
         for (unit, factor) in units::WORLD_DISTANCES {
             if self.unit == unit {
                 return Some(Distance::new(
-                    self.number.eval_float() * factor, 0.
+                    Some(self.number.eval_float() * factor), None
                 ))
             }
         }
         for (unit, factor) in units::CANVAS_DISTANCES {
             if self.unit == unit {
                 return Some(Distance::new(
-                    0., self.number.eval_float() * factor
+                    None, Some(self.number.eval_float() * factor)
                 ))
             }
         }

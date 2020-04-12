@@ -17,9 +17,10 @@ use super::mp_path;
 
 //------------ PathSet -------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct PathSet {
-    paths: HashMap<String, ImportPath>,
+    paths: Vec<ImportPath>,
+    names: HashMap<String, usize>,
 }
 
 impl PathSet {
@@ -29,7 +30,7 @@ impl PathSet {
         let walk = WalkBuilder::new(path)
             .types(types.select("osm").build().unwrap())
             .build_parallel();
-        let map = Mutex::new(HashMap::new());
+        let res = Mutex::new(PathSet::default());
         let errors = Mutex::new(PathSetError::new());
         walk.run(|| {
             Box::new(|path| {
@@ -71,7 +72,12 @@ impl PathSet {
                 for relation in relations.drain() {
                     match ImportPath::from_osm(relation, &osm) {
                         Ok((key, path)) => {
-                            map.lock().unwrap().insert(key, path);
+                            {
+                                let mut res = res.lock().unwrap();
+                                let idx = res.paths.len();
+                                res.names.insert(key, idx);
+                                res.paths.push(path);
+                            }
                         }
                         Err(err) => {
                             errors.lock().unwrap().add(path, err);
@@ -84,16 +90,20 @@ impl PathSet {
         });
         let errors = errors.into_inner().unwrap();
         errors.check()?;
-        Ok(PathSet { paths: map.into_inner().unwrap() })
+        Ok(res.into_inner().unwrap())
     }
 
-    pub fn get(&self, key: &str) -> Option<&ImportPath> {
-        self.paths.get(key)
+    pub fn lookup(&self, key: &str) -> Option<usize> {
+        self.names.get(key).cloned()
+    }
+
+    pub fn get(&self, idx: usize) -> Option<&ImportPath> {
+        self.paths.get(idx)
     }
 
     pub fn iter<'a>(
         &'a self
-    ) -> impl Iterator<Item = (&'a String, &'a ImportPath)> {
+    ) -> impl Iterator<Item = &'a ImportPath> {
         self.paths.iter()
     }
 }
@@ -113,8 +123,8 @@ impl ImportPath {
         self.len
     }
 
-    pub fn path(&self) -> &BasePath {
-        &self.path
+    pub fn path(&self) -> BasePath {
+        self.path.clone()
     }
 
     pub fn get_named(&self, name: &str) -> Option<u32> {
