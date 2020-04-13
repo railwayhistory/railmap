@@ -8,7 +8,16 @@ use crate::canvas::Canvas;
 /// The maximum zoom level we support.
 ///
 /// This **must** be less than 32 or stuff will break.
-pub const MAX_ZOOM: u8 = 20;
+const MAX_ZOOM: u8 = 20;
+
+
+/// The mapping of zoom levels to details.
+const DETAILS: &[u8] = &[
+    0, 0, 0, 0, 0,
+    1, 1, 2, 2, 3,
+    3, 4, 4, 4, 5,
+    5, 5, 5, 5, 5,
+];
 
 
 //------------ Tile ----------------------------------------------------------
@@ -45,7 +54,7 @@ impl Tile {
             surface.canvas_bp(),
             self.id.nw(),
             size * self.id.n(),
-            self.id.zoom,
+            DETAILS[self.id.zoom as usize],
         );
         features.render(&canvas);
     }

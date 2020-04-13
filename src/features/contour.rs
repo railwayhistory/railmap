@@ -61,7 +61,6 @@ pub fn simple(color: Color, width: f64) -> ContourRule {
     ContourRule(Arc::new(move |canvas: &Canvas, path: &Path| {
         color.apply(canvas);
         canvas.set_line_width(width * canvas.canvas_bp());
-        canvas.new_path();
         path.apply(canvas);
         canvas.stroke();
     }))
