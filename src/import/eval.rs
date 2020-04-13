@@ -503,7 +503,8 @@ impl ast::Location {
             None => Distance::default()
         };
         let name = name?;
-        Some((name, distance))
+        // Segment numbers are the _end_ of the segment.
+        Some((name + 1, distance))
     }
 }
 
@@ -559,42 +560,37 @@ impl ast::Range {
 impl ast::Segment {
     fn eval(
         self, scope: &mut Scope, err: &mut Error
-    ) -> Option<path::Segment> {
+    ) -> Option<path::Subpath> {
         let path = self.path.eval_path(scope, err)?;
 
-        let start = match self.start {
-            Some(val) => val.eval(path, err).map(Some),
-            None => Some(None)
-        };
-        let end = match self.end {
-            Some(val) => val.eval(path, err).map(Some),
+        let location = match self.location {
+            Some(location) => {
+                let start = location.0.eval(path, err);
+                let end = location.1.eval(path, err);
+                match (start, end) {
+                    (Some(start), Some(end)) => Some(Some((start, end))),
+                    _ => None
+                }
+            }
             None => Some(None)
         };
         let offset = match self.offset {
             Some(val) => val.eval(err).map(Some),
             None => Some(None)
         };
-        let start = start?;
-        let end = end?;
+        let location = location?;
         let offset = offset?;
 
-        Some(match (start, end)  {
-            (Some(start), Some(end)) => {
-                path::Segment::eval_subpath(
+        Some(match location {
+            Some((start, end)) => {
+                path::Subpath::eval(
                     path.path(),
                     start.0, start.1, end.0, end.1,
                     offset
                 )
             }
-            (Some(start), None) => {
-                path::Segment::eval_point(
-                    path.path(),
-                    start.0, start.1,
-                    offset
-                )
-            }
-            (None, _) => {
-                path::Segment::eval_full(
+            None => {
+                path::Subpath::eval_full(
                     path.path(),
                     offset
                 )
@@ -621,6 +617,14 @@ impl ast::Statement {
 }
 
 impl ast::StatementList {
+    pub fn eval_all(
+        self, scope: &mut Scope, features: &mut FeatureSet
+    ) -> Result<(), Error> {
+        let mut err = Error::default();
+        self.eval(scope, features, &mut err);
+        err.check()
+    }
+
     pub fn eval(
         self,
         scope: &mut Scope,
@@ -701,6 +705,21 @@ pub struct Error {
 impl Error {
     pub fn add(&mut self, pos: ast::Pos, error: impl Into<String>) {
         self.errors.push((pos, error.into()))
+    }
+
+    pub fn check(self) -> Result<(), Self> {
+        if self.errors.is_empty() {
+            Ok(())
+        }
+        else {
+            Err(self)
+        }
+    }
+
+    pub fn iter<'a>(
+        &'a self
+    ) -> impl Iterator<Item = (ast::Pos, &'a str)> + 'a {
+        self.errors.iter().map(|item| (item.0, item.1.as_ref()))
     }
 }
 

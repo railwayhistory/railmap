@@ -2,6 +2,7 @@
 use std::{fmt, fs, io};
 use std::path::Path as FsPath;
 use crate::features::FeatureSet;
+use super::{ast, eval};
 use super::path::PathSet;
 use super::ast::StatementList;
 use super::eval::Scope;
@@ -72,11 +73,10 @@ fn load_dir(
 
 fn load_file(
     path: &FsPath,
-    _context: &mut Scope,
-    _target: &mut FeatureSet,
+    scope: &mut Scope,
+    target: &mut FeatureSet,
     err: &mut FeatureSetError,
 ) {
-    eprintln!("\n---- {}", path.display());
     let data = match fs::read_to_string(path) {
         Ok(data) => data,
         Err(e) => {
@@ -84,13 +84,16 @@ fn load_file(
             return
         }
     };
-    let stm = StatementList::parse_str(&data);
-    eprintln!("{:#?}", stm);
-    /*
-    if let Err(e) = context.execute_str(&data, target) {
+    let stm = match StatementList::parse_str(&data) {
+        Ok(stm) => stm,
+        Err(e) => {
+            err.push(path, e);
+            return
+        }
+    };
+    if let Err(e) = stm.eval_all(scope, target) {
         err.push(path, e);
     }
-    */
 }
 
 
@@ -118,13 +121,14 @@ impl fmt::Display for FeatureSetError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for &(ref path, ref err) in &self.0 {
             match *err {
-                /*
-                Error::Lang(ref err_set) => {
-                    for err in err_set.iter() {
-                        writeln!(f, "{}: {}", path, err)?;
+                Error::Parse(ref err) => {
+                    writeln!(f, "{}: {}", path, err)?;
+                }
+                Error::Eval(ref err) => {
+                    for (pos, err) in err.iter() {
+                        writeln!(f, "{}:{}: {}", path, pos, err)?;
                     }
                 }
-                */
                 Error::Io(ref err) => {
                     writeln!(f, "{}: {}", path, err)?;
                 }
@@ -138,17 +142,22 @@ impl fmt::Display for FeatureSetError {
 //------------ Error ---------------------------------------------------------
 
 enum Error {
-    //Lang(LangError),
+    Parse(ast::Error),
+    Eval(eval::Error),
     Io(io::Error)
 }
 
-/*
-impl From<LangError> for Error {
-    fn from(err: LangError) -> Error {
-        Error::Lang(err)
+impl From<ast::Error> for Error {
+    fn from(err: ast::Error) -> Error {
+        Error::Parse(err)
     }
 }
-*/
+
+impl From<eval::Error> for Error {
+    fn from(err: eval::Error) -> Error {
+        Error::Eval(err)
+    }
+}
 
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Error {

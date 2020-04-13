@@ -238,7 +238,7 @@ fn cos_sin(theta: f64) -> (f64, f64) {
     (theta.cos(), theta.sin())
 }
 
-fn velocity(st: f64, ct: f64, sf: f64, cf: f64, t: f64) -> f64 {
+pub fn velocity(st: f64, ct: f64, sf: f64, cf: f64, t: f64) -> f64 {
     let sqrt5 = 5.0f64.sqrt();
     let res = (
         2.0 + SQRT_2 * (st - sf / 16.0) * (sf - st / 16.0) * (ct - cf)

@@ -25,8 +25,8 @@ impl Contour {
         Contour { path, render }
     }
 
-    pub fn bounding_box(&self) -> Rect {
-        self.path.bounding_box()
+    pub fn storage_bounds(&self) -> Rect {
+        self.path.storage_bounds()
     }
 
     pub fn render(&self, canvas: &Canvas) {
@@ -61,6 +61,7 @@ pub fn simple(color: Color, width: f64) -> ContourRule {
     ContourRule(Arc::new(move |canvas: &Canvas, path: &Path| {
         color.apply(canvas);
         canvas.set_line_width(width * canvas.canvas_bp());
+        canvas.new_path();
         path.apply(canvas);
         canvas.stroke();
     }))

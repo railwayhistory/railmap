@@ -27,5 +27,6 @@ impl Color {
 }
 
 impl Color {
+    pub const BLACK: Color = Color::rgb(0., 0., 0.);
     pub const RED: Color = Color::rgb(1., 0., 0.);
 }

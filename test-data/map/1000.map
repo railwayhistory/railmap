@@ -1,7 +1,10 @@
 let flwhag = path("path.de.1000");
 
 with detail = 0->20 {
-    contour hauptb:
-	flwhag[flw.f, hag] >> .5dt
-    ;
+#   contour hauptb: flwhag << 2mm;
+    contour hauptb: flwhag[flw, fri] << 4mm;
+#   contour hauptb: flwhag[fri, hag] >> 4mm;
+#   contour hauptb: flwhag;
+#   contour hauptb: flwhag[flw - 2mm, fri + 4mm]; 
+#   contour hauptb: flwhag[flw - 2mm, fri + 4mm] >> 2mm; 
 }

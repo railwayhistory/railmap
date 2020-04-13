@@ -73,7 +73,7 @@ pub struct StoredFeature {
 
 impl StoredFeature {
     pub fn new(feature: Feature, detail: (u8, u8), layer: f64) -> Self {
-        let bounds = feature.bounding_box();
+        let bounds = feature.storage_bounds();
         let detail = if detail.0 < detail.1 {
             (f64::from(detail.0), f64::from(detail.1))
         }
@@ -115,9 +115,9 @@ pub enum Feature {
 }
 
 impl Feature {
-    pub fn bounding_box(&self) -> Rect {
+    pub fn storage_bounds(&self) -> Rect {
         match *self {
-            Feature::Contour(ref contour) => contour.bounding_box(),
+            Feature::Contour(ref contour) => contour.storage_bounds(),
         }
     }
 

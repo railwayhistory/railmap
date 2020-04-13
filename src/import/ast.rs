@@ -44,7 +44,7 @@ pub struct StatementList {
 
 impl StatementList {
     /// Parses a string into a statement list.
-    pub fn parse_str(input: &str) -> Result<Self, ParseError> {
+    pub fn parse_str(input: &str) -> Result<Self, Error> {
         all_consuming(Self::parse)(Span::new(input))
         .map(|(_, res)| res)
         .map_err(|err| {
@@ -448,7 +448,7 @@ impl Path {
 ///
 /// ```text
 /// segment ::= path:expression
-///             ["[" start:location [ "," end:location ] "]" ]
+///             ["[" start:location "," end:location "]" ]
 ///             [ offset ]
 /// ```
 #[derive(Clone, Debug)]
@@ -456,11 +456,8 @@ pub struct Segment {
     /// The path the segment refers to.
     pub path: Expression,
 
-    /// The optional start location.
-    pub start: Option<Location>,
-
-    /// The optional end location.
-    pub end: Option<Location>,
+    /// The optional start and end location.
+    pub location: Option<(Location, Location)>,
 
     /// The optional offset.
     pub offset: Option<Offset>,
@@ -473,17 +470,15 @@ impl Segment {
     fn parse(input: Span) -> IResult<Span, Self> {
         let pos = Pos::capture(&input);
         let (input, path) = Expression::parse(input)?;
-        let (input, startend) = opt(
+        let (input, location) = opt(
             terminated(
                 preceded(
                     opt_ws(tag_char('[')),
                     tuple((
                         opt_ws(Location::parse),
-                        opt(
-                            preceded(
-                                opt_ws(tag_char(',')),
-                                opt_ws(Location::parse)
-                            )
+                        preceded(
+                            opt_ws(tag_char(',')),
+                            opt_ws(Location::parse)
                         )
                     ))
                 ),
@@ -491,12 +486,7 @@ impl Segment {
             )
         )(input)?;
         let (input, offset) = opt(opt_ws(Offset::parse))(input)?;
-
-        let (start, end) = match startend {
-            Some((start, end)) => (Some(start), end),
-            None => (None, None)
-        };
-        Ok((input, Segment { path, start, end, offset, pos }))
+        Ok((input, Segment { path, location, offset, pos }))
     }
 }
 
@@ -525,7 +515,7 @@ impl Location {
         let pos = Pos::capture(&input);
         let (input, name) = Identifier::parse(input)?;
         let (input, distance) = opt(tuple((
-            AddSub::parse, opt_ws(Distance::parse)
+            opt_ws(AddSub::parse), opt_ws(Distance::parse)
         )))(input)?;
         Ok((input, Location { name, distance, pos }))
     }
@@ -1027,24 +1017,24 @@ impl fmt::Display for Pos {
 }
 
 
-//============ ParseError ====================================================
+//============ Error ====================================================
 
 #[derive(Clone, Debug)]
-pub struct ParseError {
+pub struct Error {
     pos: Pos,
     kind: ErrorKind,
 }
 
-impl<'a> From<(Span<'a>, ErrorKind)> for ParseError {
+impl<'a> From<(Span<'a>, ErrorKind)> for Error {
     fn from((span, kind): (Span, ErrorKind)) -> Self {
-        ParseError {
+        Error {
             pos: Pos::capture(&span),
             kind
         }
     }
 }
 
-impl fmt::Display for ParseError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}: {}", self.pos, self.kind.description())
     }

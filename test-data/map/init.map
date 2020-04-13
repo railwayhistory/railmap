@@ -1,2 +1,2 @@
-let hauptb = simple(0.6bp);
+let hauptb = simple_line();
 

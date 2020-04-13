@@ -126,7 +126,7 @@ impl Canvas {
         self.transform
     }
 
-    /// Returns the size of a _bp_ in storage coordinates.
+    /// Returns the size of a _bp_ at the equator in storage coordinates.
     pub fn storage_bp(&self) -> f64 {
         self.storage_bp
     }
