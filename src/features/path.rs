@@ -17,15 +17,12 @@ use crate::import::mp_path::velocity;
 /// Accuracy for Kurbo arclen calculations in storage coordinates.
 ///
 /// This value should provide centimetre accuracy in storage coordinates.
-const STORAGE_ACCURACY: f64 = 1E-10;
+const STORAGE_ACCURACY: f64 = 1E-11;
 
 /// Accuracy for Kurbo arclen calculations in canvas coordinates.
 ///
 /// This value assumes about 192 dpi device resolution.
-const CANVAS_ACCURACY: f64 = 0.25;
-
-/// The square of the distance between two points we consider equal.
-const EPSILON2: f64 = 0.00001;
+const CANVAS_ACCURACY: f64 = 0.025;
 
 
 //------------ Path ----------------------------------------------------------
@@ -130,7 +127,12 @@ impl BasePath {
             None => 0.
         };
         let canvas = distance.canvas.unwrap_or(0.);
-        Location::new(SegTime::new(node, time), canvas)
+        if node == self.node_len() {
+            Location::new(SegTime::new(node - 1, 1.), canvas)
+        }
+        else {
+            Location::new(SegTime::new(node, time), canvas)
+        }
     }
 
     /// Returns the time value for a location on a given canvas.
@@ -150,12 +152,14 @@ impl BasePath {
         }
         else if location.canvas < 0. {
             let offset = -location.canvas;
-            let seg = self.segment_before(location.world).transform(canvas);
-            let arclen = seg.arclen();
+            let seg = self.segment(location.world.seg).transform(canvas);
+            let before = seg.sub(0., location.world.time);
+            let arclen = before.arclen();
             if arclen >= offset {
+                let len = seg.sub(location.world.time, 1.).arclen() + offset;
                 SegTime::new(
                     location.world.seg,
-                    (1. - seg.rev().arctime(offset)) * location.world.time
+                    1. - seg.rev().arctime(len)
                 )
             }
             else if location.world.seg > 1 {
@@ -173,13 +177,13 @@ impl BasePath {
         }
         else {
             let offset = location.canvas;
-            let seg = self.segment_after(location.world).transform(canvas);
-            let arclen = seg.arclen();
+            let seg = self.segment(location.world.seg).transform(canvas);
+            let after = seg.sub(location.world.time, 1.);
+            let arclen = after.arclen();
             if arclen > offset {
+                let len = seg.sub(0., location.world.time).arclen() + offset;
                 SegTime::new(
-                    location.world.seg,
-                    seg.arctime(offset) * (1. - location.world.time)
-                    + location.world.time
+                    location.world.seg, seg.arctime(len)
                 )
             }
             else if location.world.seg == self.node_len() - 1 {
@@ -302,7 +306,7 @@ impl Subpath {
         offset: Option<Distance>
     ) -> Self {
         let start = path.location(start_node, start_distance);
-        let end = path.location(end_node, end_distance).end();
+        let end = path.location(end_node, end_distance);
         Subpath::new(path, start, end, offset)
     }
 
@@ -345,9 +349,12 @@ impl Subpath {
     }
 
     fn apply_forward(
-        &self, start: SegTime, end: SegTime,
+        &self, start: SegTime, mut end: SegTime,
         before: Option<(Segment, f64, f64)>, canvas: &Canvas
     ) -> Segment {
+        if end.time == 0. {
+            end = SegTime::new(end.seg - 1, 1.);
+        }
         if start.seg == end.seg {
             let seg = self.path.segment(
                 start.seg
@@ -391,9 +398,12 @@ impl Subpath {
     }
 
     fn apply_reverse(
-        &self, start: SegTime, end: SegTime,
+        &self, mut start: SegTime, end: SegTime,
         before: Option<(Segment, f64, f64)>, canvas: &Canvas
     ) -> Segment {
+        if start.time == 0. {
+            start = SegTime::new(start.seg - 1, 1.);
+        }
         if start.seg == end.seg {
             let seg = self.path.segment(
                 start.seg
@@ -625,19 +635,6 @@ impl Location {
     pub fn new(world: SegTime, canvas: f64) -> Self {
         Location { world, canvas }
     }
-
-    /// Converts the location in a clean endpoint.
-    pub fn end(self) -> Location {
-        if self.world.time == 0. && self.canvas <= 0. {
-            Location::new(
-                SegTime::new(self.world.seg - 1, 1.),
-                self.canvas
-            )
-        }
-        else {
-            self
-        }
-    }
 }
 
 
@@ -664,6 +661,16 @@ pub struct SegTime {
 impl SegTime {
     fn new(seg: u32, time: f64) -> Self {
         SegTime { seg, time }
+    }
+
+    /// Converts the segtime into a clean endpoint.
+    pub fn end(self) -> Self {
+        if self.time == 0. {
+            SegTime::new(self.seg - 1, 1.)
+        }
+        else {
+            self
+        }
     }
 }
 
@@ -717,9 +724,9 @@ impl Segment {
         let theta = before.exit_dir().atan2() - aa;
         let phi = after.entry_dir().atan2() - aa;
         let (st, ct) = (theta.sin(), theta.cos());
-        let (sf, cf) = (phi.sin(), phi.cos());
-        let rr = velocity(st, ct, sf, cf, pre);
-        let ss = velocity(sf, cf, st, ct, post);
+        let (sf, cf) = (-phi.sin(), phi.cos());
+        let rr = velocity(st, ct, sf, cf, post);
+        let ss = velocity(sf, cf, st, ct, pre);
 
         // XXX We are ignoring negative tension ("at least") here because
         //     we don’t have that in our path expressions (yet).
@@ -786,16 +793,7 @@ impl Segment {
 
     /// Returns the part of the segment between the two given times.
     fn sub(self, start: f64, end: f64) -> Self {
-        let mut res = self.0.subsegment(start..end);
-        // If the resulting control points are too close to the end points,
-        // we move them to the endpoints to signal special cases.
-        if (res.p1 - res.p0).hypot2() < EPSILON2 {
-            res.p1 = res.p0;
-        }
-        if (res.p3 - res.p2).hypot2() < EPSILON2 {
-            res.p2 = res.p3;
-        }
-        Segment(res)
+        Segment(self.0.subsegment(start..end))
     }
 
     fn p0(self) -> Point { self.0.p0 }
@@ -855,7 +853,7 @@ impl Segment {
             }
             (false, true) => {
                 // v and s are the same.
-                let wru = v - u;
+                let wru = u - r;
                 let wus = s - u;
                 let rr = r + rot90(wru).normalize() * offset;
                 let ss = s + rot90(wus).normalize() * offset;

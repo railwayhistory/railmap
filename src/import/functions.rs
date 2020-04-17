@@ -14,7 +14,10 @@ pub fn eval(
 ) -> Option<eval::ExprVal> {
     match name.as_str() {
         "path" => path(pos, args, scope, err),
-        "simple_line" => simple_line(pos, args, scope, err),
+        "hbib" => simple_line(true, true),
+        "hbab" => simple_line(true, false),
+        "nbib" => simple_line(false, true),
+        "nbab" => simple_line(false, false),
         _ => {
             err.add(pos, format!("unknown function '{}'", name));
             None
@@ -46,8 +49,13 @@ fn path(
 
 /// A contour rendering rule for a simple, continous line.
 fn simple_line(
-    _pos: ast::Pos, _args: ArgumentList,
-    _scope: &eval::Scope, _err: &mut eval::Error
+    hauptbahn: bool, in_betrieb: bool,
 ) -> Option<ExprVal> {
-    Some(ExprVal::ContourRule(contour::simple(Color::BLACK, 1.0)))
+    Some(ExprVal::ContourRule(contour::simple(
+        if in_betrieb { Color::BLACK }
+        else { Color::grey(0.5) },
+        if hauptbahn { 0.8 }
+        else { 0.6 }
+    )))
 }
+

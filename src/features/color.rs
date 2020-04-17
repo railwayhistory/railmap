@@ -21,6 +21,10 @@ impl Color {
         Color { red, green, blue, alpha }
     }
 
+    pub const fn grey(level: f64) -> Self {
+        Color::rgb(level, level, level)
+    }
+
     pub fn apply(&self, canvas: &Canvas) {
         canvas.set_source_rgba(self.red, self.green, self.blue, self.alpha)
     }
