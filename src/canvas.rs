@@ -29,6 +29,7 @@ const BOUNDS_CORRECTION: f64 = 0.5;
 /// The canvas also provides the transformation for converting storage
 /// coordinates into canvas coordinates and a measure for its resolution,
 /// with is the size of a _bp_ (i.e., a ’PostScript point’).
+#[derive(Debug)]
 pub struct Canvas {
     /// The Cairo context for actual rendering.
     context: cairo::Context,

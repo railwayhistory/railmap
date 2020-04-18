@@ -1,6 +1,6 @@
 /// Paths.
 
-use std::{cmp, ops};
+use std::{cmp, ops, slice};
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -23,41 +23,6 @@ const STORAGE_ACCURACY: f64 = 1E-11;
 ///
 /// This value assumes about 192 dpi device resolution.
 const CANVAS_ACCURACY: f64 = 0.025;
-
-
-//------------ Path ----------------------------------------------------------
-
-/// A path.
-#[derive(Clone, Debug)]
-pub struct Path {
-    first: Subpath,
-    others: Vec<(f64, f64, Subpath)>,
-}
-
-impl Path {
-    pub fn new(first: Subpath) -> Self {
-        Path { first, others: Vec::new() }
-    }
-
-    pub fn push(&mut self, post: f64, pre: f64, segment: Subpath) {
-        self.others.push((post, pre, segment))
-    }
-
-    pub fn apply(&self, canvas: &Canvas) {
-        let mut seg = self.first.apply(None, canvas);
-        for &(post, pre, ref part) in &self.others {
-            seg = part.apply(Some((seg, post, pre)), canvas);
-        }
-    }
-
-    pub fn storage_bounds(&self) -> Rect {
-        let mut res = self.first.storage_bounds();
-        for item in &self.others {
-            res = res.union(item.2.storage_bounds())
-        }
-        res
-    }
-}
 
 
 //------------ BasePath ------------------------------------------------------
@@ -258,6 +223,139 @@ impl BasePath {
 }
 
 
+//------------ Path ----------------------------------------------------------
+
+/// A path.
+///
+/// This path is constructed as a sequence of connected subpaths referencing
+/// `BasePath`s.
+#[derive(Clone, Debug)]
+pub struct Path {
+    /// The sequence of parts.
+    ///
+    /// The first two elements are the tensions when leaving the previous
+    /// part and entering this part. The third element is the part itself.
+    parts: Vec<(f64, f64, Subpath)>,
+}
+
+impl Path {
+    pub fn new(first: Subpath) -> Self {
+        Path {
+            parts: vec![(1., 1., first)]
+        }
+    }
+
+    pub fn push(&mut self, post: f64, pre: f64, segment: Subpath) {
+        self.parts.push((post, pre, segment))
+    }
+
+    pub fn apply(&self, canvas: &Canvas) {
+        let mut segments = self.segments(canvas);
+        let seg = segments.next().unwrap();
+        seg.apply_start(canvas);
+        seg.apply_tail(canvas);
+        segments.for_each(|seg| seg.apply_tail(canvas));
+    }
+
+    pub fn storage_bounds(&self) -> Rect {
+        let mut parts = self.parts.iter();
+        let mut res = parts.next().unwrap().2.storage_bounds();
+        for item in parts {
+            res = res.union(item.2.storage_bounds())
+        }
+        res
+    }
+
+    pub fn parts(&self) -> PathPartsIter {
+        self.parts.iter()
+    }
+
+    pub fn segments<'a>(&'a self, canvas: &'a Canvas) -> PathSegmentIter<'a> {
+        PathSegmentIter::new(self, canvas)
+    }
+}
+
+
+//------------ PathPartsIter -------------------------------------------------
+
+/// An iterator over the parts of the path.
+pub type PathPartsIter<'a> = slice::Iter<'a, (f64, f64, Subpath)>;
+
+
+//------------ PathSegmentIter -----------------------------------------------
+
+/// An iterator over the segments in a path.
+#[derive(Clone, Debug)]
+pub struct PathSegmentIter<'a> {
+    /// An iterator producing the next part of the path.
+    next_part: PathPartsIter<'a>,
+
+    /// An iterator producing the next segment of the current part.
+    ///
+    /// If this is `None`, we need a new part.
+    next_seg: SubpathSegmentIter<'a>,
+
+    /// The last segment we returned.
+    ///
+    /// This is necessary to build the connection between parts.
+    last_seg: Option<Segment>,
+
+    /// The canvas to use for transforming the path.
+    canvas: &'a Canvas,
+}
+
+impl<'a> PathSegmentIter<'a> {
+    fn new(path: &'a Path, canvas: &'a Canvas) -> Self {
+        let mut next_part = path.parts.iter();
+        let &(_, _, ref part) = next_part.next().unwrap();
+        PathSegmentIter {
+            next_part,
+            next_seg: part.iter(canvas),
+            last_seg: None,
+            canvas
+        }
+    }
+}
+
+impl<'a> Iterator for PathSegmentIter<'a> {
+    type Item = Segment;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.next_seg.next() {
+            Some(seg) => {
+                // We have one more segment in the current part.
+                self.last_seg = Some(seg);
+                Some(seg)
+            }
+            None => {
+                // We’ve run out of segments in the current part.
+                //
+                // Grab the next part or return if we are done.
+                let &(post, pre, ref part) = self.next_part.next()?;
+                self.next_seg = part.iter(self.canvas);
+
+                // We need to produce a connection between the last and next
+                // segment.
+                //
+                // Grab the cached segment and first segment of the new part.
+                // Neither of them can be None at this point lest we have
+                // empty parts.
+                let before = self.last_seg.take().unwrap();
+
+                // We take the first segment from a copy of the iterator so
+                // we continue with returning the first segment next time.
+                //
+                // (Using a clone here is cheaper since the iterator does all
+                // the expensive stuff during its creation.)
+                let after = self.next_seg.clone().next().unwrap();
+
+                Some(Segment::connect(before, post, pre, after))
+            }
+        }
+    }
+}
+
+
 //------------ Subpath -------------------------------------------------------
 
 /// Part of a path.
@@ -334,115 +432,202 @@ impl Subpath {
         }
     }
 
-    fn apply(
-        &self, before: Option<(Segment, f64, f64)>, canvas: &Canvas
-    ) -> Segment {
-        let start = self.path.location_time(self.start, canvas);
-        let end = self.path.location_time(self.end, canvas);
+    fn iter<'a>(&'a self, canvas: &'a Canvas) -> SubpathSegmentIter<'a> {
+        SubpathSegmentIter::new(self, canvas)
+    }
+}
+
+
+//------------ SubpathSegmentIter --------------------------------------------
+
+/// An iterator over the segments in the subpath.
+#[derive(Clone, Debug)]
+pub struct SubpathSegmentIter<'a> {
+    /// The subpath we are working on.
+    subpath: &'a Subpath,
+
+    /// The canvas to transform the base path onto.
+    canvas: &'a Canvas,
+
+    /// Is this subpath forward or backward over the base path?
+    forward: bool,
+
+    /// The first segment of the subpath.
+    ///
+    /// This is precomputed since it is used twice by the path iterator. It
+    /// will be `None` if we are past the first segment.
+    ///
+    /// If the subpath only has only one segment, this is it.
+    first: Option<Segment>,
+
+    /// The middle of the subpath.
+    ///
+    /// This is the range of segment indexes left to iterate over. It will be
+    /// `None` if we are past the middle or there isn’t one.
+    middle: Option<(u32, u32)>,
+
+    /// The last segment of the subpath.
+    ///
+    /// Contains the location of the end of the segment. Will be `None` if we
+    /// are past this part or if there isn’t one.
+    last: Option<SegTime>,
+}
+
+impl<'a> SubpathSegmentIter<'a> {
+    fn new(subpath: &'a Subpath, canvas: &'a Canvas) -> Self {
+        let start = subpath.path.location_time(subpath.start, canvas);
+        let end = subpath.path.location_time(subpath.end, canvas);
 
         if start < end {
-            self.apply_forward(start, end, before, canvas)
+            Self::new_forward(subpath, canvas, start, end)
         }
         else {
-            self.apply_reverse(start, end, before, canvas)
+            Self::new_reverse(subpath, canvas, start, end)
         }
     }
 
-    fn apply_forward(
-        &self, start: SegTime, mut end: SegTime,
-        before: Option<(Segment, f64, f64)>, canvas: &Canvas
-    ) -> Segment {
+    fn new_forward(
+        subpath: &'a Subpath, canvas: &'a Canvas,
+        start: SegTime, mut end: SegTime
+    ) -> Self {
         if end.time == 0. {
             end = SegTime::new(end.seg - 1, 1.);
         }
-        if start.seg == end.seg {
-            let seg = self.path.segment(
-                start.seg
-            ).sub(start.time, end.time).transf_off(canvas, self.offset);
-            if let Some((before, post, pre)) = before {
-                Segment::connect(before, post, pre, seg).apply_tail(canvas)
-            }
-            else {
-                seg.apply_start(canvas);
-            }
-            seg.apply_tail(canvas);
-            seg
+        let (first, middle, last) = if start.seg == end.seg {
+            (
+                Some(
+                    subpath.path.segment(start.seg).sub(
+                        start.time, end.time
+                    ).transf_off(canvas, subpath.offset)
+                ),
+                None,
+                None
+            )
         }
         else {
-            // First segment
-            let seg = self.path.segment_after(start).transf_off(
-                canvas, self.offset
-            );
-            if let Some((before, post, pre)) = before {
-                Segment::connect(before, post, pre, seg).apply_tail(canvas)
-            }
-            else {
-                seg.apply_start(canvas);
-            }
-            seg.apply_tail(canvas);
-
-            // Middle segments
-            for idx in start.seg + 1..end.seg {
-                self.path.segment(idx).transf_off(
-                    canvas, self.offset
-                ).apply_tail(canvas);
-            }
-
-            // End segment
-            let seg = self.path.segment_before(end).transf_off(
-                canvas, self.offset
-            );
-            seg.apply_tail(canvas);
-            seg
+            (
+                Some(subpath.path.segment_after(start).transf_off(
+                    canvas, subpath.offset
+                )),
+                if start.seg + 2 >= end.seg {
+                    None
+                }
+                else {
+                    Some((start.seg + 1, end.seg - 1))
+                },
+                Some(end)
+            )
+        };
+        SubpathSegmentIter {
+            subpath, canvas,
+            forward: true,
+            first, middle, last
         }
     }
 
-    fn apply_reverse(
-        &self, mut start: SegTime, end: SegTime,
-        before: Option<(Segment, f64, f64)>, canvas: &Canvas
-    ) -> Segment {
+    fn new_reverse(
+        subpath: &'a Subpath, canvas: &'a Canvas,
+        mut start: SegTime, end: SegTime
+    ) -> Self {
         if start.time == 0. {
             start = SegTime::new(start.seg - 1, 1.);
         }
-        if start.seg == end.seg {
-            let seg = self.path.segment(
-                start.seg
-            ).sub(end.time, start.time).rev().transf_off(canvas, self.offset);
-            if let Some((before, post, pre)) = before {
-                Segment::connect(before, post, pre, seg).apply_tail(canvas)
-            }
-            else {
-                seg.apply_start(canvas);
-            }
-            seg.apply_tail(canvas);
-            seg
+        let (first, middle, last) = if start.seg == end.seg {
+            (
+                Some(
+                    subpath.path.segment(start.seg).sub(
+                        end.time, start.time
+                    ).rev().transf_off(canvas, subpath.offset)
+                ),
+                None,
+                None
+            )
         }
         else {
-            // First segment
-            let seg = self.path.segment_before(start).rev().transf_off(
-                canvas, self.offset
+            (
+                Some(subpath.path.segment_before(start).rev().transf_off(
+                    canvas, subpath.offset
+                )),
+                if end.seg + 2 >= start.seg {
+                    None
+                }
+                else {
+                    Some((start.seg - 1, end.seg + 1))
+                },
+                Some(end)
+            )
+        };
+        SubpathSegmentIter {
+            subpath, canvas,
+            forward: false,
+            first, middle, last
+        }
+    }
+
+    fn next_forward(&mut self) -> Option<Segment> {
+        if let Some(seg) = self.first.take() {
+            return Some(seg)
+        }
+        if let Some((start, end)) = self.middle {
+            let seg = self.subpath.path.segment(start).transf_off(
+                self.canvas, self.subpath.offset
             );
-            if let Some((before, post, pre)) = before {
-                Segment::connect(before, post, pre, seg).apply_tail(canvas)
+            let start = start + 1;
+            self.middle = if start > end {
+                None
             }
             else {
-                seg.apply_start(canvas);
-            }
-            seg.apply_tail(canvas);
+                Some((start, end))
+            };
+            return Some(seg)
+        }
+        if let Some(end) = self.last.take() {
+            return Some(
+                self.subpath.path.segment_before(end).transf_off(
+                    self.canvas, self.subpath.offset
+                )
+            )
+        }
+        None
+    }
 
-            // Middle segments
-            for idx in (end.seg + 1..start.seg).rev() {
-                self.path.segment(idx).rev().transf_off(
-                    canvas, self.offset
-                ).apply_tail(canvas);
-            }
-
-            // End segment
-            let seg = self.path.segment_after(end).rev().transf_off(
-                canvas, self.offset
+    fn next_reverse(&mut self) -> Option<Segment> {
+        if let Some(seg) = self.first.take() {
+            return Some(seg)
+        }
+        if let Some((start, end)) = self.middle {
+            let seg = self.subpath.path.segment(start).rev().transf_off(
+                self.canvas, self.subpath.offset
             );
-            seg.apply_tail(canvas);
-            seg
+            let start = start - 1;
+            self.middle = if start < end {
+                None
+            }
+            else {
+                Some((start, end))
+            };
+            return Some(seg)
+        }
+        if let Some(end) = self.last.take() {
+            return Some(
+                self.subpath.path.segment_after(end).rev().transf_off(
+                    self.canvas, self.subpath.offset
+                )
+            )
+        }
+        None
+    }
+}
+
+impl<'a> Iterator for SubpathSegmentIter<'a> {
+    type Item = Segment;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.forward {
+            self.next_forward()
+        }
+        else {
+            self.next_reverse()
         }
     }
 }
