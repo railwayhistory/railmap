@@ -3,7 +3,6 @@ use std::fmt;
 use std::sync::Arc;
 use kurbo::Rect;
 use crate::canvas::Canvas;
-use crate::import::units;
 use super::color::Color;
 use super::path::Path;
 
@@ -67,19 +66,27 @@ pub fn simple(color: Color, width: f64) -> ContourRule {
     }))
 }
 
-pub fn square_dash(
+pub fn dashed_line(
     color: Color,
-    part_len: f64,
-    dash_len: f64,
-    _offset: (f64, f64),
+    width: f64,
+    on: f64,
+    off: f64,
+    offset: Option<f64>,
 ) -> ContourRule {
     ContourRule(Arc::new(move |canvas: &Canvas, path: &Path| {
+        let on = on * canvas.canvas_bp();
+        let off = off * canvas.canvas_bp();
         color.apply(canvas);
-        canvas.set_line_width(units::DT * canvas.canvas_bp());
-        for path in path.partitions(part_len, canvas) {
-            path.subpath(0., path.arctime(dash_len)).apply();
-            canvas.stroke();
+        canvas.set_line_width(width * canvas.canvas_bp());
+        canvas.set_dash(&[on, off], on + off / 2.);
+        match offset {
+            Some(offset) => {
+                path.apply_offset(offset * canvas.canvas_bp(), canvas)
+            }
+            None => path.apply(canvas),
         }
+        canvas.stroke();
+        canvas.set_dash(&[], 0.);
     }))
 }
 

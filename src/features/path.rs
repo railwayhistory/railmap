@@ -258,6 +258,15 @@ impl Path {
         segments.for_each(|seg| seg.apply_tail(canvas));
     }
 
+    pub fn apply_offset(&self, offset: f64, canvas: &Canvas) {
+        let mut segments = self.segments(canvas);
+        let seg = segments.next().unwrap().offset(offset);
+        seg.apply_start(canvas);
+        seg.apply_tail(canvas);
+        segments.for_each(|seg| seg.offset(offset).apply_tail(canvas));
+    }
+
+
     pub fn storage_bounds(&self) -> Rect {
         let mut parts = self.parts.iter();
         let mut res = parts.next().unwrap().2.storage_bounds();

@@ -92,8 +92,16 @@ impl Canvas {
             feature_size.y * BOUNDS_CORRECTION,
         );
 
+        let context = cairo::Context::new(surface);
+        context.move_to(0.,0.);
+        context.line_to(size.x, 0.);
+        context.line_to(size.x, size.y);
+        context.line_to(0., size.y);
+        context.close_path();
+        context.clip();
+
         Canvas {
-            context: cairo::Context::new(surface),
+            context,
             feature_bounds: Rect::new(
                 nw.x - correct.x,
                 nw.y - correct.y,
@@ -327,8 +335,8 @@ impl<'a> Path<'a> {
         let seg = seg + 1;
         let time = time.fract();
 
-        if seg > self.node_len() {
-            SegTime::new(self.node_len(), 1.)
+        if seg >= self.node_len() {
+            SegTime::new(self.node_len() - 1, 1.)
         }
         else {
             SegTime::new(seg, time)

@@ -2,7 +2,7 @@ use std::convert::TryInto;
 use std::collections::HashMap;
 use std::str::FromStr;
 use crate::features::path;
-use crate::features::{Distance, FeatureSet, Path};
+use crate::features::{Color, Distance, FeatureSet, Path};
 use crate::features::contour::{Contour, ContourRule};
 use crate::import::functions;
 use crate::import::units;
@@ -113,6 +113,16 @@ impl Expression {
         Expression { value, pos }
     }
 
+    pub fn into_color(self, err: &mut Error) -> Option<Color> {
+        match self.value {
+            ExprVal::Color(value) => Some(value),
+            _ => {
+                err.add(self.pos, "expected color");
+                None
+            }
+        }
+    }
+
     pub fn into_contour_rule(self, err: &mut Error) -> Option<ContourRule> {
         match self.value {
             ExprVal::ContourRule(rule) => Some(rule),
@@ -123,13 +133,42 @@ impl Expression {
         }
     }
 
-    pub fn into_distance(
-        self, err: &mut Error
-    ) -> Option<Distance> {
+    pub fn into_distance(self, err: &mut Error) -> Option<Distance> {
         match self.value {
             ExprVal::Distance(path) => Some(path),
             _ => {
                 err.add(self.pos, "expected distance");
+                None
+            }
+        }
+    }
+
+    pub fn into_canvas_distance(self, err: &mut Error) -> Option<f64> {
+        match self.value {
+            ExprVal::Distance(value) => {
+                if value.world.is_some() {
+                    err.add(
+                        self.pos,
+                        "distance cannot have a world component"
+                    );
+                    None
+                }
+                else {
+                    Some(value.canvas.unwrap_or_default())
+                }
+            }
+            _ => {
+                err.add(self.pos, "expected distance");
+                None
+            }
+        }
+    }
+
+    pub fn into_number(self, err: &mut Error) -> Option<Number> {
+        match self.value {
+            ExprVal::Number(value) => Some(value),
+            _ => {
+                err.add(self.pos, "expected number");
                 None
             }
         }
@@ -170,6 +209,7 @@ pub enum ExprVal {
     Range(Range),
     Number(Number),
     Text(String),
+    Color(Color),
     ContourRule(ContourRule),
     Path(usize),
 }
@@ -209,7 +249,7 @@ pub enum Number {
 }
 
 impl Number {
-    fn into_u8(self) -> Result<u8, String> {
+    pub fn into_u8(self) -> Result<u8, String> {
         match self {
             Number::Int(val) => {
                 val.try_into().map_err(|_| "value out of range".into())
@@ -220,7 +260,7 @@ impl Number {
         }
     }
 
-    fn into_f64(self) -> f64 {
+    pub fn into_f64(self) -> f64 {
         match self {
             Number::Int(val) => val.into(),
             Number::Float(val) => val
@@ -252,8 +292,10 @@ impl ArgumentList {
         }
     }
 
-    /// Returns an iterator for a list of positional arguments only.
-    pub fn into_pos_iter(
+    /// Converts the list into an iterator over positional arguments.
+    ///
+    /// Returns an error if there are any keyword arguments.
+    pub fn into_positional(
         self, err: &mut Error
     ) -> Option<impl Iterator<Item = Expression>> {
         for item in &self.arguments {
@@ -265,8 +307,25 @@ impl ArgumentList {
         Some(self.arguments.into_iter().map(|item| item.1))
     }
 
+    /// Converts the list into an iterator over `len`  positional arguments.
+    ///
+    /// Returns an error if there are any keyword arguments or if there is
+    /// the wrong number of arguments.
+    pub fn into_n_positional(
+        self, len: usize, err: &mut Error
+    ) -> Option<impl Iterator<Item = Expression>> {
+        if self.arguments.len() != len {
+            err.add(
+                self.pos,
+                format!("expected exactly {} arguments", len)
+            );
+            return None
+        }
+        self.into_positional(err)
+    }
+
     /// Converts the list into its sole positional argument or errors.
-    pub fn single_pos(self, err: &mut Error) -> Option<Expression> {
+    pub fn single_positional(self, err: &mut Error) -> Option<Expression> {
         if self.arguments.len() != 1 {
             err.add(self.pos, "expected a single positional argument");
             return None
@@ -277,6 +336,27 @@ impl ArgumentList {
         }
         Some(self.arguments.into_iter().next().unwrap().1)
     }
+
+    /// Converts the arguments into keyword arguments.
+    ///
+    /// If there are any positional arguments, returns an error.
+    pub fn into_keyword(
+        self, err: &mut Error
+    ) -> Option<KeywordArguments> {
+        for item in &self.arguments {
+            if item.0.is_none() {
+                err.add(item.1.pos, "expected keyword arguments only");
+                return None
+            }
+        }
+        Some(KeywordArguments {
+            args: self.arguments
+                .into_iter()
+                .map(|item| (item.0.unwrap(), item.1))
+                .collect(),
+            pos: self.pos
+        })
+    }
 }
 
 impl IntoIterator for ArgumentList {
@@ -285,6 +365,46 @@ impl IntoIterator for ArgumentList {
 
     fn into_iter(self) -> Self::IntoIter {
         self.arguments.into_iter()
+    }
+}
+
+
+//------------ KeywordArguments ----------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct KeywordArguments {
+    args: HashMap<String, Expression>,
+    pos: ast::Pos,
+}
+
+impl KeywordArguments {
+    pub fn take(
+        &mut self, keyword: &str, err: &mut Error
+    ) -> Option<Expression> {
+        match self.args.remove(keyword) {
+            Some(res) => Some(res),
+            None => {
+                err.add(
+                    self.pos,
+                    format!("missing keyword argument '{}'", keyword)
+                );
+                None
+            }
+        }
+    }
+
+    pub fn take_opt(&mut self, keyword: &str) -> Option<Expression> {
+        self.args.remove(keyword) 
+    }
+
+    pub fn check_empty(self, err: &mut Error) -> Option<()> {
+        if self.args.is_empty() {
+            Some(())
+        }
+        else {
+            err.add(self.pos, "unrecognized keyword arguments");
+            None
+        }
     }
 }
 

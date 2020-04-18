@@ -20,3 +20,7 @@ tokio = { version = "0.2", features = ["macros"] }
 [[bin]]
 name = "railmap"
 doc = false
+
+
+[profile.release]
+panic = "abort"
