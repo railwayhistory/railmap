@@ -1,5 +1,8 @@
 /// The units we understand.
 
+// Various canvas units in bp.
+pub const DT: f64 = 0.75 * (72./25.4);
+
 /// The list of canvas distance units.
 /// 
 /// The list contains pairs of the unit’s name and how many base units fit

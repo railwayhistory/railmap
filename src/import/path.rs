@@ -11,7 +11,7 @@ use ignore::types::TypesBuilder;
 use kurbo::Vec2;
 use osmxml::elements::{MemberType, Osm, Relation};
 use osmxml::read::read_xml;
-use crate::features::path::BasePath;
+use crate::features::path::StoredPath;
 use super::mp_path;
 
 
@@ -113,7 +113,7 @@ impl PathSet {
 
 #[derive(Clone, Debug)]
 pub struct ImportPath {
-    path: BasePath,
+    path: StoredPath,
     len: usize,
     node_names: HashMap<String, u32>,
 }
@@ -123,7 +123,7 @@ impl ImportPath {
         self.len
     }
 
-    pub fn path(&self) -> BasePath {
+    pub fn path(&self) -> StoredPath {
         self.path.clone()
     }
 
@@ -283,7 +283,7 @@ impl ImportPath {
         )
     }
 
-    fn create_final_path(nodes: &[Node]) -> BasePath {
+    fn create_final_path(nodes: &[Node]) -> StoredPath {
         let segment = mp_path::Segment::from_vec(
             nodes.iter().map(|node| {
                 mp_path::Knot::new(
@@ -292,7 +292,7 @@ impl ImportPath {
                 )
             }).collect()
         );
-        BasePath::new(segment.to_bez_path())
+        StoredPath::new(segment.to_bez_path())
     }
 }
 

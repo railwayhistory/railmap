@@ -8,6 +8,7 @@ use kurbo::{
     BezPath, CubicBez, ParamCurve, ParamCurveArclen, ParamCurveExtrema,
     PathSeg, Point, Rect, Vec2
 };
+use crate::canvas;
 use crate::canvas::Canvas;
 use crate::import::mp_path::velocity;
 
@@ -22,18 +23,18 @@ const STORAGE_ACCURACY: f64 = 1E-11;
 /// Accuracy for Kurbo arclen calculations in canvas coordinates.
 ///
 /// This value assumes about 192 dpi device resolution.
-const CANVAS_ACCURACY: f64 = 0.025;
+pub(crate) const CANVAS_ACCURACY: f64 = 0.025;
 
 
-//------------ BasePath ------------------------------------------------------
+//------------ StoredPath ----------------------------------------------------
 
 /// A basic path.
 #[derive(Clone, Debug)]
-pub struct BasePath(Arc<BezPath>);
+pub struct StoredPath(Arc<BezPath>);
 
-impl BasePath {
+impl StoredPath {
     pub fn new(path: BezPath) -> Self {
-        BasePath(Arc::new(path))
+        StoredPath(Arc::new(path))
     }
 
     /// Returns the minimum location of the path.
@@ -228,7 +229,7 @@ impl BasePath {
 /// A path.
 ///
 /// This path is constructed as a sequence of connected subpaths referencing
-/// `BasePath`s.
+/// `StoredPath`s.
 #[derive(Clone, Debug)]
 pub struct Path {
     /// The sequence of parts.
@@ -272,6 +273,15 @@ impl Path {
 
     pub fn segments<'a>(&'a self, canvas: &'a Canvas) -> PathSegmentIter<'a> {
         PathSegmentIter::new(self, canvas)
+    }
+
+    pub fn partitions<'a>(
+        &'a self, part_len: f64, canvas: &'a Canvas
+    ) -> PathPartitionIter<'a> {
+        PathPartitionIter::new(
+            self.segments(canvas),
+            part_len * canvas.canvas_bp()
+        )
     }
 }
 
@@ -356,6 +366,91 @@ impl<'a> Iterator for PathSegmentIter<'a> {
 }
 
 
+//------------ PathPartitionIter ---------------------------------------------
+
+/// An iterator over equal-length partitions of a path.
+///
+/// The iterator produces items of type [`canvas::Path`] that can be applied
+/// directly to the canvas or be meddled with.
+///
+/// [`canvas::Path`]: ../canvas/struct.Path.html
+#[derive(Clone, Debug)]
+pub struct PathPartitionIter<'a> {
+    /// The current segment.
+    ///
+    /// If this is `None`, we have processed the whole segment and need to
+    /// move on to the next.
+    cur_seg: Option<Segment>,
+    
+    /// The iterator producing the next segment.
+    next_seg: PathSegmentIter<'a>,
+    
+    /// The arclen of each partition.
+    part_len: f64,
+}
+
+impl<'a> PathPartitionIter<'a> {
+    fn new(segments: PathSegmentIter<'a>, part_len: f64) -> Self {
+        PathPartitionIter {
+            cur_seg: None,
+            next_seg: segments,
+            part_len
+        }
+    }
+
+    /// Changes the partition length.
+    ///
+    /// The length is given in _bp_.
+    pub fn set_part_len(&mut self, part_len: f64) {
+        self.part_len = part_len * self.next_seg.canvas.canvas_bp();
+    }
+}
+
+impl<'a> Iterator for PathPartitionIter<'a> {
+    type Item = canvas::Path<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut seg = match self.cur_seg {
+            Some(seg) => seg,
+            None => self.next_seg.next()? // Return on empty.
+        };
+        let mut res = canvas::Path::new(self.next_seg.canvas);
+        let mut part_len = self.part_len;
+        res.move_to(seg.p0());
+
+        loop {
+            let seg_len = seg.arclen();
+            match part_len.partial_cmp(&seg_len).unwrap() {
+                Ordering::Less => {
+                    let end = seg.arctime(part_len);
+                    self.cur_seg = Some(seg.sub(end, 1.0));
+                    let end = seg.sub(0., end);
+                    res.curve_to(end.p1(), end.p2(), end.p3());
+                    break
+                }
+                Ordering::Equal => {
+                    self.cur_seg = None;
+                    res.curve_to(seg.p1(), seg.p2(), seg.p3());
+                    break
+                }
+                Ordering::Greater => {
+                    res.curve_to(seg.p1(), seg.p2(), seg.p3());
+                    part_len -= seg_len;
+                    match self.next_seg.next() {
+                        Some(next_seg) => seg = next_seg,
+                        None => {
+                            self.cur_seg = None;
+                            break
+                        }
+                    }
+                }
+            }
+        }
+        Some(res)
+    }
+}
+
+
 //------------ Subpath -------------------------------------------------------
 
 /// Part of a path.
@@ -367,7 +462,7 @@ impl<'a> Iterator for PathSegmentIter<'a> {
 #[derive(Clone, Debug)]
 pub struct Subpath {
     /// The base path.
-    path: BasePath,
+    path: StoredPath,
 
     /// The start location on `path`.
     start: Location,
@@ -384,21 +479,21 @@ pub struct Subpath {
 
 impl Subpath {
     pub fn new(
-        path: BasePath,
+        path: StoredPath,
         start: Location, end: Location,
         offset: Option<Distance>
     ) -> Self {
         Subpath { path, start, end, offset }
     }
 
-    pub fn eval_full(path: BasePath, offset: Option<Distance>) -> Self {
+    pub fn eval_full(path: StoredPath, offset: Option<Distance>) -> Self {
         let start = path.min_location();
         let end = path.max_location();
         Subpath::new(path, start, end, offset)
     }
 
     pub fn eval(
-        path: BasePath,
+        path: StoredPath,
         start_node: u32, start_distance: Distance,
         end_node: u32, end_distance: Distance,
         offset: Option<Distance>
@@ -646,7 +741,7 @@ impl<'a> Iterator for SubpathSegmentIter<'a> {
 #[derive(Clone, Debug)]
 pub struct Position {
     /// The base path.
-    path: BasePath,
+    path: StoredPath,
 
     /// The location of the position on the path.
     location: Location,
@@ -660,7 +755,7 @@ pub struct Position {
 
 impl Position {
     pub fn new(
-        path: BasePath, location: Location, offset: Option<Distance>
+        path: StoredPath, location: Location, offset: Option<Distance>
     ) -> Self {
         Position { path, location, offset }
     }
@@ -844,7 +939,7 @@ pub struct SegTime {
 }
 
 impl SegTime {
-    fn new(seg: u32, time: f64) -> Self {
+    pub fn new(seg: u32, time: f64) -> Self {
         SegTime { seg, time }
     }
 

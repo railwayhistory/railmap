@@ -1,10 +1,7 @@
-let flwhag = path("path.de.1000");
+let neufle = path("path.de.1040");
 
-with detail = 0->20 {
-#   contour hauptb: flwhag << 2mm;
-    contour hauptb: flwhag[flw, fri] << 4mm;
-#   contour hauptb: flwhag[fri, hag] >> 4mm;
-#   contour hauptb: flwhag;
-#   contour hauptb: flwhag[flw - 2mm, fri + 4mm]; 
-#   contour hauptb: flwhag[flw - 2mm, fri + 4mm] >> 2mm; 
+with detail = 4->5 {
+	contour hbib: neufle[neu, flw.a] << 0.5dt;
+	contour hbib: neufle[neu, flw.a] >> 0.5dt;
+	contour elib: neufle[neu, flw.a];
 }

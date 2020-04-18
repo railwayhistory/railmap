@@ -3,6 +3,7 @@ use std::fmt;
 use std::sync::Arc;
 use kurbo::Rect;
 use crate::canvas::Canvas;
+use crate::import::units;
 use super::color::Color;
 use super::path::Path;
 
@@ -63,6 +64,22 @@ pub fn simple(color: Color, width: f64) -> ContourRule {
         canvas.set_line_width(width * canvas.canvas_bp());
         path.apply(canvas);
         canvas.stroke();
+    }))
+}
+
+pub fn square_dash(
+    color: Color,
+    part_len: f64,
+    dash_len: f64,
+    _offset: (f64, f64),
+) -> ContourRule {
+    ContourRule(Arc::new(move |canvas: &Canvas, path: &Path| {
+        color.apply(canvas);
+        canvas.set_line_width(units::DT * canvas.canvas_bp());
+        for path in path.partitions(part_len, canvas) {
+            path.subpath(0., path.arctime(dash_len)).apply();
+            canvas.stroke();
+        }
     }))
 }
 

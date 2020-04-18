@@ -2,6 +2,7 @@
 
 use crate::features::Color;
 use crate::features::contour;
+use crate::import::units;
 use super::{ast, eval};
 use super::eval::{ArgumentList, ExprVal};
 
@@ -18,6 +19,7 @@ pub fn eval(
         "hbab" => simple_line(true, false),
         "nbib" => simple_line(false, true),
         "nbab" => simple_line(false, false),
+        "elib" => Some(square_dash()),
         _ => {
             err.add(pos, format!("unknown function '{}'", name));
             None
@@ -59,3 +61,11 @@ fn simple_line(
     )))
 }
 
+/// A contour rendering rule producing square dashes.
+fn square_dash() -> ExprVal {
+    ExprVal::ContourRule(contour::square_dash(
+        Color::BLACK,
+        8. * units::DT, 3. * units::DT,
+        (-0.5 * units::DT, 0.5 * units::DT),
+    ))
+}
