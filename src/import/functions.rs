@@ -1,7 +1,9 @@
 /// The function we support during import.
 
-use crate::features::Color;
+use crate::features::{Color};
 use crate::features::contour;
+use crate::features::symbol::RenderSymbol;
+use crate::library::symbols;
 use super::{ast, eval};
 use super::eval::{ArgumentList, ExprVal};
 
@@ -19,11 +21,21 @@ pub fn eval(
         "rgb" => rgb(pos, args, scope, err),
         "rgba" => rgba(pos, args, scope, err),
 
+        // Symbols
+        "de_bf_ib" => symbol(symbols::de_bf_ib),
+        "de_bf_ab" => symbol(symbols::de_bf_ab),
+        "de_hp_ib" => symbol(symbols::de_hp_ib),
+        "de_hp_ab" => symbol(symbols::de_hp_ab),
+
         _ => {
             err.add(pos, format!("unknown function '{}'", name));
             None
         }
     }
+}
+
+fn symbol(rule: impl RenderSymbol) -> Option<eval::ExprVal> {
+    Some(ExprVal::SymbolRule(rule.into()))
 }
 
 /// A contour rendering rule for a simple dashed line.

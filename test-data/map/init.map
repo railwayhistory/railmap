@@ -6,3 +6,6 @@ let nebengleis = 0.4bp;
 let hbib = line(black, hauptgleis);
 let elib2 = dashed_line(color = black, width = 1dt, on = 3dt, off = 5dt);
 
+let bfib = de_bf_ib(); 
+let bfab = de_bf_ab(); 
+

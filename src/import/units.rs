@@ -1,7 +1,9 @@
 /// The units we understand.
 
 // Various canvas units in bp.
-pub const DT: f64 = 0.75 * (72./25.4);
+pub const MM: f64 = 72./25.4;
+pub const DT: f64 = 0.75 * MM;
+pub const PT: f64 = 1.;
 
 /// The list of canvas distance units.
 /// 
@@ -16,9 +18,10 @@ pub const CANVAS_DISTANCES: &[(&str, f64)] = &[
     ("cm", 72./2.54),
 
     // Relative units.
-    ("dt", 0.75 * (72./25.4)),  // Distance between tracks. 0.5 mm
-    ("dl", 0.5 * (72./25.4)), // Length of a track crossing between two
+    ("dt", 0.75 * (72./25.4)), // Distance between tracks. 0.5 mm
+    ("dl", 0.5 * (72./25.4)),  // Length of a track crossing between two
                                // tracks one dt apart.
+    ("sw", 2.25 * MM),
 ];
 
 

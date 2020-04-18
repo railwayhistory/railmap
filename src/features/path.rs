@@ -1,12 +1,14 @@
 /// Paths.
+///
+//  XXX TODO Replace straight segments with actual lines.
 
 use std::{cmp, ops, slice};
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::sync::Arc;
 use kurbo::{
-    BezPath, CubicBez, ParamCurve, ParamCurveArclen, ParamCurveExtrema,
-    PathSeg, Point, Rect, Vec2
+    BezPath, CubicBez, ParamCurve, ParamCurveArclen,
+    ParamCurveExtrema, PathSeg, Point, Rect, Vec2
 };
 use crate::canvas;
 use crate::canvas::Canvas;
@@ -759,24 +761,54 @@ pub struct Position {
     ///
     /// Given in canvas coordinates. Positive values are to the left of the
     /// path. I.e., this is the length of a tangent vector rotated 90°.
-    offset: Option<Distance>
+    offset: Option<Distance>,
+
+    /// Optional roation from the original direction.
+    rotation: Option<f64>,
 }
 
 impl Position {
     pub fn new(
-        path: StoredPath, location: Location, offset: Option<Distance>
+        path: StoredPath,
+        location: Location,
+        offset: Option<Distance>,
+        rotation: Option<f64>,
     ) -> Self {
-        Position { path, location, offset }
+        Position { path, location, offset, rotation }
     }
 
-    /*
-    fn storage_bounds(&self) -> Rect {
+    pub fn eval(
+        path: StoredPath,
+        node: u32,
+        distance: Distance,
+        offset: Option<Distance>,
+        rotation: Option<f64>
+    ) -> Self {
+        let location = path.location(node, distance);
+        let rotation = rotation.map(f64::to_radians);
+        Position::new(path, location, offset, rotation)
+    }
+
+    pub fn storage_bounds(&self) -> Rect {
         let p = self.path.segment_after(
             self.location.world
         ).p0();
         (p, p).into()
     }
-    */
+
+    pub fn resolve(&self, canvas: &Canvas) -> (Point, f64) {
+        let loc = self.path.location_time(self.location, canvas);
+        let seg = self.path.segment(loc.seg).transform(canvas);
+        let mut point = seg.point(loc.time);
+        let dir = seg.dir(loc.time);
+        let angle = dir.atan2() + self.rotation.unwrap_or(0.);
+        if let Some(offset) = self.offset {
+            let offset = offset.resolve(point, canvas);
+            let dir = offset * rot90(dir).normalize();
+            point += dir;
+        }
+        (point, angle)
+    }
 }
 
 
@@ -1034,6 +1066,11 @@ impl Segment {
         )
     }
 
+    /// Returns whether the segment is straight.
+    fn is_straight(self) -> bool {
+        self.p0() == self.p1() && self.p2() == self.p3()
+    }
+
     /// Returns the bounding box of the segment.
     fn bounds(self) -> Rect {
         self.0.bounding_box()
@@ -1089,6 +1126,22 @@ impl Segment {
     fn p1(self) -> Point { self.0.p1 }
     fn p2(self) -> Point { self.0.p2 }
     fn p3(self) -> Point { self.0.p3 }
+
+    fn point(self, at: f64) -> Point {
+        self.0.eval(at)
+    }
+
+    fn dir(self, at: f64) -> Vec2 {
+        if self.is_straight() {
+            self.p3() - self.p0()
+        }
+        else {
+            let ta = 1. - at;
+            3. * ta * ta * (self.p1() - self.p0())
+            + 6. * ta * at * (self.p2() - self.p1())
+            + 3. * at * at * (self.p3() - self.p2())
+        }
+    }
 
     /// Returns a path that is offset to the left by the given value.
     ///

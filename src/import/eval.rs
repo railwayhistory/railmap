@@ -2,8 +2,10 @@ use std::convert::TryInto;
 use std::collections::HashMap;
 use std::str::FromStr;
 use crate::features::path;
-use crate::features::{Color, Distance, FeatureSet, Path};
-use crate::features::contour::{Contour, ContourRule};
+use crate::features::{
+    Color, Contour, ContourRule, Distance, FeatureSet, Path, Position,
+    Symbol, SymbolRule,
+};
 use crate::import::functions;
 use crate::import::units;
 use crate::import::path::{ImportPath, PathSet};
@@ -133,6 +135,16 @@ impl Expression {
         }
     }
 
+    pub fn into_symbol_rule(self, err: &mut Error) -> Option<SymbolRule> {
+        match self.value {
+            ExprVal::SymbolRule(rule) => Some(rule),
+            _ => {
+                err.add(self.pos, "expected symbol rule");
+                None
+            }
+        }
+    }
+
     pub fn into_distance(self, err: &mut Error) -> Option<Distance> {
         match self.value {
             ExprVal::Distance(path) => Some(path),
@@ -211,6 +223,7 @@ pub enum ExprVal {
     Text(String),
     Color(Color),
     ContourRule(ContourRule),
+    SymbolRule(SymbolRule),
     Path(usize),
 }
 
@@ -560,6 +573,12 @@ impl ast::Expression {
         self.eval(scope, err).and_then(|expr| expr.into_contour_rule(err))
     }
 
+    fn eval_symbol_rule(
+        self, scope: &Scope, err: &mut Error
+    ) -> Option<SymbolRule> {
+        self.eval(scope, err).and_then(|expr| expr.into_symbol_rule(err))
+    }
+
     fn eval_path<'s>(
         self, scope: &'s Scope, err: &mut Error
     ) -> Option<&'s ImportPath> {
@@ -668,6 +687,21 @@ impl ast::Path {
     }
 }
 
+impl ast::Position {
+    fn eval(self, scope: &mut Scope, err: &mut Error) -> Option<Position> {
+        let path = self.path.eval_path(scope, err)?;
+
+        let location = self.location.eval(path, err);
+        let offset = match self.offset {
+            Some(val) => Some(val.eval(err)?),
+            None => None
+        };
+        let rotation = self.rotation.map(|r| r.eval_float());
+        let (node, distance) = location?;
+        Some(Position::eval(path.path(), node, distance, offset, rotation))
+    }
+}
+
 impl ast::Range {
     fn eval(self) -> Range {
         Range {
@@ -732,6 +766,9 @@ impl ast::Statement {
             ast::Statement::Contour(contour) => {
                 contour.eval(scope, features, err)
             }
+            ast::Statement::Symbol(symbol) => {
+                symbol.eval(scope, features, err)
+            }
         }
     }
 }
@@ -753,6 +790,42 @@ impl ast::StatementList {
     ) {
         for statement in self.statements {
             statement.eval(scope, features, err)
+        }
+    }
+}
+
+impl ast::Symbol {
+    pub fn eval(
+        self,
+        scope: &mut Scope,
+        features: &mut FeatureSet,
+        err: &mut Error
+    ) {
+        // Get the rendering parameters for this contour.
+        let mut params = scope.params.clone();
+        if let Some(value) = self.params {
+            value.eval_params(&mut params, scope, err);
+        }
+
+        // Get all the parts.
+        let rule = self.rule.eval_symbol_rule(scope, err);
+        let position = self.position.eval(scope, err);
+
+        // If we don’t have a detail, complain.
+        let detail = match params.detail {
+            Some(detail) => detail,
+            None => {
+                err.add(self.pos, "'detail' rendering parameter not yet set");
+                return
+            }
+        };
+
+        // If we have both a rule and a position, create the feature.
+        if let (Some(rule), Some(position)) = (rule, position) {
+            features.insert(
+                Symbol::new(position, rule),
+                detail,  params.layer   
+            )
         }
     }
 }

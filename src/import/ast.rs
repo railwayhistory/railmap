@@ -80,6 +80,7 @@ pub enum Statement {
     Let(Let),
     With(With),
     Contour(Contour),
+    Symbol(Symbol),
 }
 
 impl Statement {
@@ -88,6 +89,7 @@ impl Statement {
             map(Let::parse, Statement::Let),
             map(With::parse, Statement::With),
             map(Contour::parse, Statement::Contour),
+            map(Symbol::parse, Statement::Symbol),
         ))(input)
     }
 }
@@ -168,9 +170,10 @@ impl With {
 /// The coutour statement draws a contour onto the map.
 ///
 /// ```text
-/// contour ::= "contour" rule:expression
+/// contour ::= "contour" 
 ///             [ "with" params:assignment-list ]
-///             ":" path ";"
+///             rule:expression
+///             path ";"
 /// ```
 ///
 /// If the optional `params` are present, the rendering parameters are updated
@@ -197,6 +200,7 @@ impl Contour {
     fn parse(input: Span) -> IResult<Span, Self> {
         let pos = Pos::capture(&input);
         let (input, _) = opt_ws(tag("contour"))(input)?;
+        let (input, _) = skip_ws(input)?;
         let (input, params) = opt(
             preceded(
                 opt_ws(tag("with")),
@@ -204,10 +208,53 @@ impl Contour {
             )
         )(input)?;
         let (input, rule) = opt_ws(Expression::parse)(input)?;
-        let (input, _) = opt_ws(tag_char(':'))(input)?;
         let (input, path) = opt_ws(Path::parse)(input)?;
         let (input, _) = opt_ws(tag_char(';'))(input)?;
         Ok((input, Contour { params, rule, path, pos }))
+    }
+}
+
+
+//------------ Symbol --------------------------------------------------------
+
+/// The symbol statements draw a symbol onto the map.
+///
+/// ```text
+/// symbol ::= "symbol"
+///            [ "with" params:assignment-list ]
+///            rule:expression
+///            position ";"
+/// ```
+#[derive(Clone, Debug)]
+pub struct Symbol {
+    /// Optional updates to the rendering parameters for this contour.
+    pub params: Option<AssignmentList>,
+
+    /// The rendering rule for this symbol.
+    pub rule: Expression,
+
+    /// The position of the symbol.
+    pub position: Position,
+
+    /// The start of the contour statement in the source.
+    pub pos: Pos
+}
+
+impl Symbol {
+    fn parse(input: Span) -> IResult<Span, Self> {
+        let pos = Pos::capture(&input);
+        let (input, _) = opt_ws(tag("symbol"))(input)?;
+        let (input, _) = skip_ws(input)?;
+        let (input, params) = opt(
+            preceded(
+                opt_ws(tag("with")),
+                opt_ws(AssignmentList::parse)
+            )
+        )(input)?;
+        let (input, rule) = opt_ws(Expression::parse)(input)?;
+        let (input, position) = opt_ws(Position::parse)(input)?;
+        let (input, _) = opt_ws(tag_char(';'))(input)?;
+        Ok((input, Symbol { params, rule, position, pos }))
     }
 }
 
@@ -223,7 +270,8 @@ impl Contour {
 /// then done during evaluation.
 ///
 /// ```text
-/// expression ::= distance | range | number | text | function | identifier
+/// expression ::= distance | position | range | number | text | function
+///              | identifier
 /// ```
 #[derive(Clone, Debug)]
 pub enum Expression {
@@ -487,6 +535,55 @@ impl Segment {
         )(input)?;
         let (input, offset) = opt(opt_ws(Offset::parse))(input)?;
         Ok((input, Segment { path, location, offset, pos }))
+    }
+}
+
+
+//------------ Position ------------------------------------------------------
+
+/// A position expression derives a point and direction from a path.
+///
+/// ```text
+/// position ::= path:expression "[" location "]"
+///              [ offset ] [ "@" angle:number ]
+/// ```
+#[derive(Clone, Debug)]
+pub struct Position {
+    /// The path the position derives to.
+    pub path: Expression,
+
+    /// The location on the path.
+    pub location: Location,
+
+    /// The optional offset.
+    pub offset: Option<Offset>,
+
+    /// The optional rotation.
+    pub rotation: Option<Number>,
+
+    /// The start of the position in the source
+    pub pos: Pos
+}
+
+impl Position {
+    fn parse(input: Span) -> IResult<Span, Self> {
+        let pos = Pos::capture(&input);
+        let (input, path) = Expression::parse(input)?;
+        let (input, location) = terminated(
+            preceded(
+                opt_ws(tag_char('[')),
+                opt_ws(Location::parse)
+            ),
+            opt_ws(tag_char(']'))
+        )(input)?;
+        let (input, offset) = opt(opt_ws(Offset::parse))(input)?;
+        let (input, rotation) = opt(
+            preceded(
+                opt_ws(tag_char('@')),
+                opt_ws(Number::parse)
+            )
+        )(input)?;
+        Ok((input, Position { path, location, offset, rotation, pos }))
     }
 }
 
