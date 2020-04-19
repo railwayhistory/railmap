@@ -3,11 +3,13 @@
 
 pub use self::color::Color;
 pub use self::contour::{Contour, ContourRule};
+pub use self::label::{Font, Label, Layout};
 pub use self::path::{Distance, Location, Path, Position};
 pub use self::symbol::{Symbol, SymbolRule};
 
 pub mod color;
 pub mod contour;
+pub mod label;
 pub mod path;
 pub mod symbol;
 
@@ -114,6 +116,7 @@ impl ops::Deref for StoredFeature {
 
 pub enum Feature {
     Contour(Contour),
+    Label(Label),
     Symbol(Symbol),
 }
 
@@ -121,6 +124,7 @@ impl Feature {
     pub fn storage_bounds(&self) -> Rect {
         match *self {
             Feature::Contour(ref contour) => contour.storage_bounds(),
+            Feature::Label(ref label) => label.storage_bounds(),
             Feature::Symbol(ref symbol) => symbol.storage_bounds(),
         }
     }
@@ -128,6 +132,7 @@ impl Feature {
     pub fn render(&self, canvas: &Canvas) {
         match *self {
             Feature::Contour(ref contour) => contour.render(canvas),
+            Feature::Label(ref label) => label.render(canvas),
             Feature::Symbol(ref symbol) => symbol.render(canvas),
         }
     }
@@ -139,6 +144,12 @@ impl Feature {
 impl From<Contour> for Feature {
     fn from(contour: Contour) -> Feature {
         Feature::Contour(contour)
+    }
+}
+
+impl From<Label> for Feature {
+    fn from(label: Label) -> Feature {
+        Feature::Label(label)
     }
 }
 

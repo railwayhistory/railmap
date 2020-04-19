@@ -1,12 +1,14 @@
+use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::collections::HashMap;
 use std::str::FromStr;
-use crate::features::path;
+use crate::features::{path, label};
 use crate::features::{
-    Color, Contour, ContourRule, Distance, FeatureSet, Path, Position,
-    Symbol, SymbolRule,
+    Color, Contour, ContourRule, Distance, FeatureSet, Label, Layout, Path,
+    Position, Symbol, SymbolRule,
 };
-use crate::import::functions;
+use crate::import::Failed;
+use crate::import::functions::Function;
 use crate::import::units;
 use crate::import::path::{ImportPath, PathSet};
 use super::ast;
@@ -115,12 +117,22 @@ impl Expression {
         Expression { value, pos }
     }
 
-    pub fn into_color(self, err: &mut Error) -> Option<Color> {
+    pub fn to_align(&self, err: &mut Error) -> Result<label::Align, Failed> {
         match self.value {
-            ExprVal::Color(value) => Some(value),
+            ExprVal::Align(value) => Ok(value),
+            _ => {
+                err.add(self.pos, "expected alignment");
+                Err(Failed)
+            }
+        }
+    }
+
+    pub fn to_color(&self, err: &mut Error) -> Result<Color, Failed> {
+        match self.value {
+            ExprVal::Color(value) => Ok(value),
             _ => {
                 err.add(self.pos, "expected color");
-                None
+                Err(Failed)
             }
         }
     }
@@ -130,6 +142,92 @@ impl Expression {
             ExprVal::ContourRule(rule) => Some(rule),
             _ => {
                 err.add(self.pos, "expected contour rule");
+                None
+            }
+        }
+    }
+
+    pub fn to_distance(&self, err: &mut Error) -> Option<Distance> {
+        match self.value {
+            ExprVal::Distance(path) => Some(path),
+            _ => {
+                err.add(self.pos, "expected distance");
+                None
+            }
+        }
+    }
+    pub fn into_distance(self, err: &mut Error) -> Option<Distance> {
+        self.to_distance(err)
+    }
+
+    pub fn to_canvas_distance(&self, err: &mut Error) -> Result<f64, Failed> {
+        match self.value {
+            ExprVal::Distance(value) => {
+                if value.world.is_some() {
+                    err.add(
+                        self.pos,
+                        "distance cannot have a world component"
+                    );
+                    Err(Failed)
+                }
+                else {
+                    Ok(value.canvas.unwrap_or_default())
+                }
+            }
+            _ => {
+                err.add(self.pos, "expected distance");
+                Err(Failed)
+            }
+        }
+    }
+
+    pub fn to_font(&self, err: &mut Error) -> Result<label::Font, Failed> {
+        match self.value {
+            ExprVal::Font(ref font) => Ok(font.clone()),
+            _ => {
+                err.add(self.pos, "expected font");
+                Err(Failed)
+            }
+        }
+    }
+
+    pub fn to_layout(&self, err: &mut Error) -> Result<Layout, Failed> {
+        match self.value {
+            ExprVal::Layout(ref layout) => Ok(layout.clone()),
+            _ => {
+                err.add(self.pos, "expected layout");
+                Err(Failed)
+            }
+        }
+    }
+
+    pub fn into_layout(self, err: &mut Error) -> Option<Layout> {
+        match self.value {
+            ExprVal::Layout(layout) => Some(layout),
+            _ => {
+                err.add(self.pos, "expected layout");
+                None
+            }
+        }
+    }
+
+    pub fn to_number(&self, err: &mut Error) -> Result<Number, Failed> {
+        match self.value {
+            ExprVal::Number(value) => Ok(value),
+            _ => {
+                err.add(self.pos, "expected number");
+                Err(Failed)
+            }
+        }
+    }
+
+    pub fn into_path<'s>(
+        self, scope: &'s Scope, err: &mut Error
+    ) -> Option<&'s ImportPath> {
+        match self.value {
+            ExprVal::Path(path) => Some(scope.paths().get(path).unwrap()),
+            _ => {
+                err.add(self.pos, "expected path segment");
                 None
             }
         }
@@ -145,55 +243,12 @@ impl Expression {
         }
     }
 
-    pub fn into_distance(self, err: &mut Error) -> Option<Distance> {
+    pub fn to_text(&self, err: &mut Error) -> Result<&str, Failed> {
         match self.value {
-            ExprVal::Distance(path) => Some(path),
+            ExprVal::Text(ref val) => Ok(val),
             _ => {
-                err.add(self.pos, "expected distance");
-                None
-            }
-        }
-    }
-
-    pub fn into_canvas_distance(self, err: &mut Error) -> Option<f64> {
-        match self.value {
-            ExprVal::Distance(value) => {
-                if value.world.is_some() {
-                    err.add(
-                        self.pos,
-                        "distance cannot have a world component"
-                    );
-                    None
-                }
-                else {
-                    Some(value.canvas.unwrap_or_default())
-                }
-            }
-            _ => {
-                err.add(self.pos, "expected distance");
-                None
-            }
-        }
-    }
-
-    pub fn into_number(self, err: &mut Error) -> Option<Number> {
-        match self.value {
-            ExprVal::Number(value) => Some(value),
-            _ => {
-                err.add(self.pos, "expected number");
-                None
-            }
-        }
-    }
-
-    pub fn into_path<'s>(
-        self, scope: &'s Scope, err: &mut Error
-    ) -> Option<&'s ImportPath> {
-        match self.value {
-            ExprVal::Path(path) => Some(scope.paths().get(path).unwrap()),
-            _ => {
-                err.add(self.pos, "expected path segment");
-                None
+                err.add(self.pos, "expected text");
+                Err(Failed)
             }
         }
     }
@@ -217,14 +272,18 @@ impl Expression {
 /// This has a shorthand name because we are going to type it a lot.
 #[derive(Clone, Debug)]
 pub enum ExprVal {
-    Distance(Distance),
-    Range(Range),
-    Number(Number),
-    Text(String),
+    Align(label::Align),
     Color(Color),
     ContourRule(ContourRule),
-    SymbolRule(SymbolRule),
+    Distance(Distance),
+    Font(label::Font),
+    Layout(label::Layout),
+    Number(Number),
+    PartialFunc(PartialFunc),
     Path(usize),
+    Range(Range),
+    SymbolRule(SymbolRule),
+    Text(String),
 }
 
 
@@ -282,142 +341,135 @@ impl Number {
 }
 
 
+//------------ PartialFunc ---------------------------------------------------
+
+/// A partially applied function.
+///
+/// When a function is called in a let expression with an incomplete set of
+/// arguments, its execution is delayed and a partial function expression is
+/// retained instead. This can be called again supplying the missing arguments
+/// or adding more in another let expression.
+#[derive(Clone, Debug)]
+pub struct PartialFunc {
+    /// The function to eventually execute.
+    function: Function,
+
+    /// The arguments of the function.
+    ///
+    /// This is updated every time the partial function is evaluated again.
+    args: ArgumentList,
+}
+
+impl PartialFunc {
+    fn new(name: &str, args: ArgumentList) -> Option<Self> {
+        Function::lookup(name).map(|function| {
+            PartialFunc { function, args }
+        })
+    }
+
+    fn eval(self, scope: &Scope, err: &mut Error) -> Option<ExprVal> {
+        match self.function.eval(&self.args, scope, err) {
+            Ok(Some(res)) => Some(res),
+            Ok(None) => Some(ExprVal::PartialFunc(self)),
+            Err(_) => None
+        }
+    }
+}
+
+
 //------------ ArgumentList --------------------------------------------------
 
 /// Evaluated arguments of a function.
 #[derive(Clone, Debug)]
 pub struct ArgumentList {
-    /// The list of arguments.
-    ///
-    /// The first element is the keyword if this is a keyword argument.
-    /// Otherwise it is a positional argument.
-    arguments: Vec<(Option<String>, Expression)>,
+    /// The positional arguments.
+    positional: Vec<Expression>,
 
-    /// The position of argument list.
+    /// The keyword arguments
+    keyword: HashMap<ast::Identifier, Expression>,
+
+    /// The start of this argument list in its source.
     pos: ast::Pos,
 }
 
 impl ArgumentList {
     fn new(pos: ast::Pos) -> Self {
         ArgumentList {
-            arguments: Vec::new(),
+            positional: Vec::new(),
+            keyword: HashMap::new(),
             pos
         }
     }
 
-    /// Converts the list into an iterator over positional arguments.
+    fn extend(&mut self, args: Self) {
+        self.positional.extend(args.positional.into_iter());
+        self.keyword.extend(args.keyword.into_iter());
+        self.pos = args.pos;
+    }
+
+    pub fn pos(&self) -> ast::Pos {
+        self.pos
+    }
+
+    /// Returns the positional arguments.
     ///
-    /// Returns an error if there are any keyword arguments.
-    pub fn into_positional(
-        self, err: &mut Error
-    ) -> Option<impl Iterator<Item = Expression>> {
-        for item in &self.arguments {
-            if item.0.is_some() {
-                err.add(item.1.pos, "expected positiona arguments only");
-                return None
-            }
-        }
-        Some(self.arguments.into_iter().map(|item| item.1))
-    }
-
-    /// Converts the list into an iterator over `len`  positional arguments.
-    ///
-    /// Returns an error if there are any keyword arguments or if there is
-    /// the wrong number of arguments.
-    pub fn into_n_positional(
-        self, len: usize, err: &mut Error
-    ) -> Option<impl Iterator<Item = Expression>> {
-        if self.arguments.len() != len {
-            err.add(
-                self.pos,
-                format!("expected exactly {} arguments", len)
-            );
-            return None
-        }
-        self.into_positional(err)
-    }
-
-    /// Converts the list into its sole positional argument or errors.
-    pub fn single_positional(self, err: &mut Error) -> Option<Expression> {
-        if self.arguments.len() != 1 {
-            err.add(self.pos, "expected a single positional argument");
-            return None
-        }
-        if self.arguments[0].0.is_some() {
-            err.add(self.pos, "expected a single positional argument");
-            return None
-        }
-        Some(self.arguments.into_iter().next().unwrap().1)
-    }
-
-    /// Converts the arguments into keyword arguments.
-    ///
-    /// If there are any positional arguments, returns an error.
-    pub fn into_keyword(
-        self, err: &mut Error
-    ) -> Option<KeywordArguments> {
-        for item in &self.arguments {
-            if item.0.is_none() {
-                err.add(item.1.pos, "expected keyword arguments only");
-                return None
-            }
-        }
-        Some(KeywordArguments {
-            args: self.arguments
-                .into_iter()
-                .map(|item| (item.0.unwrap(), item.1))
-                .collect(),
-            pos: self.pos
-        })
-    }
-}
-
-impl IntoIterator for ArgumentList {
-    type Item = (Option<String>, Expression);
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.arguments.into_iter()
-    }
-}
-
-
-//------------ KeywordArguments ----------------------------------------------
-
-#[derive(Clone, Debug)]
-pub struct KeywordArguments {
-    args: HashMap<String, Expression>,
-    pos: ast::Pos,
-}
-
-impl KeywordArguments {
-    pub fn take(
-        &mut self, keyword: &str, err: &mut Error
-    ) -> Option<Expression> {
-        match self.args.remove(keyword) {
-            Some(res) => Some(res),
-            None => {
-                err.add(
-                    self.pos,
-                    format!("missing keyword argument '{}'", keyword)
-                );
-                None
-            }
-        }
-    }
-
-    pub fn take_opt(&mut self, keyword: &str) -> Option<Expression> {
-        self.args.remove(keyword) 
-    }
-
-    pub fn check_empty(self, err: &mut Error) -> Option<()> {
-        if self.args.is_empty() {
-            Some(())
+    /// Fails if there are keyword arguments.
+    pub fn positional_only(
+        &self, err: &mut Error
+    ) -> Result<&[Expression], Failed> {
+        if !self.keyword.is_empty() {
+            err.add(self.pos, "expected positional arguments only");
+            Err(Failed)
         }
         else {
-            err.add(self.pos, "unrecognized keyword arguments");
-            None
+            Ok(&self.positional)
         }
+    }
+
+    /// Returns exactly n positional arguments.
+    ///
+    /// Fails if there are keyword arguments or more than n positional
+    /// arguments. Returns `Ok(None)` if there are less than n positional
+    /// arguments.
+    pub fn n_positional_only(
+        &self, n: usize, err: &mut Error
+    ) -> Result<Option<&[Expression]>, Failed> {
+        self.positional_only(err).and_then(|res| {
+            match res.len().cmp(&n) {
+                Ordering::Less => Ok(None),
+                Ordering::Equal => Ok(Some(res)),
+                Ordering::Greater => {
+                    err.add(
+                        self.pos,
+                        format!("expected exactly {} positional arguments", n)
+                    );
+                    Err(Failed)
+                }
+            }
+        })
+    }
+
+    /// Returns the only positional argument.
+    pub fn sole_positional(
+        &self, err: &mut Error
+    ) -> Result<Option<&Expression>, Failed> {
+        self.n_positional_only(1, err).map(|res| res.map(|res| &res[0]))
+    }
+
+    /// Checks that there are keyword arguments only.
+    pub fn keyword_only(&self, err: &mut Error) -> Result<(), Failed> {
+        if !self.positional.is_empty() {
+            err.add(self.pos, "expected keyword arguments only");
+            Err(Failed)
+        }
+        else {
+            Ok(())
+        }
+    }
+
+    /// Returns a keyword argument.
+    pub fn get_keyword(&self, key: &str) -> Option<&Expression> {
+        self.keyword.get(key)
     }
 }
 
@@ -429,22 +481,20 @@ impl KeywordArguments {
 impl ast::ArgumentList {
     fn eval(self, scope: &Scope, err: &mut Error) -> Option<ArgumentList> {
         let mut good = true;
-        let mut res = ArgumentList { arguments: Vec::new(), pos: self.pos };
+        let mut res = ArgumentList::new(self.pos);
         for argument in self.arguments {
             match argument {
                 ast::Argument::Keyword(assignment) => {
                     match assignment.expression.eval(scope, err) {
                         Some(expr) => {
-                            res.arguments.push(
-                                (Some(assignment.target.eval()), expr)
-                            )
+                            res.keyword.insert(assignment.target, expr);
                         }
                         None => good = false,
                     }
                 }
                 ast::Argument::Pos(expr) => {
                     match expr.eval(scope, err) {
-                        Some(expr) => res.arguments.push((None, expr)),
+                        Some(expr) => res.positional.push(expr),
                         None => good = false,
                     }
                 }
@@ -528,6 +578,23 @@ impl ast::Distance {
         }
         res
     }
+
+    fn eval_loc(self, neg_first: bool, err: &mut Error) -> Option<Distance> {
+        let mut res = self.first.eval(err).map(|res| {
+            if neg_first { -res } else { res }
+        });
+        for (addsub, value) in self.others {
+            if let Some(distance) = value.eval(err) {
+                if let Some(res) = res.as_mut() {
+                    match addsub {
+                        ast::AddSub::Add => *res += distance,
+                        ast::AddSub::Sub => *res -= distance,
+                    }
+                }
+            }
+        }
+        res
+    }
 }
 
 impl ast::Expression {
@@ -573,6 +640,12 @@ impl ast::Expression {
         self.eval(scope, err).and_then(|expr| expr.into_contour_rule(err))
     }
 
+    fn eval_layout(
+        self, scope: &Scope, err: &mut Error
+    ) -> Option<Layout> {
+        self.eval(scope, err).and_then(|expr| expr.into_layout(err))
+    }
+
     fn eval_symbol_rule(
         self, scope: &Scope, err: &mut Error
     ) -> Option<SymbolRule> {
@@ -588,12 +661,35 @@ impl ast::Expression {
 
 impl ast::Function {
     fn eval(self, scope: &Scope, err: &mut Error) -> Option<ExprVal> {
-        let name = self.name.eval();
         let args = match self.args {
             Some(args) => args.eval(scope, err)?,
-            None => ArgumentList::new(self.pos)
+            None => ArgumentList::new(self.name.pos)
         };
-        functions::eval(self.pos, name, args, scope, err)
+
+        let func = match scope.get_var(self.name.as_ref()) {
+            Some(ExprVal::PartialFunc(mut func)) => {
+                func.args.extend(args);
+                func
+            }
+            Some(_) => {
+                err.add(
+                    self.name.pos,
+                    "expected partial function or function name"
+                );
+                return None
+            }
+            None => match PartialFunc::new(self.name.as_ref(), args) {
+                Some(func) => func,
+                None => {
+                    err.add(
+                        self.name.pos,
+                        "expected partial function or function name"
+                    );
+                    return None
+                }
+            }
+        };
+        func.eval(scope, err)
     }
 }
 
@@ -602,6 +698,44 @@ impl ast::Identifier {
         self.ident
     }
 }
+
+impl ast::Label {
+    fn eval(
+        self,
+        scope: &mut Scope,
+        features: &mut FeatureSet,
+        err: &mut Error
+    ) {
+        // Get the rendering parameters for this contour.
+        let mut params = scope.params.clone();
+        if let Some(value) = self.params {
+            value.eval_params(&mut params, scope, err);
+        }
+
+        // Get all the parts.
+        let layout = self.layout.eval_layout(scope, err);
+        let position = self.position.eval(scope, err);
+
+        // If we don’t have a detail, complain.
+        let detail = match params.detail {
+            Some(detail) => detail,
+            None => {
+                err.add(self.pos, "'detail' rendering parameter not yet set");
+                return
+            }
+        };
+
+        // If we have both a rule and a position, create the feature.
+        if let (Some(layout), Some(position)) = (layout, position) {
+            features.insert(
+                Label::new(position, layout),
+                detail,  params.layer   
+            )
+        }
+    }
+}
+
+        
 
 impl ast::Let {
     fn eval(self, scope: &mut Scope, err: &mut Error) {
@@ -633,10 +767,9 @@ impl ast::Location {
         };
         let distance = match self.distance {
             Some((addsub, distance)) => {
-                let distance = distance.eval(err)?;
                 match addsub {
-                    ast::AddSub::Add => distance,
-                    ast::AddSub::Sub => -distance,
+                    ast::AddSub::Add => distance.eval_loc(false, err)?,
+                    ast::AddSub::Sub => distance.eval_loc(true, err)?,
                 }
             }
             None => Distance::default()
@@ -761,14 +894,11 @@ impl ast::Statement {
         err: &mut Error
     ) {
         match self {
+            ast::Statement::Contour(stm) => stm.eval(scope, features, err),
+            ast::Statement::Label(stm) => stm.eval(scope, features, err),
             ast::Statement::Let(stm) => stm.eval(scope, err),
-            ast::Statement::With(with) => with.eval(scope, features, err),
-            ast::Statement::Contour(contour) => {
-                contour.eval(scope, features, err)
-            }
-            ast::Statement::Symbol(symbol) => {
-                symbol.eval(scope, features, err)
-            }
+            ast::Statement::Symbol(stm) => stm.eval(scope, features, err),
+            ast::Statement::With(stm) => stm.eval(scope, features, err),
         }
     }
 }

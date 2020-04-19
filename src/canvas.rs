@@ -64,6 +64,8 @@ pub struct Canvas {
 
     /// Detail level.
     detail: u8,
+
+    fira: cairo::FontFace
 }
 
 impl Canvas {
@@ -115,6 +117,11 @@ impl Canvas {
             storage_bp: canvas_bp / scale,
             canvas_bp,
             detail,
+            fira: cairo::FontFace::toy_create(
+                "Fira Sans",
+                cairo::FontSlant::Normal,
+                cairo::FontWeight::Normal,
+            ),
         }
     }
 
@@ -154,6 +161,18 @@ impl Canvas {
     /// Returns the detail level.
     pub fn detail(&self) -> u8 {
         self.detail
+    }
+
+    pub fn fira(&self) -> &cairo::FontFace {
+        &self.fira
+    }
+
+    pub fn mark_point(&self, point: Point) {
+        self.set_source_rgb(1., 0., 0.);
+        self.set_line_width(0.4 * self.canvas_bp());
+        self.new_path();
+        self.arc(point.x, point.y, self.canvas_bp(), 0., 2. * std::f64::consts::PI);
+        self.stroke();
     }
 }
 

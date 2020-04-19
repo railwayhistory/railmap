@@ -4,7 +4,7 @@
 //! tree is then implemented on the structures defined here in the *eval*
 //! module.
 
-use std::{fmt, hash, str};
+use std::{borrow, fmt, hash, str};
 use std::convert::TryFrom;
 use nom::IResult;
 use nom::branch::alt;
@@ -73,94 +73,26 @@ impl StatementList {
 /// This type enumerates all currently defined statements.
 ///
 /// ```text
-/// statement ::= (let | with | contour)
+/// statement ::= (contour | label | let | symbol | with)
 /// ```
 #[derive(Clone, Debug)]
 pub enum Statement {
-    Let(Let),
-    With(With),
     Contour(Contour),
+    Label(Label),
+    Let(Let),
     Symbol(Symbol),
+    With(With),
 }
 
 impl Statement {
     fn parse(input: Span) -> IResult<Span, Self> {
         alt((
-            map(Let::parse, Statement::Let),
-            map(With::parse, Statement::With),
             map(Contour::parse, Statement::Contour),
+            map(Label::parse, Statement::Label),
+            map(Let::parse, Statement::Let),
             map(Symbol::parse, Statement::Symbol),
+            map(With::parse, Statement::With),
         ))(input)
-    }
-}
-
-
-//----------- Let ------------------------------------------------------------
-
-/// The let statement assigns values to variables;
-///
-/// ```text
-/// let ::= "let" assignment-list ";"
-/// ```
-///
-/// The scope of the variables is the current block or file. One exception is
-/// let statements made at file level in a file named “init.map”. These
-/// variables are also available in all files in the same directory or below.
-///
-/// Variables can be overidden by simply defining them anew.
-#[derive(Clone, Debug)]
-pub struct Let {
-    /// The assignments of the let statement.
-    pub assignments: AssignmentList,
-
-    /// The start of the let statement in the source.
-    pub pos: Pos,
-}
-
-impl Let{
-    fn parse(input: Span) -> IResult<Span, Self> {
-        let pos = Pos::capture(&input);
-        let (input, _) = opt_ws(tag("let"))(input)?;
-        let (input, assignments) = ws(AssignmentList::parse)(input)?;
-        let (input, _) = opt_ws(tag_char(';'))(input)?;
-        Ok((input, Let { assignments, pos }))
-    }
-}
-
-
-//----------- With -----------------------------------------------------------
-
-/// The with statement executes a block with updated render parameters.
-///
-/// ```text
-/// with ::= "with" params:assignment-list "{" block:statement-list "}"
-/// ```
-///
-/// Then the with statement is evaluated, a new scope is created as a clone
-/// of the current scope. In this scope, the render parameters given in
-/// `params` are updated to their evaluated values and then statements in
-/// `block` are evaluated for this scope.
-#[derive(Clone, Debug)]
-pub struct With {
-    /// The updates to the rendering parameters.
-    pub params: AssignmentList,
-
-    /// The statements to execute.
-    pub block: StatementList,
-
-    /// The start of the with statement in the source.
-    pub pos: Pos
-}
-
-impl With {
-    fn parse(input: Span) -> IResult<Span, Self> {
-        let pos = Pos::capture(&input);
-        let (input, _) = opt_ws(tag("with"))(input)?;
-        let (input, params) = ws(AssignmentList::parse)(input)?;
-        let (input, _) = opt_ws(tag_char('{'))(input)?;
-        let (input, block) = opt_ws(StatementList::parse)(input)?;
-        let (input, _) = opt_ws(tag_char('}'))(input)?;
-        Ok((input, With { params, block, pos }))
     }
 }
 
@@ -215,6 +147,83 @@ impl Contour {
 }
 
 
+//------------ Label ---------------------------------------------------------
+
+/// The label statement renders text onto the map.
+///
+/// ```text
+/// label ::= "label"
+///           [ "with" params:assignment-list ]
+///           position
+///           layout:expression ";"
+/// ```
+#[derive(Clone, Debug)]
+pub struct Label {
+    /// Optional updates to the rendering parameters for this contour.
+    pub params: Option<AssignmentList>,
+
+    /// The position of the symbol.
+    pub position: Position,
+
+    /// The layout to render.
+    pub layout: Expression,
+
+    /// The start of the text statement in the source.
+    pub pos: Pos
+}
+
+impl Label {
+    fn parse(input: Span) -> IResult<Span, Self> {
+        let pos = Pos::capture(&input);
+        let (input, _) = opt_ws(tag("label"))(input)?;
+        let (input, _) = skip_ws(input)?;
+        let (input, params) = opt(
+            preceded(
+                opt_ws(tag("with")),
+                opt_ws(AssignmentList::parse)
+            )
+        )(input)?;
+        let (input, position) = opt_ws(Position::parse)(input)?;
+        let (input, layout) = opt_ws(Expression::parse)(input)?;
+        let (input, _) = opt_ws(tag_char(';'))(input)?;
+        Ok((input, Label { params, position, layout, pos }))
+    }
+}
+
+
+//----------- Let ------------------------------------------------------------
+
+/// The let statement assigns values to variables;
+///
+/// ```text
+/// let ::= "let" assignment-list ";"
+/// ```
+///
+/// The scope of the variables is the current block or file. One exception is
+/// let statements made at file level in a file named “init.map”. These
+/// variables are also available in all files in the same directory or below.
+///
+/// Variables can be overidden by simply defining them anew.
+#[derive(Clone, Debug)]
+pub struct Let {
+    /// The assignments of the let statement.
+    pub assignments: AssignmentList,
+
+    /// The start of the let statement in the source.
+    pub pos: Pos,
+}
+
+impl Let{
+    fn parse(input: Span) -> IResult<Span, Self> {
+        let pos = Pos::capture(&input);
+        let (input, _) = opt_ws(tag("let"))(input)?;
+        let (input, assignments) = ws(AssignmentList::parse)(input)?;
+        let (input, _) = opt_ws(tag_char(';'))(input)?;
+        Ok((input, Let { assignments, pos }))
+    }
+}
+
+
 //------------ Symbol --------------------------------------------------------
 
 /// The symbol statements draw a symbol onto the map.
@@ -236,7 +245,7 @@ pub struct Symbol {
     /// The position of the symbol.
     pub position: Position,
 
-    /// The start of the contour statement in the source.
+    /// The start of the symbol statement in the source.
     pub pos: Pos
 }
 
@@ -255,6 +264,43 @@ impl Symbol {
         let (input, position) = opt_ws(Position::parse)(input)?;
         let (input, _) = opt_ws(tag_char(';'))(input)?;
         Ok((input, Symbol { params, rule, position, pos }))
+    }
+}
+
+
+//----------- With -----------------------------------------------------------
+
+/// The with statement executes a block with updated render parameters.
+///
+/// ```text
+/// with ::= "with" params:assignment-list "{" block:statement-list "}"
+/// ```
+///
+/// Then the with statement is evaluated, a new scope is created as a clone
+/// of the current scope. In this scope, the render parameters given in
+/// `params` are updated to their evaluated values and then statements in
+/// `block` are evaluated for this scope.
+#[derive(Clone, Debug)]
+pub struct With {
+    /// The updates to the rendering parameters.
+    pub params: AssignmentList,
+
+    /// The statements to execute.
+    pub block: StatementList,
+
+    /// The start of the with statement in the source.
+    pub pos: Pos
+}
+
+impl With {
+    fn parse(input: Span) -> IResult<Span, Self> {
+        let pos = Pos::capture(&input);
+        let (input, _) = opt_ws(tag("with"))(input)?;
+        let (input, params) = ws(AssignmentList::parse)(input)?;
+        let (input, _) = opt_ws(tag_char('{'))(input)?;
+        let (input, block) = opt_ws(StatementList::parse)(input)?;
+        let (input, _) = opt_ws(tag_char('}'))(input)?;
+        Ok((input, With { params, block, pos }))
     }
 }
 
@@ -842,6 +888,12 @@ impl Identifier {
 
 impl AsRef<str> for Identifier {
     fn as_ref(&self) -> &str {
+        self.ident.as_ref()
+    }
+}
+
+impl borrow::Borrow<str> for Identifier {
+    fn borrow(&self) -> &str {
         self.ident.as_ref()
     }
 }

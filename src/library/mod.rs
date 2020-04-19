@@ -1,1 +1,3 @@
-pub mod symbols;
+mod symbols;
+
+pub use self::symbols::Symbol;

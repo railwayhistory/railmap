@@ -2,7 +2,9 @@
 use std::fmt;
 use std::sync::Arc;
 use kurbo::Rect;
+use crate::library;
 use crate::canvas::Canvas;
+use super::color::Color;
 use super::path::Position;
 
 //------------ Symbol --------------------------------------------------------
@@ -60,5 +62,24 @@ impl<R: RenderSymbol> From<R> for SymbolRule {
     fn from(rule: R) -> Self {
         SymbolRule(Arc::new(rule))
     }
+}
+
+
+//------------ Concrete Symbol Rules -----------------------------------------
+
+pub fn monochrome(
+    symbol: &str,
+    color: Color,
+    rotation: f64
+) -> Option<SymbolRule> {
+    let symbol = library::Symbol::lookup(symbol)?;
+    Some(SymbolRule(Arc::new(move |canvas: &Canvas, position: &Position| {
+        let (point, angle) = position.resolve(canvas);
+        canvas.translate(point.x, point.y);
+        canvas.rotate(angle + rotation.to_radians());
+        color.apply(canvas);
+        symbol.render(canvas);
+        canvas.identity_matrix();
+    })))
 }
 

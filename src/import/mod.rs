@@ -49,3 +49,13 @@ impl fmt::Display for ImportError {
     }
 }
 
+
+//------------ Failed --------------------------------------------------------
+
+/// A marker type indicating that an operation has failed.
+///
+/// This type is used as the error type of a result in cases where the actual
+/// error has been been added to an error collection.
+#[derive(Copy, Clone, Debug)]
+pub struct Failed;
+

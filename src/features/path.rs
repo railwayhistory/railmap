@@ -809,6 +809,10 @@ impl Position {
         }
         (point, angle)
     }
+
+    pub fn resolve_label(&self, canvas: &Canvas) -> (Point, f64) {
+        (self.resolve(canvas).0, self.rotation.unwrap_or(0.))
+    }
 }
 
 

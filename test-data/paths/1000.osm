@@ -44,6 +44,12 @@
     <tag k='description' v='Harrislee Grenze' />
     <tag k='name' v='hag' />
   </node>
+  <node id='-2189838' action='modify' visible='true' lat='54.79872362782' lon='9.37229776546'>
+    <tag k='name' v='har.x' />
+  </node>
+  <node id='-2189840' action='modify' visible='true' lat='54.80323531905' lon='9.36975218202'>
+    <tag k='name' v='har.f' />
+  </node>
   <way id='-2186824' action='modify' visible='true'>
     <nd ref='-2186785' />
     <nd ref='-2186789' />
@@ -108,6 +114,8 @@
   <way id='-2186837' action='modify' visible='true'>
     <nd ref='-2186817' />
     <nd ref='-2186821' />
+    <nd ref='-2189838' />
+    <nd ref='-2189840' />
     <nd ref='-2186823' />
     <nd ref='-2186813' />
     <tag k='type' v='straight' />

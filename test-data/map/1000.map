@@ -2,10 +2,39 @@ let flwhag = path("path.de.1000");
 let neufle = path("path.de.1040");
 
 with detail = 4->5 {
-	contour hbib flwhag[flw.f, hag] >> 0.5dt;
-	contour hbib flwhag[flw.f, hag] << 0.5dt;
+    contour hbib flwhag[flw.f, hag] >> 0.5dt;
+    contour hbib flwhag[flw.f, hag] << 0.5dt;
+    contour elib2 flwhag[flw.f, har - 2sw];
 
-		
-	symbol bfab flwhag[har] >> 0.5dt;
-	symbol with layer = 2 de_hp_ib() flwhag[har] << 0.5dt @ 180;
+    # Harrislee
+    contour bfab
+        flwhag[har - .51sw, har - .5sw] << 0.5dt --
+        flwhag[har - .5sw + 1dl, har.x - 1dl] << 1.5dt --
+        flwhag[har.x + 5dl, har.f] >> 3.5dt
+    ;
+    contour bfab
+        flwhag[har.x + 4dl, har.f] >> 2.5dt
+    ;
+        
+    symbol bfabr flwhag[har] >> 0.5dt;
+
+    label flwhag[har + .5sw] >> 2sw
+        hbox(align("ref"),
+            vbox(align("center"),
+            span(font(color=grey, size=8pt), "Harrislee"),
+            span(font(color=grey, size=6pt), "177,44")
+            )
+        )
+    ;
+
+    contour elib2 flwhag[har.x + 2dl, hag];
+
+#   label flwhag[har] >> 3mm
+#       vbox(align("start"), 
+#           vbox(align("center"),
+#           span(font(color=black, size=8pt), "Harrislee"),
+#           span(font(color=black, size=6pt), "177,44")
+#           )
+#       )
+#   ;
 }

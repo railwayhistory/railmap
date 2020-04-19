@@ -13,6 +13,7 @@ pub const PT: f64 = 1.;
 pub const CANVAS_DISTANCES: &[(&str, f64)] = &[
     // Real units.
     ("bp", 1.),
+    ("pt", 1.),
     ("in", 72.),
     ("mm", 72./25.4),
     ("cm", 72./2.54),

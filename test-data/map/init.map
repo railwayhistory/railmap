@@ -1,11 +1,18 @@
 let black = rgb(0, 0, 0);
+let grey = rgb(0.5, 0.5, 0.5);
+let linegrey = rgb(0.35, 0.35, 0.35);
 
 let hauptgleis = 0.6bp;
 let nebengleis = 0.4bp;
 
 let hbib = line(black, hauptgleis);
 let elib2 = dashed_line(color = black, width = 1dt, on = 3dt, off = 5dt);
+let bfab = line(linegrey, nebengleis);
 
-let bfib = de_bf_ib(); 
-let bfab = de_bf_ab(); 
+let bfibr = mono_symbol("de_bf", black, 0); 
+let bfibl = mono_symbol("de_bf", black, 180); 
+let bfabr = mono_symbol("de_bf", grey, 0);
+let bfabl = mono_symbol("de_bf", grey, 180);
 
+let hpibr = mono_symbol("de_hp", black, 0); 
+let hpabr = mono_symbol("de_hp", grey, 0); 

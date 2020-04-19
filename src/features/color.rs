@@ -4,7 +4,7 @@ use crate::canvas::Canvas;
 
 
 /// A color.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Color {
     red: f64,
     green: f64,
