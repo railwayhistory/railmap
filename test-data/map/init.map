@@ -1,5 +1,5 @@
 let black = rgb(0, 0, 0);
-let grey = rgb(0.5, 0.5, 0.5);
+let grey = rgb(0.6, 0.6, 0.6);
 let linegrey = rgb(0.35, 0.35, 0.35);
 
 let hauptgleis = 0.6bp;
@@ -7,7 +7,7 @@ let nebengleis = 0.4bp;
 
 let hbib = line(black, hauptgleis);
 let elib2 = dashed_line(color = black, width = 1dt, on = 3dt, off = 5dt);
-let bfab = line(linegrey, nebengleis);
+let bfab = line(grey, nebengleis);
 
 let bfibr = mono_symbol("de_bf", black, 0); 
 let bfibl = mono_symbol("de_bf", black, 180); 

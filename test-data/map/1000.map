@@ -2,8 +2,8 @@ let flwhag = path("path.de.1000");
 let neufle = path("path.de.1040");
 
 with detail = 4->5 {
-    contour hbib flwhag[flw.f, hag] >> 0.5dt;
-    contour hbib flwhag[flw.f, hag] << 0.5dt;
+    contour hbib flwhag[flw.f, f] >> 0.5dt;
+    contour hbib flwhag[flw.f, f] << 0.5dt;
     contour elib2 flwhag[flw.f, har - 2sw];
 
     # Harrislee
@@ -21,20 +21,24 @@ with detail = 4->5 {
     label flwhag[har + .5sw] >> 2sw
         hbox(align("ref"),
             vbox(align("center"),
-            span(font(color=grey, size=8pt), "Harrislee"),
-            span(font(color=grey, size=6pt), "177,44")
+            span(font(color=linegrey, size=8pt), "Harrislee"),
+            span(font(color=linegrey, size=6pt), "177,44*")
             )
         )
     ;
 
-    contour elib2 flwhag[har.x + 2dl, hag];
+    contour elib2 flwhag[har.x + 2dl, f];
 
-#   label flwhag[har] >> 3mm
-#       vbox(align("start"), 
-#           vbox(align("center"),
-#           span(font(color=black, size=8pt), "Harrislee"),
-#           span(font(color=black, size=6pt), "177,44")
-#           )
-#       )
-#   ;
+    symbol mono_symbol("de_dirgr", black, 0) flwhag[hag] >> 0.5dt;
+    symbol mono_symbol("statdt", black, 0) flwhag[hag] << 0.5dt;
+    symbol mono_symbol("de_dirgr", black, 180) flwhag[hag] << 0.5dt;
+
+    label flwhag[hag - 1dt] >> 5dt
+        hbox(align("center"),
+            vbox(align("start"),
+                span(font(color=black, size=6pt), "DK 26: 110,6"),
+                span(font(color=black, size=6pt), "DE 1000: 179,83*")
+            )
+        )
+    ;
 }
