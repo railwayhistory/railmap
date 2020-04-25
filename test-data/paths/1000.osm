@@ -25,7 +25,9 @@
   <node id='-2186807' action='modify' visible='true' lat='54.76251200999' lon='9.39998793075'>
     <tag k='name' v='flw.f' />
   </node>
-  <node id='-2186809' action='modify' visible='true' lat='54.76540220772' lon='9.39808738485' />
+  <node id='-2186809' action='modify' visible='true' lat='54.76540220772' lon='9.39808738485'>
+    <tag k='name' v='ffle' />
+  </node>
   <node id='-2186811' action='modify' visible='true' lat='54.7637180277' lon='9.39941833107' />
   <node id='-2186813' action='modify' visible='true' lat='54.81679293814' lon='9.36210100065'>
     <tag k='name' v='f' />

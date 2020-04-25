@@ -1,16 +1,19 @@
+use std::ops;
 use std::cmp::Ordering;
 use std::convert::TryInto;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
-use crate::features::{path, label};
+use crate::features::label;
 use crate::features::{
-    Color, Contour, ContourRule, Distance, FeatureSet, Label, Layout, Path,
-    Position, Symbol, SymbolRule,
+    //Color, ContourRule, Distance,
+    FeatureSet,
+    //SymbolRule,
 };
+use crate::features::path::{Distance, Path, Position, Subpath};
 use crate::import::Failed;
-use crate::import::functions::Function;
-use crate::import::units;
 use crate::import::path::{ImportPath, PathSet};
+use crate::library::units;
+use crate::library::{Function, Procedure};
 use super::ast;
 
 
@@ -43,15 +46,18 @@ impl<'a> Scope<'a> {
     pub fn set_var(&mut self, ident: String, value: ExprVal) {
         self.variables.insert(ident.clone(), value);
     }
+
+    pub fn params(&self) -> &RenderParams {
+        &self.params
+    }
 }
 
 
 //------------ RenderParams --------------------------------------------------
 
 #[derive(Clone, Debug, Default)]
-struct RenderParams
-{
-    detail: Option<(u8, u8)>,
+pub struct RenderParams {
+    detail: Option<u8>,
     layer: f64,
 }
 
@@ -63,40 +69,58 @@ impl RenderParams {
         pos: ast::Pos,
         err: &mut Error
     ) {
-        let res = match target {
-            "detail" => {
-                match value.value {
-                    ExprVal::Number(number) => {
-                        number.into_u8().map(|num| {
-                            self.detail = Some((num, num));
-                        })
-                    }
-                    ExprVal::Range(range) => {
-                        range.into_u8().map(|num| {
-                            self.detail = Some(num);
-                        })
-                    }
-                    _ => {
-                        Err("expected number or range".into())
-                    }
-                }
-            }
-            "layer" => {
-                match value.value {
-                    ExprVal::Number(val) => {
-                        self.layer = val.into_f64();
-                        Ok(())
-                    }
-                    _ => Err("expected number".into())
-                }
-            }
+        match target {
+            "detail" => self.update_detail(value, err),
+            "layer" => self.update_layer(value, err),
             _ => {
-                Err(format!("unknown render param {}", target))
+                err.add(pos, format!("unknown render param {}", target));
             }
-        };
-        if let Err(e) = res {
-            err.add(pos, e)
         }
+    }
+
+    fn update_detail(
+        &mut self,
+        value: Expression,
+        err: &mut Error
+    ) {
+        match value.value {
+            ExprVal::Number(val) => {
+                match val.into_u8() {
+                    Ok(val) => self.detail = Some(val),
+                    Err(_) => err.add(value.pos, "expected 8-bit integer"),
+                }
+            }
+            _ => err.add(value.pos, "expected number"),
+        }
+    }
+
+    fn update_layer(
+        &mut self,
+        value: Expression,
+        err: &mut Error
+    ) {
+        match value.value {
+            ExprVal::Number(val) => {
+                self.layer = val.into_f64();
+            }
+            _ => err.add(value.pos, "expected number"),
+        }
+    }
+
+    pub fn detail(
+        &self, pos: ast::Pos, err: &mut Error
+    ) -> Result<u8, Failed> {
+        match self.detail {
+            Some(detail) => Ok(detail),
+            None => {
+                err.add(pos, "no detail level selected yet");
+                Err(Failed)
+            }
+        }
+    }
+
+    pub fn layer(&self) -> f64 {
+        self.layer
     }
 }
 
@@ -117,148 +141,95 @@ impl Expression {
         Expression { value, pos }
     }
 
-    pub fn to_align(&self, err: &mut Error) -> Result<label::Align, Failed> {
+    pub fn into_layout(
+    self, err: &mut Error
+    ) -> Result<(label::Layout, ast::Pos), Failed> {
         match self.value {
-            ExprVal::Align(value) => Ok(value),
+            ExprVal::Layout(val) => Ok((val, self.pos)),
             _ => {
-                err.add(self.pos, "expected alignment");
+                err.add(self.pos, "expected layout");
                 Err(Failed)
             }
         }
     }
 
-    pub fn to_color(&self, err: &mut Error) -> Result<Color, Failed> {
+    pub fn into_layout_or_text(
+        self, err: &mut Error
+    ) -> Result<(Result<label::Layout, String>, ast::Pos), Failed> {
         match self.value {
-            ExprVal::Color(value) => Ok(value),
+            ExprVal::Layout(val) => Ok((Ok(val), self.pos)),
+            ExprVal::Text(val) => Ok((Err(val), self.pos)),
             _ => {
-                err.add(self.pos, "expected color");
+                err.add(self.pos, "expected layout or text");
                 Err(Failed)
             }
         }
     }
 
-    pub fn into_contour_rule(self, err: &mut Error) -> Option<ContourRule> {
+    pub fn into_path(
+        self, err: &mut Error
+    ) -> Result<(Path, ast::Pos), Failed> {
         match self.value {
-            ExprVal::ContourRule(rule) => Some(rule),
+            ExprVal::Path(val) => Ok((val, self.pos)),
             _ => {
-                err.add(self.pos, "expected contour rule");
-                None
+                err.add(self.pos, "expected path");
+                Err(Failed)
             }
         }
     }
 
-    pub fn to_distance(&self, err: &mut Error) -> Option<Distance> {
+    pub fn into_position(
+        self, err: &mut Error
+    ) -> Result<(Position, ast::Pos), Failed> {
         match self.value {
-            ExprVal::Distance(path) => Some(path),
+            ExprVal::Position(val) => Ok((val, self.pos)),
             _ => {
-                err.add(self.pos, "expected distance");
-                None
+                err.add(self.pos, "expected position");
+                Err(Failed)
             }
         }
     }
-    pub fn into_distance(self, err: &mut Error) -> Option<Distance> {
-        self.to_distance(err)
-    }
 
-    pub fn to_canvas_distance(&self, err: &mut Error) -> Result<f64, Failed> {
+    pub fn into_symbol(
+        self, err: &mut Error
+    ) -> Result<(String, ast::Pos), Failed> {
         match self.value {
-            ExprVal::Distance(value) => {
-                if value.world.is_some() {
-                    err.add(
-                        self.pos,
-                        "distance cannot have a world component"
-                    );
+            ExprVal::SymbolSet(set) => {
+                if set.len() != 1 {
+                    err.add(self.pos, "expected exactly one symbol");
                     Err(Failed)
                 }
                 else {
-                    Ok(value.canvas.unwrap_or_default())
+                    Ok((set.into_iter().next().unwrap(), self.pos))
                 }
             }
             _ => {
-                err.add(self.pos, "expected distance");
+                err.add(self.pos, "expected symbol");
                 Err(Failed)
             }
         }
     }
 
-    pub fn to_font(&self, err: &mut Error) -> Result<label::Font, Failed> {
+    pub fn into_symbol_set(
+        self, err: &mut Error
+    ) -> Result<(SymbolSet, ast::Pos), Failed> {
         match self.value {
-            ExprVal::Font(ref font) => Ok(font.clone()),
+            ExprVal::SymbolSet(val) => Ok((val, self.pos)),
             _ => {
-                err.add(self.pos, "expected font");
+                err.add(self.pos, "expected symbol set");
                 Err(Failed)
             }
         }
     }
 
-    pub fn to_layout(&self, err: &mut Error) -> Result<Layout, Failed> {
+    pub fn into_text(
+        self, err: &mut Error
+    ) -> Result<(String, ast::Pos), Failed> {
         match self.value {
-            ExprVal::Layout(ref layout) => Ok(layout.clone()),
-            _ => {
-                err.add(self.pos, "expected layout");
-                Err(Failed)
-            }
-        }
-    }
-
-    pub fn into_layout(self, err: &mut Error) -> Option<Layout> {
-        match self.value {
-            ExprVal::Layout(layout) => Some(layout),
-            _ => {
-                err.add(self.pos, "expected layout");
-                None
-            }
-        }
-    }
-
-    pub fn to_number(&self, err: &mut Error) -> Result<Number, Failed> {
-        match self.value {
-            ExprVal::Number(value) => Ok(value),
-            _ => {
-                err.add(self.pos, "expected number");
-                Err(Failed)
-            }
-        }
-    }
-
-    pub fn into_path<'s>(
-        self, scope: &'s Scope, err: &mut Error
-    ) -> Option<&'s ImportPath> {
-        match self.value {
-            ExprVal::Path(path) => Some(scope.paths().get(path).unwrap()),
-            _ => {
-                err.add(self.pos, "expected path segment");
-                None
-            }
-        }
-    }
-
-    pub fn into_symbol_rule(self, err: &mut Error) -> Option<SymbolRule> {
-        match self.value {
-            ExprVal::SymbolRule(rule) => Some(rule),
-            _ => {
-                err.add(self.pos, "expected symbol rule");
-                None
-            }
-        }
-    }
-
-    pub fn to_text(&self, err: &mut Error) -> Result<&str, Failed> {
-        match self.value {
-            ExprVal::Text(ref val) => Ok(val),
+            ExprVal::Text(val) => Ok((val, self.pos)),
             _ => {
                 err.add(self.pos, "expected text");
                 Err(Failed)
-            }
-        }
-    }
-
-    pub fn into_text(self, err: &mut Error) -> Option<String> {
-        match self.value {
-            ExprVal::Text(val) => Some(val),
-            _ => {
-                err.add(self.pos, "expected text");
-                None
             }
         }
     }
@@ -272,38 +243,17 @@ impl Expression {
 /// This has a shorthand name because we are going to type it a lot.
 #[derive(Clone, Debug)]
 pub enum ExprVal {
-    Align(label::Align),
-    Color(Color),
-    ContourRule(ContourRule),
     Distance(Distance),
-    Font(label::Font),
+    ImportPath(usize),
     Layout(label::Layout),
+    List(Vec<Expression>),
     Number(Number),
-    PartialFunc(PartialFunc),
-    Path(usize),
-    Range(Range),
-    SymbolRule(SymbolRule),
+    Partial(Partial),
+    Path(Path),
+    Position(Position),
+    SymbolSet(SymbolSet),
     Text(String),
-}
-
-
-//------------ Range ---------------------------------------------------------
-
-/// An evaluated range expression.
-///
-/// This contains the lower and upper bounds as numbers.
-#[derive(Clone, Copy, Debug)]
-pub struct Range {
-    first: Number,
-    second: Number,
-}
-
-impl Range {
-    fn into_u8(self) -> Result<(u8, u8), String> {
-        let first = self.first.into_u8()?;
-        let second = self.second.into_u8()?;
-        Ok((first, second))
-    }
+    Vector((Distance, Distance)),
 }
 
 
@@ -341,40 +291,97 @@ impl Number {
 }
 
 
-//------------ PartialFunc ---------------------------------------------------
+//------------ Partial -------------------------------------------------------
 
-/// A partially applied function.
+/// A partially applied function or procedure.
 ///
 /// When a function is called in a let expression with an incomplete set of
-/// arguments, its execution is delayed and a partial function expression is
-/// retained instead. This can be called again supplying the missing arguments
-/// or adding more in another let expression.
+/// arguments or a procedure is called, its execution is delayed and a partial
+/// expression is retained instead. This can be called again supplying the
+/// missing arguments or adding more in another let expression.
 #[derive(Clone, Debug)]
-pub struct PartialFunc {
-    /// The function to eventually execute.
-    function: Function,
+pub struct Partial {
+    /// The function or procedure to eventually execute.
+    ///
+    /// We abuse `Result` here as an either type.
+    function: Result<Function, Procedure>,
 
     /// The arguments of the function.
     ///
     /// This is updated every time the partial function is evaluated again.
     args: ArgumentList,
+
+    /// The position of the function.
+    pos: ast::Pos,
 }
 
-impl PartialFunc {
-    fn new(name: &str, args: ArgumentList) -> Option<Self> {
-        Function::lookup(name).map(|function| {
-            PartialFunc { function, args }
-        })
+impl Partial {
+    fn new(
+        name: &str, args: ArgumentList, pos: ast::Pos, err: &mut Error
+    ) -> Result<Self, Failed> {
+        let function = Function::lookup(name).map(Ok).or_else(|| {
+            Procedure::lookup(name).map(Err)
+        }).or_else(|| {
+            err.add(
+                pos,
+                "expected function or function name"
+            );
+            None
+        });
+        match function {
+            Some(function) => Ok(Partial { function, args, pos }),
+            None => Err(Failed)
+        }
     }
 
-    fn eval(self, scope: &Scope, err: &mut Error) -> Option<ExprVal> {
-        match self.function.eval(&self.args, scope, err) {
-            Ok(Some(res)) => Some(res),
-            Ok(None) => Some(ExprVal::PartialFunc(self)),
-            Err(_) => None
+    fn extend(&mut self, args: ArgumentList, pos: ast::Pos) {
+        self.args.extend(args);
+        self.pos = pos;
+    }
+
+    fn eval_expr(
+        mut self, scope: &Scope, err: &mut Error
+    ) -> Result<ExprVal, Failed> {
+        if let Ok(function) = self.function {
+            match function.eval(self.args, scope, err) {
+                Ok(res) => Ok(res),
+                Err(Ok(args)) => {
+                    self.args = args;
+                    Ok(ExprVal::Partial(self))
+                }
+                Err(Err(_)) => Err(Failed)
+            }
+        }
+        else {
+            Ok(ExprVal::Partial(self))
+        }
+    }
+
+    fn eval_procedure(
+        self, 
+        scope: &mut Scope,
+        features: &mut FeatureSet,
+        err: &mut Error
+    ) -> Result<(), Failed> {
+        match self.function {
+            Ok(_) => {
+                err.add(self.pos, "expected procedure");
+                Err(Failed)
+            }
+            Err(procedure) => {
+                procedure.eval(self.pos, self.args, scope, features, err)
+            }
         }
     }
 }
+
+
+//------------ SymbolSet -----------------------------------------------------
+
+/// A set of symbols.
+//
+//  XXX This should probably be moved.
+pub type SymbolSet = HashSet<String>;
 
 
 //------------ ArgumentList --------------------------------------------------
@@ -411,18 +418,25 @@ impl ArgumentList {
         self.pos
     }
 
-    /// Returns the positional arguments.
-    ///
-    /// Fails if there are keyword arguments.
-    pub fn positional_only(
-        &self, err: &mut Error
-    ) -> Result<&[Expression], Failed> {
+    pub fn positional(&self) -> &[Expression] {
+        &self.positional
+    }
+
+    pub fn into_positionals(
+        self,
+        err: &mut Error,
+        test: impl FnOnce(&Self, &mut Error) -> Result<bool, Failed>
+    ) -> Result<Vec<Expression>, Result<Self, Failed>> {
         if !self.keyword.is_empty() {
             err.add(self.pos, "expected positional arguments only");
-            Err(Failed)
+            Err(Err(Failed))
         }
         else {
-            Ok(&self.positional)
+            match test(&self, err) {
+                Ok(true) => Ok(self.positional),
+                Ok(false) => Err(Ok(self)),
+                Err(_) => Err(Err(Failed))
+            }
         }
     }
 
@@ -431,16 +445,16 @@ impl ArgumentList {
     /// Fails if there are keyword arguments or more than n positional
     /// arguments. Returns `Ok(None)` if there are less than n positional
     /// arguments.
-    pub fn n_positional_only(
-        &self, n: usize, err: &mut Error
-    ) -> Result<Option<&[Expression]>, Failed> {
-        self.positional_only(err).and_then(|res| {
-            match res.len().cmp(&n) {
-                Ordering::Less => Ok(None),
-                Ordering::Equal => Ok(Some(res)),
-                Ordering::Greater => {
+    pub fn into_n_positionals(
+        self, n: usize, err: &mut Error
+    ) -> Result<Vec<Expression>, Result<ArgumentList, Failed>> {
+        self.into_positionals(err, |args, err| {
+            match n.cmp(&args.positional().len()) {
+                Ordering::Greater => Ok(false),
+                Ordering::Equal => Ok(true),
+                Ordering::Less => {
                     err.add(
-                        self.pos,
+                        args.pos(),
                         format!("expected exactly {} positional arguments", n)
                     );
                     Err(Failed)
@@ -450,10 +464,10 @@ impl ArgumentList {
     }
 
     /// Returns the only positional argument.
-    pub fn sole_positional(
-        &self, err: &mut Error
-    ) -> Result<Option<&Expression>, Failed> {
-        self.n_positional_only(1, err).map(|res| res.map(|res| &res[0]))
+    pub fn into_sole_positional(
+        self, err: &mut Error
+    ) -> Result<Expression, Result<ArgumentList, Failed>> {
+        self.into_n_positionals(1, err).map(|mut res| res.pop().unwrap())
     }
 
     /// Checks that there are keyword arguments only.
@@ -474,434 +488,67 @@ impl ArgumentList {
 }
 
 
+//------------ PositionOffset ------------------------------------------------
+
+/// The combined offset of a position.
+#[derive(Clone, Copy, Debug, Default)]
+struct PositionOffset {
+    sideways: Distance,
+    shift: (Distance, Distance),
+    rotation: Option<f64>,
+}
+
+impl PositionOffset {
+    fn sideways(sideways: Distance) -> Self {
+        PositionOffset {
+            sideways,
+            shift: (Default::default(), Default::default()),
+            rotation: None,
+        }
+    }
+
+    fn shift(shift: (Distance, Distance)) -> Self {
+        PositionOffset {
+            sideways: Default::default(),
+            shift,
+            rotation: None,
+        }
+    }
+
+    fn rotation(rotation: f64) -> Self {
+        PositionOffset {
+            sideways: Default::default(),
+            shift: (Default::default(), Default::default()),
+            rotation: Some(rotation),
+        }
+    }
+
+}
+
+impl ops::Add for PositionOffset {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        PositionOffset {
+            sideways: self.sideways + other.sideways,
+            shift: (
+                self.shift.0 + other.shift.0,
+                self.shift.1 + other.shift.1
+            ),
+            rotation: match (self.rotation, other.rotation) {
+                (Some(l), Some(r)) => Some(l + r),
+                (Some(l), None) => Some(l),
+                (None, Some(r)) => Some(r),
+                (None, None) => None
+            },
+        }
+    }
+}
+
+
 //============ Evaluations for AST Types =====================================
-//
-// These are here in alphabetical order.
 
-impl ast::ArgumentList {
-    fn eval(self, scope: &Scope, err: &mut Error) -> Option<ArgumentList> {
-        let mut good = true;
-        let mut res = ArgumentList::new(self.pos);
-        for argument in self.arguments {
-            match argument {
-                ast::Argument::Keyword(assignment) => {
-                    match assignment.expression.eval(scope, err) {
-                        Some(expr) => {
-                            res.keyword.insert(assignment.target, expr);
-                        }
-                        None => good = false,
-                    }
-                }
-                ast::Argument::Pos(expr) => {
-                    match expr.eval(scope, err) {
-                        Some(expr) => res.positional.push(expr),
-                        None => good = false,
-                    }
-                }
-            }
-        }
-        if good {
-            Some(res)
-        }
-        else {
-            None
-        }
-    }
-}
-
-impl ast::AssignmentList {
-    fn eval_params(
-        self,
-        params: &mut RenderParams,
-        scope: &Scope,
-        err: &mut Error
-    ) {
-        for item in self.assignments {
-            let target = item.target.eval();
-            let expression = match item.expression.eval(&scope, err) {
-                Some(expression) => expression,
-                None => continue,
-            };
-            params.update(&target, expression, item.pos, err);
-        }
-    }
-}
-
-impl ast::Contour {
-    pub fn eval(
-        self,
-        scope: &mut Scope,
-        features: &mut FeatureSet,
-        err: &mut Error
-    ) {
-        // Get the rendering parameters for this contour.
-        let mut params = scope.params.clone();
-        if let Some(value) = self.params {
-            value.eval_params(&mut params, scope, err);
-        }
-
-        // Get all the parts.
-        let rule = self.rule.eval_contour_rule(scope, err);
-        let path = self.path.eval(scope, err);
-
-        // If we don’t have a detail, complain.
-        let detail = match params.detail {
-            Some(detail) => detail,
-            None => {
-                err.add(self.pos, "'detail' rendering parameter not yet set");
-                return
-            }
-        };
-
-        // If we have both a rule and a path, create the feature.
-        if let (Some(rule), Some(path)) = (rule, path) {
-            features.insert(
-                Contour::new(path, rule),
-                detail,  params.layer   
-            )
-        }
-    }
-}
-
-impl ast::Distance {
-    fn eval(self, err: &mut Error) -> Option<Distance> {
-        let mut res = self.first.eval(err);
-        for (addsub, value) in self.others {
-            if let Some(distance) = value.eval(err) {
-                if let Some(res) = res.as_mut() {
-                    match addsub {
-                        ast::AddSub::Add => *res += distance,
-                        ast::AddSub::Sub => *res -= distance,
-                    }
-                }
-            }
-        }
-        res
-    }
-
-    fn eval_loc(self, neg_first: bool, err: &mut Error) -> Option<Distance> {
-        let mut res = self.first.eval(err).map(|res| {
-            if neg_first { -res } else { res }
-        });
-        for (addsub, value) in self.others {
-            if let Some(distance) = value.eval(err) {
-                if let Some(res) = res.as_mut() {
-                    match addsub {
-                        ast::AddSub::Add => *res += distance,
-                        ast::AddSub::Sub => *res -= distance,
-                    }
-                }
-            }
-        }
-        res
-    }
-}
-
-impl ast::Expression {
-    fn eval(self, scope: &Scope, err: &mut Error) -> Option<Expression> {
-        let pos = self.pos();
-        let res = match self {
-            ast::Expression::Distance(distance) => {
-                distance.eval(err).map(ExprVal::Distance)
-            }
-            ast::Expression::Range(range) => {
-                Some(ExprVal::Range(range.eval()))
-            }
-            ast::Expression::Number(number) => {
-                Some(ExprVal::Number(number.eval()))
-            }
-            ast::Expression::Text(text) => {
-                Some(ExprVal::Text(text.eval()))
-            }
-            ast::Expression::Function(function) => {
-                function.eval(scope, err)
-            }
-            ast::Expression::Variable(ident) => {
-                let pos = ident.pos;
-                let ident = ident.eval();
-                match scope.get_var(&ident) {
-                    Some(expr) => Some(expr),
-                    None => {
-                        err.add(
-                            pos,
-                            format!("unresolved variable '{}'", ident)
-                        );
-                        None
-                    }
-                }
-            }
-        };
-        res.map(|val| Expression::new(val, pos))
-    }
-
-    fn eval_contour_rule(
-        self, scope: &Scope, err: &mut Error
-    ) -> Option<ContourRule> {
-        self.eval(scope, err).and_then(|expr| expr.into_contour_rule(err))
-    }
-
-    fn eval_layout(
-        self, scope: &Scope, err: &mut Error
-    ) -> Option<Layout> {
-        self.eval(scope, err).and_then(|expr| expr.into_layout(err))
-    }
-
-    fn eval_symbol_rule(
-        self, scope: &Scope, err: &mut Error
-    ) -> Option<SymbolRule> {
-        self.eval(scope, err).and_then(|expr| expr.into_symbol_rule(err))
-    }
-
-    fn eval_path<'s>(
-        self, scope: &'s Scope, err: &mut Error
-    ) -> Option<&'s ImportPath> {
-        self.eval(scope, err).and_then(|expr| expr.into_path(scope, err))
-    }
-}
-
-impl ast::Function {
-    fn eval(self, scope: &Scope, err: &mut Error) -> Option<ExprVal> {
-        let args = match self.args {
-            Some(args) => args.eval(scope, err)?,
-            None => ArgumentList::new(self.name.pos)
-        };
-
-        let func = match scope.get_var(self.name.as_ref()) {
-            Some(ExprVal::PartialFunc(mut func)) => {
-                func.args.extend(args);
-                func
-            }
-            Some(_) => {
-                err.add(
-                    self.name.pos,
-                    "expected partial function or function name"
-                );
-                return None
-            }
-            None => match PartialFunc::new(self.name.as_ref(), args) {
-                Some(func) => func,
-                None => {
-                    err.add(
-                        self.name.pos,
-                        "expected partial function or function name"
-                    );
-                    return None
-                }
-            }
-        };
-        func.eval(scope, err)
-    }
-}
-
-impl ast::Identifier {
-    fn eval(self) -> String {
-        self.ident
-    }
-}
-
-impl ast::Label {
-    fn eval(
-        self,
-        scope: &mut Scope,
-        features: &mut FeatureSet,
-        err: &mut Error
-    ) {
-        // Get the rendering parameters for this contour.
-        let mut params = scope.params.clone();
-        if let Some(value) = self.params {
-            value.eval_params(&mut params, scope, err);
-        }
-
-        // Get all the parts.
-        let layout = self.layout.eval_layout(scope, err);
-        let position = self.position.eval(scope, err);
-
-        // If we don’t have a detail, complain.
-        let detail = match params.detail {
-            Some(detail) => detail,
-            None => {
-                err.add(self.pos, "'detail' rendering parameter not yet set");
-                return
-            }
-        };
-
-        // If we have both a rule and a position, create the feature.
-        if let (Some(layout), Some(position)) = (layout, position) {
-            features.insert(
-                Label::new(position, layout),
-                detail,  params.layer   
-            )
-        }
-    }
-}
-
-        
-
-impl ast::Let {
-    fn eval(self, scope: &mut Scope, err: &mut Error) {
-        for assignment in self.assignments.assignments {
-            let target = assignment.target.eval();
-            let expression = match assignment.expression.eval(scope, err) {
-                Some(expression) => expression,
-                None => continue,
-            };
-            scope.set_var(target, expression.value);
-        }
-    }
-}
-
-impl ast::Location {
-    fn eval(
-        self, path: &ImportPath, err: &mut Error
-    ) -> Option<(u32, Distance)> {
-        let name = self.name.eval();
-        let name = match path.get_named(&name) {
-            Some(name) => Some(name),
-            None => {
-                err.add(
-                    self.pos,
-                    format!("unresolved path point '{}'", name)
-                );
-                None
-            }
-        };
-        let distance = match self.distance {
-            Some((addsub, distance)) => {
-                match addsub {
-                    ast::AddSub::Add => distance.eval_loc(false, err)?,
-                    ast::AddSub::Sub => distance.eval_loc(true, err)?,
-                }
-            }
-            None => Distance::default()
-        };
-        let name = name?;
-        // Segment numbers are the _end_ of the segment.
-        Some((name + 1, distance))
-    }
-}
-
-impl ast::Number {
-    fn eval(self) -> Number {
-        if let Ok(value) = i32::from_str(&self.value) {
-            Number::Int(value)
-        }
-        else {
-            Number::Float(f64::from_str(&self.value).unwrap())
-        }
-    }
-
-    fn eval_float(self) -> f64 {
-        f64::from_str(&self.value).unwrap()
-    }
-}
-
-impl ast::Offset {
-    fn eval(self, err: &mut Error) -> Option<Distance> {
-        let distance = self.distance.eval(err)?;
-        match self.direction {
-            ast::Direction::Left => Some(distance),
-            ast::Direction::Right => Some(-distance),
-        }
-    }
-}
-
-impl ast::Path {
-    fn eval(self, scope: &mut Scope, err: &mut Error) -> Option<Path> {
-        let mut path = self.first.eval(scope, err).map(Path::new);
-        for (conn, expr) in self.others {
-            let (post, pre) = conn.tension();
-            if let Some(seg) = expr.eval(scope, err) {
-                if let Some(path) = path.as_mut() {
-                    path.push(post, pre, seg)
-                }
-            }
-        }
-        path
-    }
-}
-
-impl ast::Position {
-    fn eval(self, scope: &mut Scope, err: &mut Error) -> Option<Position> {
-        let path = self.path.eval_path(scope, err)?;
-
-        let location = self.location.eval(path, err);
-        let offset = match self.offset {
-            Some(val) => Some(val.eval(err)?),
-            None => None
-        };
-        let rotation = self.rotation.map(|r| r.eval_float());
-        let (node, distance) = location?;
-        Some(Position::eval(path.path(), node, distance, offset, rotation))
-    }
-}
-
-impl ast::Range {
-    fn eval(self) -> Range {
-        Range {
-            first: self.first.eval(),
-            second: self.second.eval()
-        }
-    }
-}
-
-impl ast::Segment {
-    fn eval(
-        self, scope: &mut Scope, err: &mut Error
-    ) -> Option<path::Subpath> {
-        let path = self.path.eval_path(scope, err)?;
-
-        let location = match self.location {
-            Some(location) => {
-                let start = location.0.eval(path, err);
-                let end = location.1.eval(path, err);
-                match (start, end) {
-                    (Some(start), Some(end)) => Some(Some((start, end))),
-                    _ => None
-                }
-            }
-            None => Some(None)
-        };
-        let offset = match self.offset {
-            Some(val) => val.eval(err).map(Some),
-            None => Some(None)
-        };
-        let location = location?;
-        let offset = offset?;
-
-        Some(match location {
-            Some((start, end)) => {
-                path::Subpath::eval(
-                    path.path(),
-                    start.0, start.1, end.0, end.1,
-                    offset
-                )
-            }
-            None => {
-                path::Subpath::eval_full(
-                    path.path(),
-                    offset
-                )
-            }
-        })
-    }
-}
-
-impl ast::Statement {
-    pub fn eval(
-        self,
-        scope: &mut Scope,
-        features: &mut FeatureSet,
-        err: &mut Error
-    ) {
-        match self {
-            ast::Statement::Contour(stm) => stm.eval(scope, features, err),
-            ast::Statement::Label(stm) => stm.eval(scope, features, err),
-            ast::Statement::Let(stm) => stm.eval(scope, err),
-            ast::Statement::Symbol(stm) => stm.eval(scope, features, err),
-            ast::Statement::With(stm) => stm.eval(scope, features, err),
-        }
-    }
-}
+//------------ Statements ----------------------------------------------------
 
 impl ast::StatementList {
     pub fn eval_all(
@@ -924,74 +571,75 @@ impl ast::StatementList {
     }
 }
 
-impl ast::Symbol {
+impl ast::Statement {
     pub fn eval(
         self,
         scope: &mut Scope,
         features: &mut FeatureSet,
         err: &mut Error
     ) {
-        // Get the rendering parameters for this contour.
-        let mut params = scope.params.clone();
-        if let Some(value) = self.params {
-            value.eval_params(&mut params, scope, err);
+        match self {
+            ast::Statement::Let(stm) => stm.eval(scope, err),
+            ast::Statement::NoOp(_) => { },
+            ast::Statement::Procedure(stm) => {
+                let _ = stm.eval(scope, features, err);
+            }
+            ast::Statement::With(stm) => stm.eval(scope, features, err),
         }
+    }
+}
 
-        // Get all the parts.
-        let rule = self.rule.eval_symbol_rule(scope, err);
-        let position = self.position.eval(scope, err);
+impl ast::Let {
+    fn eval(self, scope: &mut Scope, err: &mut Error) {
+        for assignment in self.assignments.assignments {
+            let target = assignment.target.eval();
+            let expression = match assignment.expression.eval(scope, err) {
+                Ok(expression) => expression,
+                Err(_) => continue,
+            };
+            scope.set_var(target, expression.value);
+        }
+    }
+}
 
-        // If we don’t have a detail, complain.
-        let detail = match params.detail {
-            Some(detail) => detail,
+impl ast::Procedure {
+    fn eval(
+        self, 
+        scope: &mut Scope,
+        features: &mut FeatureSet,
+        err: &mut Error
+    ) -> Result<(), Failed> {
+        let args = self.args.eval(scope, err)?;
+        
+        match scope.get_var(self.ident.as_ref()) {
+            Some(ExprVal::Partial(mut func)) => {
+                func.extend(args, self.pos);
+                func.eval_procedure(scope, features, err)
+            }
+            Some(_) => {
+                err.add(
+                    self.ident.pos,
+                    "expected procedure variable"
+                );
+                Err(Failed)
+            }
             None => {
-                err.add(self.pos, "'detail' rendering parameter not yet set");
-                return
-            }
-        };
-
-        // If we have both a rule and a position, create the feature.
-        if let (Some(rule), Some(position)) = (rule, position) {
-            features.insert(
-                Symbol::new(position, rule),
-                detail,  params.layer   
-            )
-        }
-    }
-}
-
-impl ast::Text {
-    fn eval(self) -> String {
-        let mut res = self.first.content;
-        for item in self.others {
-            res.push_str(&item.content);
-        }
-        res
-    }
-}
-
-impl ast::UnitNumber {
-    /// Evaluates the unit number.
-    ///
-    /// On success, returns the world component in the first element and the
-    /// canvas component in the second.
-    fn eval(self, err: &mut Error) -> Option<Distance> {
-        for (unit, factor) in units::WORLD_DISTANCES {
-            if self.unit == unit {
-                return Some(Distance::new(
-                    Some(self.number.eval_float() * factor), None
-                ))
+                match Procedure::lookup(self.ident.as_ref()) {
+                    Some(procedure) => {
+                        procedure.eval(
+                            self.pos, args, scope, features, err
+                        )
+                    }
+                    None => {
+                        err.add(
+                            self.ident.pos,
+                            format!("unresolved variable '{}'", self.ident)
+                        );
+                        Err(Failed)
+                    }
+                }
             }
         }
-        for (unit, factor) in units::CANVAS_DISTANCES {
-            if self.unit == unit {
-                return Some(Distance::new(
-                    None, Some(self.number.eval_float() * factor)
-                ))
-            }
-        }
-        err.add(self.pos, format!("unknown unit '{}'", self.unit));
-        None
     }
 }
 
@@ -1014,6 +662,479 @@ impl ast::With {
         self.block.eval(&mut scope, features, err);
     }
 }
+
+
+//------------ Assignments and Arguments -------------------------------------
+
+impl ast::AssignmentList {
+    fn eval_params(
+        self,
+        params: &mut RenderParams,
+        scope: &Scope,
+        err: &mut Error
+    ) {
+        for item in self.assignments {
+            let target = item.target.eval();
+            let expression = match item.expression.eval(&scope, err) {
+                Ok(expression) => expression,
+                Err(_) => continue,
+            };
+            params.update(&target, expression, item.pos, err);
+        }
+    }
+}
+
+impl ast::ArgumentList {
+    fn eval(
+        self, scope: &Scope, err: &mut Error
+    ) -> Result<ArgumentList, Failed> {
+        let mut good = true;
+        let mut res = ArgumentList::new(self.pos);
+        for argument in self.arguments {
+            match argument {
+                ast::Argument::Keyword(assignment) => {
+                    match assignment.expression.eval(scope, err) {
+                        Ok(expr) => {
+                            res.keyword.insert(assignment.target, expr);
+                        }
+                        Err(_) => good = false,
+                    }
+                }
+                ast::Argument::Pos(expr) => {
+                    match expr.eval(scope, err) {
+                        Ok(expr) => res.positional.push(expr),
+                        Err(_) => good = false,
+                    }
+                }
+            }
+        }
+        if good {
+            Ok(res)
+        }
+        else {
+            Err(Failed)
+        }
+    }
+}
+
+
+//------------ Expressions ---------------------------------------------------
+
+impl ast::Expression {
+    fn eval(
+        self, scope: &Scope, err: &mut Error
+    ) -> Result<Expression, Failed> {
+        if self.connected.is_empty() {
+            Ok(Expression::new(self.first.eval_simple(scope, err)?, self.pos))
+        }
+        else {
+            let mut path = Path::new(self.first.eval_subpath(scope, err)?);
+            for (conn, frag) in self.connected {
+                let (post, pre) = conn.tension();
+                path.push(post, pre, frag.eval_subpath(scope, err)?);
+            }
+            Ok(Expression::new(ExprVal::Path(path), self.pos))
+        }
+    }
+}
+
+impl ast::Fragment {
+    fn eval_simple(
+        self, scope: &Scope, err: &mut Error
+    ) -> Result<ExprVal, Failed> {
+        match self {
+            ast::Fragment::Complex(frag) => frag.eval_expr(scope, err),
+            ast::Fragment::List(frag) => frag.eval_expr(scope, err),
+            ast::Fragment::Vector(frag) => frag.eval_expr(scope, err),
+            ast::Fragment::Atom(frag) => frag.eval(scope, err),
+        }
+    }
+
+    fn eval_subpath(
+        self, scope: &Scope, err: &mut Error
+    ) -> Result<Subpath, Failed> {
+        match self {
+            ast::Fragment::Complex(frag) => frag.eval_subpath(scope, err),
+            _ => {
+                err.add(self.pos(), "expected section");
+                Err(Failed)
+            }
+        }
+    }
+}
+
+impl ast::Complex {
+    fn eval_expr(
+        self, scope: &Scope, err: &mut Error
+    ) -> Result<ExprVal, Failed> {
+        match self.section {
+            Some(section) => {
+                let base = self.external.eval_import_path(scope, err)?;
+                section.eval_expr(base, scope, err)
+            }
+            None => self.external.eval_expr(scope, err),
+        }
+    }
+
+    fn eval_subpath(
+        self, scope: &Scope, err: &mut Error
+    ) -> Result<Subpath, Failed> {
+        let base = self.external.eval_import_path(scope, err);
+        match self.section {
+            Some(section) => section.eval_subpath(base?, scope, err),
+            None => {
+                err.add(self.pos, "expected section");
+                Err(Failed)
+            }
+        }
+    }
+}
+
+impl ast::External {
+    fn eval_expr(
+        self, scope: &Scope, err: &mut Error
+    ) -> Result<ExprVal, Failed> {
+        match self.args {
+            Some(args) => {
+                let args = args.eval(scope, err)?;
+                let func = match scope.get_var(&self.ident.ident) {
+                    Some(ExprVal::Partial(mut func)) => {
+                        func.extend(args, self.pos);
+                        Ok(func)
+                    }
+                    Some(_) => {
+                        err.add(
+                            self.pos,
+                            "expected partial function"
+                        );
+                        Err(Failed)
+                    }
+                    None => {
+                        Partial::new(
+                            &self.ident.ident, args, self.pos, err
+                        )
+                    }
+                }?;
+
+                func.eval_expr(scope, err)
+            }
+            None => {
+                match scope.get_var(&self.ident.ident) {
+                    Some(val) => Ok(val),
+                    None => {
+                        err.add(
+                            self.pos,
+                            format!(
+                                "undefined variable '{}'",
+                                self.ident.ident
+                            )
+                        );
+                        Err(Failed)
+                    }
+                }
+            }
+        }
+    }
+
+    fn eval_import_path<'s>(
+        self, scope: &'s Scope, err: &mut Error
+    ) -> Result<&'s ImportPath, Failed> {
+        let pos = self.pos;
+        match self.eval_expr(scope, err)? {
+            ExprVal::ImportPath(idx) => {
+                Ok(scope.paths().get(idx).unwrap())
+            }
+            _ => {
+                err.add(pos, "expected import path");
+                Err(Failed)
+            }
+        }
+    }
+}
+
+impl ast::Section {
+    fn eval_subpath(
+        self, base: &ImportPath, scope: &Scope, err: &mut Error
+    ) -> Result<Subpath, Failed> {
+        let start = self.start.eval(&base, scope, err);
+        let end = match self.end {
+            Some(end) => end.eval(&base, scope, err),
+            None => {
+                err.add(self.pos, "expected subpath section");
+                return Err(Failed)
+            }
+        };
+        let offset = self.offset.into_iter().fold(
+            Ok(Distance::default()),
+            |res, item| {
+                let item = item.eval_subpath(scope, err);
+                if let (Ok(res), Ok(item)) = (res, item) {
+                    Ok(res + item)
+                }
+                else {
+                    Err(Failed)
+                }
+            }
+        )?;
+        let start = start?;
+        let end = end?;
+        Ok(Subpath::eval(
+            base.path(), start.0, start.1, end.0, end.1, offset
+        ))
+    }
+
+    fn eval_position(
+        self, base: &ImportPath, scope: &Scope, err: &mut Error
+    ) -> Result<Position, Failed> {
+        if self.end.is_some() {
+            err.add(self.pos, "expected position section");
+            return Err(Failed)
+        }
+        let start = self.start.eval(&base, scope, err);
+        let offset = self.offset.into_iter().fold(
+            Ok(PositionOffset::default()),
+            |res, item| {
+                let item = item.eval_position(scope, err);
+                if let (Ok(res), Ok(item)) = (res, item) {
+                    Ok(res + item)
+                }
+                else {
+                    Err(Failed)
+                }
+            }
+        )?;
+        let start = start?;
+        Ok(Position::eval(
+            base.path(),
+            start.0, start.1,
+            offset.sideways, offset.shift, offset.rotation
+        ))
+    }
+
+    fn eval_expr(
+        self, base: &ImportPath, scope: &Scope, err: &mut Error
+    ) -> Result<ExprVal, Failed> {
+        if self.end.is_some() {
+            self.eval_subpath(base, scope, err).map(|subpath| {
+                ExprVal::Path(Path::new(subpath))
+            })
+        }
+        else {
+            self.eval_position(base, scope, err).map(ExprVal::Position)
+        }
+    }
+}
+
+impl ast::Location {
+    fn eval(
+        self, base: &ImportPath, scope: &Scope, err: &mut Error
+    ) -> Result<(u32, Distance), Failed> {
+        let node = match base.get_named(self.node.as_ref()) {
+            Some(node) => Ok(node),
+            None => {
+                err.add(
+                    self.node.pos,
+                    format!("unresolved path node '{}'", self.node.as_ref())
+                );
+                 Err(Failed)
+            }
+        };
+        let distance = self.distance.into_iter().fold(
+            Ok(Distance::default()),
+            |res, item| {
+                match (res, item.eval(scope, err)) {
+                    (Ok(res), Ok(item)) => Ok(res + item),
+                    _ => Err(Failed),
+                }
+            }
+        )?;
+        let node = node?;
+        Ok((node, distance))
+    }
+}
+
+impl ast::Distance {
+    fn eval(
+        self, scope: &Scope, err: &mut Error
+    ) -> Result<Distance, Failed> {
+        let value = self.value.eval(scope, err)?;
+        match self.op {
+            ast::AddSub::Add => Ok(value),
+            ast::AddSub::Sub => Ok(-value),
+        }
+    }
+}
+
+impl ast::Offset {
+    fn eval_subpath(
+        self, scope: &Scope, err: &mut Error
+    ) -> Result<Distance, Failed> {
+        match self {
+            ast::Offset::Sideways(sideways) => {
+                let value = sideways.value.eval(scope, err)?;
+                match sideways.direction {
+                    ast::Direction::Left => Ok(value),
+                    ast::Direction::Right => Ok(-value),
+                }
+            }
+            ast::Offset::Shift(shift) => {
+                err.add(shift.pos, "expected sideways offset");
+                Err(Failed)
+            }
+            ast::Offset::Angle(angle) => {
+                err.add(angle.pos, "expected sideways offset");
+                Err(Failed)
+            }
+        }
+    }
+
+    fn eval_position(
+        self, scope: &Scope, err: &mut Error
+    ) -> Result<PositionOffset, Failed> {
+        match self {
+            ast::Offset::Sideways(sideways) => {
+                let value = sideways.value.eval(scope, err)?;
+                let value = match sideways.direction {
+                    ast::Direction::Left => value,
+                    ast::Direction::Right => -value,
+                };
+                Ok(PositionOffset::sideways(value))
+            }
+            ast::Offset::Shift(shift) => {
+                let (x, y) = shift.value.eval(scope, err)?;
+                let value = match shift.op {
+                    ast::AddSub::Add => (x, y),
+                    ast::AddSub::Sub => (-x, -y),
+                };
+                Ok(PositionOffset::shift(value))
+            }
+            ast::Offset::Angle(angle) => {
+                Ok(PositionOffset::rotation(angle.value.eval_float()))
+            }
+        }
+    }
+}
+
+impl ast::List {
+    fn eval_expr(
+        self, scope: &Scope, err: &mut Error
+    ) -> Result<ExprVal, Failed> {
+        self.content.into_iter().fold(Ok(Vec::new()), |res, expr| {
+            match (res, expr.eval(scope, err)) {
+                (Ok(mut res), Ok(expr)) => {
+                    res.push(expr);
+                    Ok(res)
+                }
+                _ => Err(Failed)
+            }
+        }).map(ExprVal::List)
+    }
+}
+
+impl ast::Vector {
+    fn eval_expr(
+        self, scope: &Scope, err: &mut Error
+    ) -> Result<ExprVal, Failed> {
+        self.eval(scope, err).map(|res| ExprVal::Vector(res))
+    }
+
+    fn eval(
+        self, scope: &Scope, err: &mut Error
+    ) -> Result<(Distance, Distance), Failed> {
+        let x = self.x.eval(scope, err);
+        let y = self.y.eval(scope, err)?;
+        Ok((x?, y))
+    }
+}
+
+impl ast::Atom {
+    fn eval(
+        self, scope: &Scope, err: &mut Error
+    ) -> Result<ExprVal, Failed> {
+        match self {
+            ast::Atom::Number(atom) => atom.eval_expr(scope, err),
+            ast::Atom::SymbolSet(atom) => atom.eval_expr(scope, err),
+            ast::Atom::Text(atom) => atom.eval_expr(scope, err),
+            ast::Atom::UnitNumber(atom) => atom.eval_expr(scope, err),
+        }
+    }
+}
+
+impl ast::Number {
+    fn eval_expr(
+        self, _scope: &Scope, _err: &mut Error
+    ) -> Result<ExprVal, Failed> {
+        if let Ok(value) = i32::from_str(&self.value) {
+            Ok(ExprVal::Number(Number::Int(value)))
+        }
+        else {
+            Ok(ExprVal::Number(
+                Number::Float(f64::from_str(&self.value).unwrap())
+            ))
+        }
+    }
+
+    fn eval_float(self) -> f64 {
+        f64::from_str(&self.value).unwrap()
+    }
+}
+
+impl ast::SymbolSet {
+    fn eval_expr(
+        self, _scope: &Scope, _err: &mut Error
+    ) -> Result<ExprVal, Failed> {
+        Ok(ExprVal::SymbolSet(
+            self.symbols.into_iter().map(Into::into).collect()
+        ))
+    }
+}
+
+impl ast::Text {
+    fn eval_expr(
+        self, _scope: &Scope, _err: &mut Error
+    ) -> Result<ExprVal, Failed> {
+        let mut res = self.first.content;
+        self.others.into_iter().for_each(|val| res.push_str(&val.content));
+        Ok(ExprVal::Text(res))
+    }
+}
+
+impl ast::UnitNumber {
+    fn eval_expr(
+        self, scope: &Scope, err: &mut Error
+    ) -> Result<ExprVal, Failed> {
+        self.eval(scope, err).map(|res| ExprVal::Distance(res))
+    }
+
+    fn eval(
+        self, _scope: &Scope, err: &mut Error
+    ) -> Result<Distance, Failed> {
+        for (unit, factor) in units::WORLD_DISTANCES {
+            if self.unit == unit {
+                return Ok(Distance::new(
+                    Some(self.number.eval_float() * factor), None
+                ))
+            }
+        }
+        for (unit, factor) in units::CANVAS_DISTANCES {
+            if self.unit == unit {
+                return Ok(Distance::new(
+                    None, Some(self.number.eval_float() * factor)
+                ))
+            }
+        }
+        err.add(self.pos, format!("unknown unit '{}'", self.unit));
+        Err(Failed)
+    }
+}
+
+impl ast::Identifier {
+    fn eval(self) -> String {
+        self.ident
+    }
+}
+
+
 
 
 //============ Errors ========================================================

@@ -1,0 +1,67 @@
+
+statement-list 	::=  *(statement)
+
+statement-block ::=  ( "{" statement-list "}" ) | statement
+
+statement 	::=  (let | no-op | procedure | with)
+
+let 		::=  "let" assignment-list ";"
+
+no-op 		::=  ";"
+
+procedure 	::=  identifier "(" argument-list ")"
+
+with 		::=  "with" params:assignment-list statement-block
+
+assignment-list ::=  assignment *("," assignment)
+
+argument-list 	::=  argument  *("," argument)
+
+argument 	::=  assignment | expression
+
+assignment 	::=  identifier "=" expression
+
+expression  	::=  fragment *( connector fragment )
+
+fragment	::=  complex | list | vector | atom
+
+complex 	::=  external [ section ]
+
+external    	::=  identifier [ "(" attribute-list ")" ]
+
+section   	::=  "[" location  [ "," location ] "]" *offset
+
+location    	::=  symbol *distance
+
+distance    	::=  add-sub unit-number
+
+offset		::=  sideways | shift | angle
+
+sideways	::=  direction unit-number
+
+shift       	::=  add-sub vector
+
+angle       	::=  "@" number
+
+list		::=  "[" "]" | "[" expression *( "," expression ) "]"
+
+vector      	::=  "(" unit-number "," unit-number ")"
+
+atom        	::=  number | symbol-set | text | unit-number
+
+number		::=  <a number>
+
+symbol		::=  <a colon followed directly by an identifier>
+
+symbol-set	::=  symbol *(symbol)
+
+text		::=  <text>
+
+unit-number	::=  <a number followed directly by a unit>
+
+connector	::=  ".." | "--"
+
+add-sub		::=  "+" | "-"
+
+identifier	::=  <an identifier>
+

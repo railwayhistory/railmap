@@ -20,7 +20,7 @@ pub const CANVAS_DISTANCES: &[(&str, f64)] = &[
 
     // Relative units.
     ("dt", 0.75 * (72./25.4)), // Distance between tracks. 0.5 mm
-    ("dl", 0.5 * (72./25.4)),  // Length of a track crossing between two
+    ("dl", 0.375 * (72./25.4)),  // Length of a track crossing between two
                                // tracks one dt apart.
     ("sw", 2.25 * MM),
 ];

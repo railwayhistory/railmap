@@ -5,6 +5,7 @@
 use std::{cmp, ops, slice};
 use std::cmp::Ordering;
 use std::convert::TryFrom;
+use std::f64::consts::PI;
 use std::sync::Arc;
 use kurbo::{
     BezPath, CubicBez, ParamCurve, ParamCurveArclen,
@@ -51,7 +52,94 @@ impl StoredPath {
 
     /// Returns the location at a distance from a node.
     fn location(&self, mut node: u32, distance: Distance) -> Location {
-        let conv_pt = self.node_trimmed(node);
+        // `node` is the index of the referenced node. We need to convert
+        // this to the segment index which is the index of the end node of
+        // the segment.
+        //
+        // First let’s make sure there aren’t going to be any surprise.
+        // Nodes are only referenced to by their name, we convert them into
+        // indexes so there shouldn’t be an invalid index.
+        assert!(node < self.node_len());
+        let canvas = distance.canvas.unwrap_or(0.);
+
+        match distance.world {
+            None => {
+                // Let’s do the simple case first. If we don’t have a world
+                // component in `distance`, we only need to convert the node
+                // index into a segment index.
+                if node < self.node_len() - 1 {
+                    Location::new(SegTime::new(node + 1, 0.), canvas)
+                }
+                else {
+                    Location::new(SegTime::new(node, 1.), canvas)
+                }
+            }
+            Some(world) if world < 0. => {
+                // We have a negative world component. We need to go backwards
+                // on segments starting with the one that ends at the node
+                // index.
+                let mut seg = self.get_seg(node).unwrap();
+                let mut storage = to_storage_distance(-world, seg.p3());
+                loop {
+                    let arclen = seg.arclen_storage();
+                    if storage >= arclen {
+                        if node == 1 {
+                            return self.min_location()
+                        }
+                        node -= 1;
+                        seg = self.get_seg(node).unwrap();
+                        storage -= arclen;
+                    }
+                    else {
+                        return Location::new(
+                            SegTime::new(
+                                node,
+                                1. - seg.rev().arctime_storage(storage)
+                            ),
+                            canvas
+                        );
+                    }
+                }
+            }
+            Some(world) => {
+                // We have a positive world component. We need to go forward
+                // starting with the segment beginning at the node, i.e,
+                // segment node + 1. If we are already on the last segment,
+                // we can bail out.
+                if node == self.node_len() - 1 {
+                    return self.max_location()
+                }
+                node += 1;
+                let mut seg = self.get_seg(node).unwrap();
+                let mut storage = to_storage_distance(world, seg.p0());
+                loop {
+                    let arclen = seg.arclen_storage();
+                    if storage >= arclen {
+                        if node == self.node_len() - 1 {
+                            return self.max_location()
+                        }
+                        node += 1;
+                        seg = self.get_seg(node).unwrap();
+                        storage -= arclen
+                    }
+                    else {
+                        return Location::new(
+                            SegTime::new(
+                                node,
+                                seg.arctime_storage(storage)
+                            ),
+                            canvas
+                        );
+                    }
+                }
+            }
+        }
+
+        /*
+
+        // The reference point is at the beginning of the segment `node`.
+        let conv_pt = self.get_seg(at).unwrap().p0();
+
         let time = match distance.world {
             Some(world) => {
                 let mut storage = to_storage_distance(world, conv_pt);
@@ -77,7 +165,7 @@ impl StoredPath {
                 }
                 else {
                     loop {
-                        let seg = match self.get_seg(node + 1) {
+                        let seg = match self.get_seg(node) {
                             Some(seg) => seg,
                             None => return self.max_location()
                         };
@@ -101,6 +189,7 @@ impl StoredPath {
         else {
             Location::new(SegTime::new(node, time), canvas)
         }
+        */
     }
 
     /// Returns the time value for a location on a given canvas.
@@ -497,20 +586,26 @@ impl Subpath {
         Subpath { path, start, end, offset }
     }
 
-    pub fn eval_full(path: StoredPath, offset: Option<Distance>) -> Self {
+    pub fn eval_full(path: StoredPath) -> Self {
         let start = path.min_location();
         let end = path.max_location();
-        Subpath::new(path, start, end, offset)
+        Subpath::new(path, start, end, None)
     }
 
     pub fn eval(
         path: StoredPath,
         start_node: u32, start_distance: Distance,
         end_node: u32, end_distance: Distance,
-        offset: Option<Distance>
+        offset: Distance
     ) -> Self {
         let start = path.location(start_node, start_distance);
         let end = path.location(end_node, end_distance);
+        let offset = if offset.is_none() {
+            None
+        }
+        else {
+            Some(offset)
+        };
         Subpath::new(path, start, end, offset)
     }
 
@@ -615,7 +710,7 @@ impl<'a> SubpathSegmentIter<'a> {
                 Some(subpath.path.segment_after(start).transf_off(
                     canvas, subpath.offset
                 )),
-                if start.seg + 2 >= end.seg {
+                if start.seg + 2 > end.seg {
                     None
                 }
                 else {
@@ -654,7 +749,7 @@ impl<'a> SubpathSegmentIter<'a> {
                 Some(subpath.path.segment_before(start).rev().transf_off(
                     canvas, subpath.offset
                 )),
-                if end.seg + 2 >= start.seg {
+                if end.seg + 2 > start.seg {
                     None
                 }
                 else {
@@ -781,12 +876,19 @@ impl Position {
         path: StoredPath,
         node: u32,
         distance: Distance,
-        offset: Option<Distance>,
+        sideways: Distance,
+        _shift: (Distance, Distance), // XXX
         rotation: Option<f64>
     ) -> Self {
         let location = path.location(node, distance);
         let rotation = rotation.map(f64::to_radians);
-        Position::new(path, location, offset, rotation)
+        let sideways = if sideways.is_none() {
+            None
+        }
+        else {
+            Some(sideways)
+        };
+        Position::new(path, location, sideways, rotation)
     }
 
     pub fn storage_bounds(&self) -> Rect {
@@ -810,8 +912,26 @@ impl Position {
         (point, angle)
     }
 
-    pub fn resolve_label(&self, canvas: &Canvas) -> (Point, f64) {
-        (self.resolve(canvas).0, self.rotation.unwrap_or(0.))
+    pub fn resolve_label(
+        &self, canvas: &Canvas, on_path: bool
+    ) -> (Point, f64) {
+        if on_path {
+            let (point, mut angle) = self.resolve(canvas);
+
+            // Correct the angle so the label won’t be upside down.
+            if angle.abs() > 0.5 * PI {
+                if angle < 0. {
+                    angle += PI
+                }
+                else {
+                    angle -= PI
+                }
+            }
+            (point, angle)
+        }
+        else {
+            (self.resolve(canvas).0, self.rotation.unwrap_or(0.))
+        }
     }
 }
 
@@ -845,6 +965,11 @@ impl Distance {
         Distance { world, canvas }
     }
 
+    /// Returns whether both dimensions of the distance are `None`.
+    pub fn is_none(self) -> bool {
+        self.world.is_none() && self.canvas.is_none()
+    }
+
     /// Resolves the distance at the given point in storage coordinates.
     fn resolve(self, point: Point, canvas: &Canvas) -> f64 {
         let world = match self.world {
@@ -860,6 +985,15 @@ impl Distance {
             None => 0.
         };
         world + canv
+    }
+}
+
+impl ops::Add for Distance {
+    type Output = Self;
+
+    fn add(mut self, other: Self) -> Self {
+        self += other;
+        self
     }
 }
 

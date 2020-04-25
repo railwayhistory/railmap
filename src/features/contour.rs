@@ -37,6 +37,11 @@ impl Contour {
 
 pub trait RenderContour: Send + Sync + 'static {
     fn render(&self, canvas: &Canvas, path: &Path);
+
+    fn into_rule(self) -> ContourRule
+    where Self: Sized {
+        ContourRule(Arc::new(self))
+    }
 }
 
 impl<F: Fn(&Canvas, &Path) + Send + Sync + 'static> RenderContour for F {

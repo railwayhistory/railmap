@@ -5,13 +5,13 @@ pub use self::color::Color;
 pub use self::contour::{Contour, ContourRule};
 pub use self::label::{Font, Label, Layout};
 pub use self::path::{Distance, Location, Path, Position};
-pub use self::symbol::{Symbol, SymbolRule};
+pub use self::marker::{Marker, MarkerRule};
 
 pub mod color;
 pub mod contour;
 pub mod label;
 pub mod path;
-pub mod symbol;
+pub mod marker;
 
 
 use std::ops;
@@ -35,7 +35,7 @@ impl FeatureSet {
     pub fn insert(
         &mut self,
         feature: impl Into<Feature>,
-        detail: (u8, u8),
+        detail: u8,
         layer: f64
     ) {
         self.features.insert(
@@ -76,20 +76,15 @@ pub struct StoredFeature {
 }
 
 impl StoredFeature {
-    pub fn new(feature: Feature, detail: (u8, u8), layer: f64) -> Self {
+    pub fn new(feature: Feature, detail: u8, layer: f64) -> Self {
         let bounds = feature.storage_bounds();
-        let detail = if detail.0 < detail.1 {
-            (f64::from(detail.0), f64::from(detail.1))
-        }
-        else {
-            (f64::from(detail.1), f64::from(detail.0))
-        };
+        let detail = f64::from(detail);
         StoredFeature {
             feature,
             layer,
             bounds: AABB::from_corners(
-                [detail.0 - 0.5, bounds.x0, bounds.y0],
-                [detail.1 + 0.5, bounds.x1, bounds.y1]
+                [detail - 0.4, bounds.x0, bounds.y0],
+                [detail + 0.4, bounds.x1, bounds.y1]
             )
         }
     }
@@ -117,7 +112,7 @@ impl ops::Deref for StoredFeature {
 pub enum Feature {
     Contour(Contour),
     Label(Label),
-    Symbol(Symbol),
+    Marker(Marker),
 }
 
 impl Feature {
@@ -125,7 +120,7 @@ impl Feature {
         match *self {
             Feature::Contour(ref contour) => contour.storage_bounds(),
             Feature::Label(ref label) => label.storage_bounds(),
-            Feature::Symbol(ref symbol) => symbol.storage_bounds(),
+            Feature::Marker(ref marker) => marker.storage_bounds(),
         }
     }
 
@@ -133,7 +128,7 @@ impl Feature {
         match *self {
             Feature::Contour(ref contour) => contour.render(canvas),
             Feature::Label(ref label) => label.render(canvas),
-            Feature::Symbol(ref symbol) => symbol.render(canvas),
+            Feature::Marker(ref marker) => marker.render(canvas),
         }
     }
 }
@@ -153,9 +148,9 @@ impl From<Label> for Feature {
     }
 }
 
-impl From<Symbol> for Feature {
-    fn from(symbol: Symbol) -> Feature {
-        Feature::Symbol(symbol)
+impl From<Marker> for Feature {
+    fn from(marker: Marker) -> Feature {
+        Feature::Marker(marker)
     }
 }
 

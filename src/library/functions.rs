@@ -1,38 +1,28 @@
 /// The function we support during import.
 
-use crate::features::{contour, label, symbol};
-use crate::features::{Color};
-use super::eval;
-use super::Failed;
-use super::eval::ExprVal;
+//use crate::features::label;
+use crate::import::Failed;
+use crate::import::eval;
+use crate::import::eval::ExprVal;
 
 
+/// All known functions.
+///
+/// The first element is the name of the function. The second element is the
+/// closure evaluating the arguments and producing the function’s result.
+/// Since functions can be partially applied, there are three possible return
+/// values: `Ok(Ok(_))` is returned if the function succeeds and a result is
+/// available. `Ok(Err(_))` is returned if the function doesn’t have all
+/// arguments yet. In this case, it can return a modified argument list if it
+/// wants to. If it already found the arguments to be lacking, it reports an
+/// error and returns `Err(Failed)`.
 const FUNCTIONS: &[(
     &str,
     &dyn Fn(
-        &eval::ArgumentList, &eval::Scope, &mut eval::Error
-    ) -> Result<Option<eval::ExprVal>, Failed>
+        eval::ArgumentList, &eval::Scope, &mut eval::Error
+    ) -> Result<ExprVal, Result<eval::ArgumentList, Failed>>
 )] = &[
-    // A layout alignment.
-    //
-    // ```text
-    // align(alignment)
-    // ```
-    ("align", &|args, _, err| {
-        let pos = args.pos();
-        let align = match args.sole_positional(err)? {
-            Some(value) => value.to_text(err)?,
-            None => return Ok(None),
-        };
-        let align = match label::Align::try_from_str(&align) {
-            Some(align) => align,
-            None => {
-                err.add(pos, "invalid alignment");
-                return Err(Failed)
-            }
-        };
-        Ok(Some(ExprVal::Align(align)))
-    }),
+/*
 
     // A contour rendering rule for a simple dashed line.
     //
@@ -164,6 +154,7 @@ const FUNCTIONS: &[(
             }
         }
     }),
+    */
 
     // Resolve a base path.
     //
@@ -171,24 +162,22 @@ const FUNCTIONS: &[(
     // path(name: string) -> stored_path
     // ```
     ("path", &|args, scope, err| {
-        let name_expr = match args.sole_positional(err)? {
-            Some(name_expr) => name_expr,
-            None => return Ok(None)
-        };
-        let name = name_expr.to_text(err)?;
+        let name_expr = args.into_sole_positional(err)?;
+        let (name, pos) = name_expr.into_text(err)?;
 
         match scope.paths().lookup(&name) {
-            Some(path) => Ok(Some(ExprVal::Path(path))),
+            Some(path) => Ok(ExprVal::ImportPath(path)),
             None => {
                 err.add(
-                    name_expr.pos,
+                    pos,
                     format!("unresolved path \"{}\"", name)
                 );
-                Err(Failed)
+                Err(Err(Failed))
             }
         }
     }),
 
+    /*
     // Produces an opaque color.
     //
     // ```text
@@ -253,21 +242,36 @@ const FUNCTIONS: &[(
     // )
     // ```
     ("vbox", &|args, _, err| {
-        let args = args.positional_only(err)?;
-        if args.len() < 2 {
-            return Ok(None)
-        }
+        let args = args.into_positionals(err, |args, _| {
+            if args.positional().len() < 2 {
+                Ok(false)
+            }
+            else {
+                Ok(true)
+            }
+        })?;
         let mut args = args.into_iter();
 
-        let align = args.next().unwrap().to_align(err)?;
+        let (align, pos) = args.next().unwrap().into_symbol(err)?;
+        let align = match align.as_str() {
+            "left" => label::Align::Start,
+            "center" => label::Align::Center,
+            "base" => label::Align::Ref,
+            "right" => label::Align::End,
+            _ => {
+                err.add(pos, "expected horizonal alignment");
+                return Err(Err(Failed))
+            }
+        };
         let mut lines = Vec::new();
         for expr in args {
-            lines.push(expr.to_layout(err)?);
+            lines.push(expr.into_layout(err)?.0);
         }
-        Ok(Some(ExprVal::Layout(label::Layout::Vbox(
+        Ok(ExprVal::Layout(label::Layout::Vbox(
             label::Vbox::new(align, lines)
-        ))))
+        )))
     }),
+    */
 ];
 
 
@@ -291,10 +295,10 @@ impl Function {
 
     pub fn eval(
         self,
-        args: &eval::ArgumentList,
+        args: eval::ArgumentList,
         scope: &eval::Scope,
         err: &mut eval::Error,
-    ) -> Result<Option<eval::ExprVal>, Failed> {
+    ) -> Result<ExprVal, Result<eval::ArgumentList, Failed>> {
         (*FUNCTIONS[self.0].1)(args, scope, err)
     }
 }

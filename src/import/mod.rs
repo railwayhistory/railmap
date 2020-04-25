@@ -2,10 +2,8 @@
 pub mod ast;
 pub mod eval;
 pub mod features;
-pub mod functions;
 pub mod path;
 pub mod mp_path;
-pub mod units;
 
 
 use std::fmt;
@@ -58,4 +56,10 @@ impl fmt::Display for ImportError {
 /// error has been been added to an error collection.
 #[derive(Copy, Clone, Debug)]
 pub struct Failed;
+
+impl<T> From<Failed> for Result<T, Failed> {
+    fn from(_: Failed) -> Result<T, Failed> {
+        Err(Failed)
+    }
+}
 
