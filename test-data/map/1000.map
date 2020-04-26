@@ -2,6 +2,39 @@
 #
 let flwhag = path("path.de.1000");
 
+with detail = 1 {
+    track(:first, flwhag[:flw.f, :f]);
+}
+
+with detail = 2 {
+    track(:first, flwhag[:flw.f, :f]);
+}
+
+with detail = 3 {
+    track(:double :first :cat, flwhag[:flw.f, :f]);
+    track(:first :cat, flwhag[:ffle, :fri] >> 1.5dt);
+
+    marker(:de_abzw, flwhag[:fri] >> 1.5dt);
+    marker(:statdt, flwhag[:fri] << .5dt);
+    marker(:statdt, flwhag[:fri] >> .5dt);
+    station(
+        flwhag[:fri - .4sw] << .5dt << 6bp, :left,
+        "F. Friedensweg",
+        "174,57 • 5,49"
+    );
+
+    marker(:de_bf :removed, flwhag[:har] >> .5dt);
+    station(
+        flwhag[:har - .4sw] << 6bp, :left,
+        "Harrislee",
+        "177,44"
+    );
+
+    marker(:de_dirgr, flwhag[:hag] >> 0.5dt);
+    marker(:statdt, flwhag[:hag] << 0.5dt);
+    marker(:de_dirgr :left, flwhag[:hag] << 0.5dt);
+}
+
 with detail = 4 {
     track(:double :first :cat, flwhag[:flw.f, :fri - 1sw]);
     track(:first :cat, flwhag[:ffle, :fri - 1sw] >> 1.5dt); # de.1005 
@@ -22,7 +55,7 @@ with detail = 4 {
     );
     marker(:de_abzw, flwhag[:fri] >> 1.5dt);
     station(
-        flwhag[:fri] << 0.5dt, :left,
+        flwhag[:fri - .4sw] << .5dt << 6bp, :left,
         "F. Friedensweg",
         "174,57 • 5,49"
     );
@@ -44,7 +77,7 @@ with detail = 4 {
     );
     marker(:de_bf :removed, flwhag[:har] >> 0.5dt);
     station(
-        flwhag[:har] >> 1sw, :right,
+        flwhag[:har - .4sw] >> 1.3sw, :right,
         "Harrislee",
         "177,44"
     );
@@ -56,40 +89,5 @@ with detail = 4 {
     marker(:de_dirgr, flwhag[:hag] >> 0.5dt);
     marker(:statdt, flwhag[:hag] << 0.5dt);
     marker(:de_dirgr :left, flwhag[:hag] << 0.5dt);
-
-
-#   contour bfab
-#       flwhag[har - .51sw, har - .5sw] << 0.5dt --
-#       flwhag[har - .5sw + 1dl, har.x - 1dl] << 1.5dt --
-#       flwhag[har.x + 5dl, har.f] >> 3.5dt
-#   ;
-#   contour bfab
-#       flwhag[har.x + 4dl, har.f] >> 2.5dt
-#   ;
-#       
-#   symbol bfabr flwhag[har] >> 0.5dt;
-
-#   label flwhag[har + .5sw] >> 2sw
-#       hbox(align("ref"),
-#           vbox(align("center"),
-#           span(font(color=linegrey, size=8pt), "Harrislee"),
-#           span(font(color=linegrey, size=6pt), "177,44*")
-#           )
-#       )
-#   ;
-
-#   contour elib2 flwhag[har.x + 2dl, f];
-
-#   symbol mono_symbol("de_dirgr", black, 0) flwhag[hag] >> 0.5dt;
-#   symbol mono_symbol("statdt", black, 0) flwhag[hag] << 0.5dt;
-#   symbol mono_symbol("de_dirgr", black, 180) flwhag[hag] << 0.5dt;
-
-#   label flwhag[hag - 1dt] >> 5dt
-#       hbox(align("center"),
-#           vbox(align("start"),
-#               span(font(color=black, size=6pt), "DK 26: 110,6"),
-#               span(font(color=black, size=6pt), "DE 1000: 179,83*")
-#           )
-#       )
-#   ;
 }
+

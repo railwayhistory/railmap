@@ -153,9 +153,13 @@ impl Vbox {
 
     fn extent(&self, canvas: &Canvas) -> Rect {
         let mut res = Rect::default();
+        let mut top = None;
         for layout in &self.lines {
             let extent = layout.extent(canvas);
             res.y1 += extent.height();
+            if top.is_none() {
+                top = Some(extent.y0);
+            }
             match self.halign {
                 Align::Start => {
                     res.x1 = res.x1.max(extent.width());
@@ -175,10 +179,16 @@ impl Vbox {
             }
         }
         match self.valign {
-            Align::Start | Align::Ref => { }
+            Align::Start => { }
             Align::Center => {
                 res.y0 = -res.y1 / 2.;
                 res.y1 = res.y1 / 2.
+            }
+            Align::Ref => {
+                if let Some(top) = top {
+                    res.y0 = top;
+                    res.y1 += top;
+                }
             }
             Align::End => {
                 res.y0 = -res.y1;
@@ -233,7 +243,7 @@ impl Hbox {
                     layout.render(
                         Point::new(
                             point.x,
-                            point.y + extent.y1
+                            point.y - extent.y1
                         ),
                         extent,
                         canvas
@@ -246,9 +256,13 @@ impl Hbox {
 
     fn extent(&self, canvas: &Canvas) -> Rect {
         let mut res = Rect::default();
+        let mut left = None;
         for layout in &self.spans {
             let extent = layout.extent(canvas);
             res.x1 += extent.width();
+            if left.is_none() {
+                left = Some(extent.x0);
+            }
             match self.valign {
                 Align::Start => {
                     res.y1 = res.y1.max(extent.height());
@@ -268,10 +282,16 @@ impl Hbox {
             }
         }
         match self.halign {
-            Align::Start | Align::Ref => { }
+            Align::Start => { }
             Align::Center => {
                 res.x0 = -res.x1 / 2.;
                 res.x1 = res.x1 / 2.
+            }
+            Align::Ref => {
+                if let Some(left) = left {
+                    res.x0 = left;
+                    res.x1 += left;
+                }
             }
             Align::End => {
                 res.x0 = -res.x1;

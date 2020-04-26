@@ -54,13 +54,7 @@ use crate::canvas::Canvas;
 use crate::import::eval::SymbolSet;
 use crate::features::contour::RenderContour;
 use crate::features::path::Path;
-
-
-//------------ Constants -----------------------------------------------------
-
-const OPEN_GREY: f64 = 0.;
-const CLOSED_GREY: f64 = 0.4;
-const REMOVED_GREY: f64 = 0.7;
+use super::colors::Palette;
 
 
 //------------ Units ---------------------------------------------------------
@@ -113,14 +107,14 @@ pub struct TrackContour {
     /// Are markings flipped?
     flip: bool,
 
-    /// Is this track closed?
-    closed: bool,
-
-    /// Has this track been removed?
-    removed: bool,
+    /// The palette to use for rendering
+    palette: Palette,
 
     /// The category of the track.
     category: Category,
+
+    /// Is this station track?
+    station: bool,
 
     /// The status of catenary electrification.
     cat: Status,
@@ -135,9 +129,9 @@ impl TrackContour {
             casing,
             double: symbols.contains("double"),
             flip: symbols.contains("flip"),
-            closed: symbols.contains("closed"),
-            removed: symbols.contains("removed"),
+            palette: Palette::from_symbols(&symbols),
             category: Category::from_symbols(&symbols),
+            station: symbols.contains("station"),
             cat: if symbols.contains("cat") { Status::Active }
                  else if symbols.contains("excat") { Status:: Ex }
                  else { Status::Never },
@@ -200,7 +194,7 @@ impl TrackContour {
         }
 
         // Classification
-        if self.category.has_class() {
+        if !self.station && self.category.has_class() {
             self.apply_class_properties(canvas, units);
             canvas.set_line_width(units.mark);
             if self.flip {
@@ -238,7 +232,7 @@ impl TrackContour {
         }
 
         // Classification
-        if self.category.has_class() {
+        if !self.station && self.category.has_class() {
             self.apply_class_properties(canvas, units);
             canvas.set_line_width(units.mark);
             if self.flip {
@@ -267,18 +261,7 @@ impl TrackContour {
             if self.category.is_line() { units.line_width }
             else { units.other_width }
         );
-        if self.category.is_debug() {
-            canvas.set_source_rgb(1., 0., 0.);
-        }
-        else if self.removed {
-            canvas.set_source_rgb(REMOVED_GREY, REMOVED_GREY, REMOVED_GREY);
-        }
-        else if self.closed {
-            canvas.set_source_rgb(CLOSED_GREY, CLOSED_GREY, CLOSED_GREY);
-        }
-        else {
-            canvas.set_source_rgb(OPEN_GREY, OPEN_GREY, OPEN_GREY);
-        }
+        self.palette.stroke.apply(canvas);
     }
 
     fn apply_cat_properties(&self, canvas: &Canvas, units: Units) {
@@ -294,17 +277,11 @@ impl TrackContour {
                 5. * units.seg / 8.
             );
         }
-        if self.removed {
-            canvas.set_source_rgb(REMOVED_GREY, REMOVED_GREY, REMOVED_GREY);
-        }
-        else if self.closed {
-            canvas.set_source_rgb(CLOSED_GREY, CLOSED_GREY, CLOSED_GREY);
-        }
-        else if self.cat.is_ex() {
-            canvas.set_source_rgb(REMOVED_GREY, REMOVED_GREY, REMOVED_GREY);
+        if self.cat.is_ex() {
+            Palette::REMOVED.fill.apply(canvas)
         }
         else {
-            canvas.set_source_rgb(OPEN_GREY, OPEN_GREY, OPEN_GREY);
+            self.palette.fill.apply(canvas)
         }
     }
 
@@ -327,17 +304,11 @@ impl TrackContour {
                 5. * units.seg / 8.
             );
         }
-        if self.removed {
-            canvas.set_source_rgb(REMOVED_GREY, REMOVED_GREY, REMOVED_GREY);
-        }
-        else if self.closed {
-            canvas.set_source_rgb(CLOSED_GREY, CLOSED_GREY, CLOSED_GREY);
-        }
-        else if self.rail.is_ex() {
-            canvas.set_source_rgb(REMOVED_GREY, REMOVED_GREY, REMOVED_GREY);
+        if self.rail.is_ex() {
+            Palette::REMOVED.fill.apply(canvas)
         }
         else {
-            canvas.set_source_rgb(OPEN_GREY, OPEN_GREY, OPEN_GREY);
+            self.palette.fill.apply(canvas)
         }
     }
 
@@ -362,15 +333,7 @@ impl TrackContour {
             }
             _ => unreachable!()
         }
-        if self.removed {
-            canvas.set_source_rgb(REMOVED_GREY, REMOVED_GREY, REMOVED_GREY);
-        }
-        else if self.closed {
-            canvas.set_source_rgb(CLOSED_GREY, CLOSED_GREY, CLOSED_GREY);
-        }
-        else {
-            canvas.set_source_rgb(OPEN_GREY, OPEN_GREY, OPEN_GREY);
-        }
+        self.palette.stroke.apply(canvas);
     }
 }
 
@@ -386,7 +349,6 @@ enum Category {
     Tram,
     Private,
     Station,
-    Debug
 }
 
 impl Category {
@@ -397,7 +359,6 @@ impl Category {
         else if symbols.contains("third") { Category::Third }
         else if symbols.contains("tram") { Category::Tram }
         else if symbols.contains("private") { Category::Private }
-        else if symbols.contains("debug") { Category::Debug }
         else { Category::Station }
     }
 
@@ -419,13 +380,6 @@ impl Category {
         match self {
             Category::Second => true,
             Category::Third => true,
-            _ => false,
-        }
-    }
-
-    fn is_debug(self) -> bool {
-        match self {
-            Category::Debug => true,
             _ => false,
         }
     }

@@ -118,7 +118,7 @@ impl Canvas {
             canvas_bp,
             detail,
             fira: cairo::FontFace::toy_create(
-                "Fira Sans Light",
+                "Fira Sans Regular",
                 cairo::FontSlant::Normal,
                 cairo::FontWeight::Normal,
             ),

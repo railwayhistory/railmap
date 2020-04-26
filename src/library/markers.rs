@@ -13,19 +13,13 @@
 
 use std::f64::consts::PI;
 use crate::canvas::Canvas;
-use crate::features::color::Color;
 use crate::features::marker::RenderMarker;
 use crate::features::path::Position;
 use crate::import::ast;
 use crate::import::Failed;
 use crate::import::eval::{Error, SymbolSet};
-
-
-//------------ Constants -----------------------------------------------------
-
-const OPEN_GREY: f64 = 0.;
-const CLOSED_GREY: f64 = 0.4;
-const REMOVED_GREY: f64 = 0.7;
+use super::colors::Palette;
+use super::units;
 
 
 //------------ Units ---------------------------------------------------------
@@ -53,16 +47,31 @@ struct Units {
 
 impl Units {
     fn new(canvas: &Canvas) -> Self {
-        Units {
-            dt: super::units::DT * canvas.canvas_bp(),
-            sw: 6. * canvas.canvas_bp(),
-            sh: 5.8 * canvas.canvas_bp(),
-            ds: 0.5 * canvas.canvas_bp(),
-            sp: 0.8 * canvas.canvas_bp(),
-            bp: 0.6 * canvas.canvas_bp(),
+        if canvas.detail() > 3 {
+            let base = units::SW * canvas.canvas_bp();
+            Units {
+                dt: units::DT * canvas.canvas_bp(),
+                sw: base,
+                sh: 0.96 * base,
+                ds: 0.05 * base,
+                sp: 0.8 * canvas.canvas_bp(),
+                bp: 0.6 * canvas.canvas_bp(),
+            }
+        }
+        else {
+            let base = units::SSW * canvas.canvas_bp();
+            Units {
+                dt: units::DT * canvas.canvas_bp(),
+                sw: base,
+                sh: 0.96 * base,
+                ds: 0.05 * base,
+                sp: 0.4 * canvas.canvas_bp(),
+                bp: 0.4 * canvas.canvas_bp(),
+            }
         }
     }
 }
+
 
 //------------ StandardMarker ------------------------------------------------
 
@@ -71,8 +80,8 @@ pub struct StandardMarker {
     /// Extra rotation in addition to whatever the position dictates.
     rotation: f64,
 
-    /// The color to render the symbol in.
-    color: Color,
+    /// The palette to use for rendering the symbol.
+    palette: Palette,
 
     /// The index of the marker to use.
     marker: usize
@@ -83,15 +92,6 @@ impl StandardMarker {
     pub fn create(
         pos: ast::Pos, symbols: SymbolSet, err: &mut Error
     ) -> Result<Self, Failed> {
-        let color = if symbols.contains("removed") {
-            Color::grey(REMOVED_GREY)
-        }
-        else if symbols.contains("closed") {
-            Color::grey(CLOSED_GREY)
-        }
-        else {
-            Color::grey(OPEN_GREY)
-        };
         let rotation = if symbols.contains("top") { 0.5 * PI }
                        else if symbols.contains("left") { PI }
                        else if symbols.contains("bottom") { 1.5 * PI }
@@ -99,7 +99,8 @@ impl StandardMarker {
         for (index, marker) in MARKERS.iter().enumerate() {
             if symbols.contains(marker.0) {
                 return Ok(StandardMarker {
-                    rotation, color,
+                    rotation,
+                    palette: Palette::from_symbols(&symbols),
                     marker: index
                 })
             }
@@ -114,7 +115,7 @@ impl RenderMarker for StandardMarker {
         let (point, angle) = position.resolve(canvas);
         canvas.translate(point.x, point.y);
         canvas.rotate(angle + self.rotation);
-        self.color.apply(canvas);
+        self.palette.stroke.apply(canvas);
         MARKERS[self.marker].1(canvas, Units::new(canvas));
         canvas.identity_matrix();
     }
@@ -124,7 +125,29 @@ impl RenderMarker for StandardMarker {
 //------------ Markers ------------------------------------------------------
 
 const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
-    ("de_bf", &|canvas, u| {
+    ("de.abzw", &|canvas, u| {
+        canvas.set_line_width(u.sp);
+        canvas.move_to(0., 0.);
+        canvas.line_to(0., 0.5 * u.sh);
+        canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
+        canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
+        canvas.move_to(-0.5 * u.sw, u.sh);
+        canvas.line_to(0., 0.5 * u.sh);
+        canvas.line_to(0.5 * u.sw, u.sh);
+        canvas.stroke();
+    }),
+
+    ("de.awanst", &|canvas, u| {
+        canvas.set_line_width(u.sp);
+        canvas.move_to(0., 0.);
+        canvas.line_to(0., u.sh);
+        canvas.move_to(-0.5 * u.sw, u.sh);
+        canvas.line_to(0., 0.5 * u.sh);
+        canvas.line_to(0.5 * u.sw, u.sh);
+        canvas.stroke();
+    }),
+
+    ("de.bf", &|canvas, u| {
         canvas.move_to(-0.5 * u.sw, 0.);
         canvas.line_to(-0.5 * u.sw, u.sh - u.ds);
         canvas.curve_to(
@@ -143,28 +166,7 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.fill();
     }),
 
-    ("de_hp", &|canvas, u| {
-        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
-        canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.);
-        canvas.set_line_width(u.sp);
-        canvas.stroke();
-    }),
-
-    ("de_abzw", &|canvas, u| {
-        canvas.set_line_width(u.sp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., 0.5 * u.sh);
-        canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
-        canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
-        canvas.move_to(-0.5 * u.sw, u.sh);
-        canvas.line_to(0., 0.5 * u.sh);
-        canvas.line_to(0.5 * u.sw, u.sh);
-        canvas.stroke();
-    }),
-
-    ("de_dirgr", &|canvas, u| {
+    ("de.dirgr", &|canvas, u| {
         let r = 0.8 * u.dt;
         canvas.set_line_width(u.bp);
         canvas.move_to(0., 0.);
@@ -174,6 +176,27 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.stroke();
         canvas.arc(0., 3. * r, 0.5 * r, 0., 2. * PI);
         canvas.fill();
+    }),
+
+    ("de.hp", &|canvas, u| {
+        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
+        canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
+        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh - 0.5 * u.sp);
+        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.);
+        canvas.set_line_width(u.sp);
+        canvas.stroke();
+    }),
+
+    ("de.hst", &|canvas, u| {
+        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
+        canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
+        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh - 0.5 * u.sp);
+        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.);
+        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, u.sh);
+        canvas.line_to(0., 0.);
+        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh);
+        canvas.set_line_width(u.sp);
+        canvas.stroke();
     }),
 
     ("statdt", &|canvas, u| {

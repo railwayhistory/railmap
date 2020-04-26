@@ -856,7 +856,10 @@ pub struct Position {
     ///
     /// Given in canvas coordinates. Positive values are to the left of the
     /// path. I.e., this is the length of a tangent vector rotated 90°.
-    offset: Option<Distance>,
+    sideways: Option<Distance>,
+
+    /// Shift of the resulting point.
+    shift: Option<(Distance, Distance)>,
 
     /// Optional roation from the original direction.
     rotation: Option<f64>,
@@ -866,10 +869,11 @@ impl Position {
     pub fn new(
         path: StoredPath,
         location: Location,
-        offset: Option<Distance>,
+        sideways: Option<Distance>,
+        shift: Option<(Distance, Distance)>,
         rotation: Option<f64>,
     ) -> Self {
-        Position { path, location, offset, rotation }
+        Position { path, location, sideways, shift, rotation }
     }
 
     pub fn eval(
@@ -877,7 +881,7 @@ impl Position {
         node: u32,
         distance: Distance,
         sideways: Distance,
-        _shift: (Distance, Distance), // XXX
+        shift: (Distance, Distance),
         rotation: Option<f64>
     ) -> Self {
         let location = path.location(node, distance);
@@ -888,7 +892,13 @@ impl Position {
         else {
             Some(sideways)
         };
-        Position::new(path, location, sideways, rotation)
+        let shift = if shift.0.is_none() && shift.1.is_none() {
+            None
+        }
+        else {
+            Some(shift)
+        };
+        Position::new(path, location, sideways, shift, rotation)
     }
 
     pub fn storage_bounds(&self) -> Rect {
@@ -904,10 +914,15 @@ impl Position {
         let mut point = seg.point(loc.time);
         let dir = seg.dir(loc.time);
         let angle = dir.atan2() + self.rotation.unwrap_or(0.);
-        if let Some(offset) = self.offset {
-            let offset = offset.resolve(point, canvas);
-            let dir = offset * rot90(dir).normalize();
+        if let Some(sideways) = self.sideways {
+            let sideways= sideways.resolve(point, canvas);
+            let dir = sideways * rot90(dir).normalize();
             point += dir;
+        }
+        if let Some(shift) = self.shift {
+            let x = shift.0.resolve(point, canvas);
+            let y = shift.1.resolve(point, canvas);
+            point += Vec2::new(x, y)
         }
         (point, angle)
     }

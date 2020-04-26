@@ -142,7 +142,7 @@ impl Expression {
     }
 
     pub fn into_layout(
-    self, err: &mut Error
+        self, err: &mut Error
     ) -> Result<(label::Layout, ast::Pos), Failed> {
         match self.value {
             ExprVal::Layout(val) => Ok((val, self.pos)),
