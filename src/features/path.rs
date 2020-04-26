@@ -989,9 +989,7 @@ impl Distance {
     fn resolve(self, point: Point, canvas: &Canvas) -> f64 {
         let world = match self.world {
             Some(world) => {
-                // XXX I think this is correct?
-                world * (1. - point.y.tanh().powi(2)).sqrt()
-                * canvas.storage_bp()
+                world * scale_correction(point) * canvas.storage_bp()
             }
             None => 0.
         };
@@ -1456,7 +1454,13 @@ fn line_intersect(p1: Point, d1: Vec2, p2: Point, d2: Vec2) -> Point {
 fn to_storage_distance(world: f64, at: Point) -> f64 {
     const EQUATOR: f64 = (40_075_016_686. / (25.4/72.)); // in bp
 
-    (world / EQUATOR) * (1. - at.y.tanh().powi(2)).sqrt()
+    //(world / EQUATOR) * (1. - at.y.tanh().powi(2)).sqrt()
+    (world / EQUATOR) * scale_correction(at)
+}
+
+/// The scale correction at a given point
+fn scale_correction(at: Point) -> f64 {
+    (1. + (PI - at.y * 2. * PI).sinh().powi(2)).sqrt()
 }
 
 

@@ -74,8 +74,9 @@ impl Server {
                 )
             }
         };
-        let body = match self.cache.lock().unwrap().get(&tile) {
-            Some(bytes) => bytes.clone().into(),
+        let cached = self.cache.lock().unwrap().get(&tile).map(Clone::clone); 
+        let body = match cached {
+            Some(bytes) => bytes.into(),
             None => {
                 let bytes = Tile::new(tile).render(&self.features);
                 self.cache.lock().unwrap().put(tile, bytes.clone());
