@@ -12,6 +12,9 @@ pub const DT: f64 = 0.75 * MM;
 pub const SW: f64 = 6.;
 pub const SSW: f64 = 1.6 * DT;
 
+pub const M: f64 = 1_000. * (72./25.4);
+pub const KM: f64 = 1_000. * M;
+
 /// The list of canvas distance units.
 /// 
 /// The list contains pairs of the unit’s name and how many base units fit
@@ -38,12 +41,11 @@ pub const CANVAS_DISTANCES: &[(&str, f64)] = &[
 /// These distance units refer to real world distance and need to be scaled
 /// before using in a map. Nonetheless, _bp_ is the base unit here, too.
 pub const WORLD_DISTANCES: &[(&str, f64)] = &[
-    ("m",  1_000. * (72./25.4)),
-    ("km", 1_000_000. * (72./25.4)),
+    ("m",  M),
+    ("km", KM),
 ];
 
 
 /// The size of the equator in _bp._
-///
-//  The equator is 40075.016686 km long, so in bp that’s:
-pub const EQUATOR_BP: f64 = 40075.016686 * 1_000_000. * (72./25.4);
+pub const EQUATOR_BP: f64 = 40075.016686 * KM;
+
