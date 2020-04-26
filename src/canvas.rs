@@ -57,7 +57,7 @@ pub struct Canvas {
     transform: TranslateScale,
 
     /// The size of a bp in storage coordinates.
-    storage_bp: f64,
+    equator_scale: f64,
 
     /// The size of a bp in canvas coordinates.
     canvas_bp: f64,
@@ -114,7 +114,7 @@ impl Canvas {
                 Vec2::new(-nw.x * scale, -nw.y * scale),
                 scale
             ),
-            storage_bp: canvas_bp / scale,
+            equator_scale: scale,
             canvas_bp,
             detail,
             fira: cairo::FontFace::toy_create(
@@ -148,9 +148,9 @@ impl Canvas {
         self.transform
     }
 
-    /// Returns the size of a _bp_ at the equator in storage coordinates.
-    pub fn storage_bp(&self) -> f64 {
-        self.storage_bp
+    /// Returns the map scale at the equator.
+    pub fn equator_scale(&self) -> f64 {
+        self.equator_scale
     }
 
     /// Returns the size of a _bp_ in canvas coordinates.

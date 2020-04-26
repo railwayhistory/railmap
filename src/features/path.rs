@@ -14,6 +14,7 @@ use kurbo::{
 use crate::canvas;
 use crate::canvas::Canvas;
 use crate::import::mp_path::velocity;
+use crate::library::units;
 
 
 //------------ Configuration Constants ---------------------------------------
@@ -910,19 +911,24 @@ impl Position {
 
     pub fn resolve(&self, canvas: &Canvas) -> (Point, f64) {
         let loc = self.path.location_time(self.location, canvas);
-        let seg = self.path.segment(loc.seg).transform(canvas);
-        let mut point = seg.point(loc.time);
+        let seg = self.path.segment(loc.seg);
+        let point = seg.point(loc.time);
         let dir = seg.dir(loc.time);
+        let shift = self.shift.map(|shift| {
+            Vec2::new(
+                shift.0.resolve(point, canvas),
+                shift.1.resolve(point, canvas)
+            )
+        });
+        let mut point = canvas.transform() * point;
         let angle = dir.atan2() + self.rotation.unwrap_or(0.);
         if let Some(sideways) = self.sideways {
             let sideways= sideways.resolve(point, canvas);
             let dir = sideways * rot90(dir).normalize();
             point += dir;
         }
-        if let Some(shift) = self.shift {
-            let x = shift.0.resolve(point, canvas);
-            let y = shift.1.resolve(point, canvas);
-            point += Vec2::new(x, y)
+        if let Some(shift) = shift {
+            point += shift
         }
         (point, angle)
     }
@@ -989,7 +995,7 @@ impl Distance {
     fn resolve(self, point: Point, canvas: &Canvas) -> f64 {
         let world = match self.world {
             Some(world) => {
-                world * scale_correction(point) * canvas.storage_bp()
+                to_storage_distance(world, point) * canvas.equator_scale()
             }
             None => 0.
         };
@@ -1452,10 +1458,7 @@ fn line_intersect(p1: Point, d1: Vec2, p2: Point, d2: Vec2) -> Point {
 ///
 /// The point is already in storage coordinates.
 fn to_storage_distance(world: f64, at: Point) -> f64 {
-    const EQUATOR: f64 = (40_075_016_686. / (25.4/72.)); // in bp
-
-    //(world / EQUATOR) * (1. - at.y.tanh().powi(2)).sqrt()
-    (world / EQUATOR) * scale_correction(at)
+    (world / units::EQUATOR_BP) * scale_correction(at)
 }
 
 /// The scale correction at a given point
