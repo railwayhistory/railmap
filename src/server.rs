@@ -1,9 +1,11 @@
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use hyper::{Body, Request, Response};
+use hyper::body::Bytes;
 use hyper::service::{make_service_fn, service_fn};
+use lru::LruCache;
 use crate::features::FeatureSet;
 use crate::import;
 use crate::tile::{Tile, TileId};
@@ -11,6 +13,7 @@ use crate::tile::{Tile, TileId};
 #[derive(Clone)]
 pub struct Server {
     features: Arc<FeatureSet>,
+    cache: Arc<Mutex<LruCache<TileId, Bytes>>>,
 }
 
 
@@ -19,7 +22,10 @@ impl Server {
         import_dir: impl AsRef<Path>,
     ) -> Result<Server, import::ImportError> {
         import::load(import_dir.as_ref()).map(|features| {
-            Server { features: Arc::new(features) }
+            Server {
+                features: Arc::new(features),
+                cache: Arc::new(Mutex::new(LruCache::new(10_000))),
+            }
         })
     }
 
@@ -68,15 +74,19 @@ impl Server {
                 )
             }
         };
-        Ok(self.render(tile))
-    }
-
-    fn render(&self, tile: TileId) -> Response<Body> {
-        let tile = Tile::new(tile);
-        Response::builder()
+        let body = match self.cache.lock().unwrap().get(&tile) {
+            Some(bytes) => bytes.clone().into(),
+            None => {
+                let bytes = Tile::new(tile).render(&self.features);
+                self.cache.lock().unwrap().put(tile, bytes.clone());
+                bytes.into()
+            }
+        };
+        Ok(Response::builder()
             .header("Content-Type", tile.content_type())
-            .body(tile.render(&self.features))
+            .body(body)
             .unwrap()
+        )
     }
 }
 

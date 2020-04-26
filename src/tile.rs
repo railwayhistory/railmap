@@ -1,6 +1,6 @@
 use std::{fmt, ops};
 use std::str::FromStr;
-use hyper::Body;
+use hyper::body::Bytes;
 use kurbo::Point;
 use crate::features::FeatureSet;
 use crate::canvas::Canvas;
@@ -39,16 +39,13 @@ impl Tile {
     }
 
     pub fn content_type(&self) -> &'static str {
-        match self.id.format {
-            TileFormat::Png => "image/png",
-            TileFormat::Svg => "image/svg+xml",
-        }
+        self.id.content_type()
     }
 
-    pub fn render(&self, features: &FeatureSet) -> Body {
+    pub fn render(&self, features: &FeatureSet) -> Bytes {
         let surface = Surface::new(self.id.format);
         self.render_surface(&surface, features);
-        surface.into_body()
+        surface.finalize()
     }
 
     fn render_surface(
@@ -70,6 +67,7 @@ impl Tile {
 
 //------------ TileId --------------------------------------------------------
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct TileId {
     pub zoom: u8,
     pub x: u32,
@@ -144,6 +142,13 @@ impl TileId {
             f64::from(self.y) / self.n(),
         )
     }
+
+    pub fn content_type(&self) -> &'static str {
+        match self.format {
+            TileFormat::Png => "image/png",
+            TileFormat::Svg => "image/svg+xml",
+        }
+    }
 }
 
 impl fmt::Display for TileId {
@@ -156,7 +161,7 @@ impl fmt::Display for TileId {
 
 //------------ TileFormat ----------------------------------------------------
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum TileFormat {
     Png,
     Svg,
@@ -224,7 +229,7 @@ impl Surface {
         }
     }
 
-    fn into_body(self) -> Body {
+    fn finalize(self) -> Bytes {
         match self {
             Surface::Png(surface) => {
                 let mut data = Vec::new();
