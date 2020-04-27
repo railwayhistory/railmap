@@ -50,7 +50,7 @@ impl Label {
         canvas.fill();
         canvas.set_operator(cairo::Operator::Over);
 
-        self.layout.render(Point::default(), &font, extent, canvas);
+        self.layout.render(Point::default(), &font, extent, extent, canvas);
         canvas.identity_matrix();
     }
 }
@@ -88,14 +88,24 @@ impl Layout {
         Layout::new(Content::Span(Span { content }), font)
     }
 
+    pub fn hbar(width: f64) -> Self {
+        Layout::new(Content::Hbar(Hbar { width }), Font::default())
+    }
+
     fn render(
-        &self, point: Point, font: &FinalFont, extent: Rect, canvas: &Canvas
+        &self, point: Point, font: &FinalFont,
+        extent: Rect, outer: Rect, canvas: &Canvas
     ) {
         let font = font.update(&self.font);
         match self.content {
-            Content::Vbox(ref v) => v.render(point, &font, extent, canvas),
-            Content::Hbox(ref v) => v.render(point, &font, extent, canvas),
-            Content::Span(ref v) => v.render(point, &font, extent, canvas),
+            Content::Vbox(ref v)
+                => v.render(point, &font, extent, outer, canvas),
+            Content::Hbox(ref v)
+                => v.render(point, &font, extent, outer, canvas),
+            Content::Span(ref v)
+                => v.render(point, &font, extent, outer, canvas),
+            Content::Hbar(ref v)
+                => v.render(point, &font, extent, outer, canvas),
         }
     }
 
@@ -108,6 +118,7 @@ impl Layout {
             Content::Vbox(ref v) => v.extent(&font, canvas),
             Content::Hbox(ref v) => v.extent(&font, canvas),
             Content::Span(ref v) => v.extent(&font, canvas),
+            Content::Hbar(ref v) => v.extent(&font, canvas),
         }
     }
 }
@@ -120,6 +131,7 @@ enum Content {
     Vbox(Vbox),
     Hbox(Hbox),
     Span(Span),
+    Hbar(Hbar),
 }
 
 
@@ -134,8 +146,10 @@ struct Vbox {
 
 impl Vbox {
     fn render(
-        &self, mut point: Point, font: &FinalFont, extent: Rect, canvas: &Canvas
+        &self, mut point: Point, font: &FinalFont,
+        extent: Rect, _outer: Rect, canvas: &Canvas
     ) {
+        let outer = extent;
         point.y += extent.y0;
         for layout in &self.lines {
             let extent = layout.extent(font, canvas);
@@ -147,7 +161,7 @@ impl Vbox {
                             point.x + extent.x0, // x0 is negative.
                             point.y
                         ),
-                        font, extent, canvas
+                        font, extent, outer, canvas
                     );
                 }
                 Align::Center => {
@@ -156,11 +170,11 @@ impl Vbox {
                             point.x - extent.width() / 2. - extent.x0,
                             point.y
                         ),
-                        font, extent, canvas
+                        font, extent, outer, canvas
                     );
                 }
                 Align::Ref => {
-                    layout.render(point, font, extent, canvas);
+                    layout.render(point, font, extent, outer, canvas);
                 }
                 Align::End => {
                     layout.render(
@@ -168,7 +182,7 @@ impl Vbox {
                             point.x - extent.x1,
                             point.y
                         ),
-                        font, extent, canvas
+                        font, extent, outer, canvas
                     );
                 }
             }
@@ -236,8 +250,10 @@ struct Hbox {
 
 impl Hbox {
     fn render(
-        &self, mut point: Point, font: &FinalFont, extent: Rect, canvas: &Canvas
+        &self, mut point: Point, font: &FinalFont,
+        extent: Rect, _outer: Rect, canvas: &Canvas
     ) {
+        let outer = extent;
         point.x += extent.x0;
         for layout in &self.spans {
             let extent = layout.extent(font, canvas);
@@ -249,7 +265,7 @@ impl Hbox {
                             point.x,
                             point.y - extent.y0
                         ),
-                        font, extent, canvas
+                        font, extent, outer, canvas
                     )
                 }
                 Align::Center => {
@@ -258,11 +274,11 @@ impl Hbox {
                             point.x,
                             point.y - 0.5 * extent.height() - extent.y0
                         ),
-                        font, extent, canvas
+                        font, extent, outer, canvas
                     )
                 }
                 Align::Ref => {
-                    layout.render(point, font, extent, canvas)
+                    layout.render(point, font, extent, outer, canvas)
                 }
                 Align::End => {
                     layout.render(
@@ -270,7 +286,7 @@ impl Hbox {
                             point.x,
                             point.y - extent.y1
                         ),
-                        font, extent, canvas
+                        font, extent, outer, canvas
                     )
                 }
             }
@@ -336,7 +352,8 @@ struct Span {
 
 impl Span {
     fn render(
-        &self, point: Point, font: &FinalFont, _extent: Rect, canvas: &Canvas
+        &self, point: Point, font: &FinalFont,
+        _extent: Rect, _outer: Rect, canvas: &Canvas
     ) {
         font.apply(canvas);
         canvas.move_to(point.x, point.y);
@@ -362,6 +379,32 @@ impl Span {
         let right = text.x_advance;
 
         Rect::new(left, top, right, bottom)
+    }
+}
+
+
+//------------ Hbar ----------------------------------------------------------
+
+#[derive(Clone, Debug)]
+struct Hbar {
+    width: f64,
+}
+
+impl Hbar {
+    fn render(
+        &self, point: Point, font: &FinalFont,
+        _extent: Rect, outer: Rect, canvas: &Canvas
+    ) {
+        font.color.apply(canvas);
+        canvas.set_line_width(self.width * canvas.canvas_bp());
+        canvas.move_to(point.x + outer.x0, point.y);
+        canvas.line_to(point.x + outer.x1, point.y);
+        canvas.stroke()
+    }
+
+    fn extent(&self, _font: &FinalFont, canvas: &Canvas) -> Rect {
+        let height = self.width * canvas.canvas_bp() * 0.5;
+        Rect::new(0., -height, 0., height)
     }
 }
 

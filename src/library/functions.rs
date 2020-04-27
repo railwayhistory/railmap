@@ -23,6 +23,19 @@ const FUNCTIONS: &[(
         eval::ArgumentList, &eval::Scope, &mut eval::Error
     ) -> Result<ExprVal, Result<eval::ArgumentList, Failed>>
 )] = &[
+    // Produces a layout containing a horizontal bar.
+    //
+    // ```text
+    // hbar(width: unit-number)
+    // ```
+    ("hbar", &|args, _, err| {
+        let width =
+            args.into_sole_positional(err)?
+            .into_number(err)?.0.into_f64();
+
+        Ok(ExprVal::Layout(label::Layout::hbar(width)))
+    }),
+
     // Produces a horizontal box for a label layout.
     //
     // ```text

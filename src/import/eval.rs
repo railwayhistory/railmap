@@ -166,6 +166,18 @@ impl Expression {
         }
     }
 
+    pub fn into_number(
+        self, err: &mut Error
+    ) -> Result<(Number, ast::Pos), Failed> {
+        match self.value {
+            ExprVal::Number(val) => Ok((val, self.pos)),
+            _ => {
+                err.add(self.pos, "expected number");
+                Err(Failed)
+            }
+        }
+    }
+
     pub fn into_path(
         self, err: &mut Error
     ) -> Result<(Path, ast::Pos), Failed> {
