@@ -1,4 +1,5 @@
 mod colors;
+mod fonts;
 mod functions;
 mod markers;
 mod procedures;

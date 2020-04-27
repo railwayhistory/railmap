@@ -405,23 +405,42 @@ pub struct FontFace(usize);
 
 impl FontFace {
     /// Returns the font face described by the symbol set.
-    pub fn new(symbols: &SymbolSet) -> Self {
-        let mut index = if symbols.contains("bold") {
-            1
+    pub fn from_symbols(symbols: &SymbolSet) -> Option<Self> {
+        let weight = if symbols.contains("bold") {
+            Some(1)
         }
         else if symbols.contains("light") {
-            2
+            Some(2)
+        }
+        else if symbols.contains("normal") {
+            Some(0)
         }
         else {
-            0
+            None
         };
-        if symbols.contains("italic") {
-            index += 3
+
+        let slant = if symbols.contains("italic") {
+            Some(3)
         }
-        if symbols.contains("condensed") {
-            index += 6
+        else {
+            None
+        };
+
+        let width = if symbols.contains("condensed") {
+            Some(6)
         }
-        FontFace(index)
+        else {
+            None
+        };
+
+        if weight.is_none() && slant.is_none() && width.is_none() {
+            None
+        }
+        else {
+            Some(FontFace(
+                weight.unwrap_or(0) + slant.unwrap_or(0) + width.unwrap_or(0)
+            ))
+        }
     }
 }
 
@@ -442,28 +461,28 @@ impl FontTable {
     pub fn new() -> Self {
         use cairo::FontFace;
         use cairo::FontSlant::{Italic, Normal};
-        use cairo::FontWeight::Normal as Regular;
+        use cairo::FontWeight::{Bold, Normal as Regular};
 
         const FONT_NORMAL: &str = "Fira Sans Normal";
-        const FONT_BOLD: &str = "Fira Sans Medium";
+        const FONT_BOLD: &str = "Fira Sans Normal";
         const FONT_LIGHT: &str = "Fira Sans Light";
         const FONT_NORMAL_COND: &str = "Fira Sans Condensed";
-        const FONT_BOLD_COND: &str = "Fira Sans Condensed Medium";
+        const FONT_BOLD_COND: &str = "Fira Sans Condensed Normal";
         const FONT_LIGHT_COND: &str = "Fira Sans Condensed Light";
 
         FontTable {
             font_faces: [
                 FontFace::toy_create(FONT_NORMAL, Normal, Regular),
-                FontFace::toy_create(FONT_BOLD, Normal, Regular),
+                FontFace::toy_create(FONT_BOLD, Normal, Bold),
                 FontFace::toy_create(FONT_LIGHT, Normal, Regular),
                 FontFace::toy_create(FONT_NORMAL, Italic, Regular),
-                FontFace::toy_create(FONT_BOLD, Italic, Regular),
+                FontFace::toy_create(FONT_BOLD, Italic, Bold),
                 FontFace::toy_create(FONT_LIGHT, Italic, Regular),
                 FontFace::toy_create(FONT_NORMAL_COND, Normal, Regular),
-                FontFace::toy_create(FONT_BOLD_COND, Normal, Regular),
+                FontFace::toy_create(FONT_BOLD_COND, Normal, Bold),
                 FontFace::toy_create(FONT_LIGHT_COND, Normal, Regular),
                 FontFace::toy_create(FONT_NORMAL_COND, Italic, Regular),
-                FontFace::toy_create(FONT_BOLD_COND, Italic, Regular),
+                FontFace::toy_create(FONT_BOLD_COND, Italic, Bold),
                 FontFace::toy_create(FONT_LIGHT_COND, Italic, Regular),
             ],
         }

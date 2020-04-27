@@ -1,5 +1,6 @@
 use kurbo::{Point, Rect};
 use crate::canvas::{Canvas, FontFace};
+use crate::import::eval::SymbolSet;
 use super::color::Color;
 use super::path::Position;
 
@@ -376,13 +377,39 @@ pub enum Align {
 }
 
 impl Align {
-    pub fn try_from_str(s: &str) -> Option<Align> {
-        match s {
-            "start" => Some(Align::Start),
-            "center" => Some(Align::Center),
-            "ref" => Some(Align::Ref),
-            "end" => Some(Align::End),
-            _ => None,         
+    pub fn h_from_symbols(symbols: &SymbolSet) -> Option<Align> {
+        if symbols.contains("left") {
+            Some(Align::Start)
+        }
+        else if symbols.contains("center") {
+            Some(Align::Center)
+        }
+        else if symbols.contains("sep") {
+            Some(Align::Ref)
+        }
+        else if symbols.contains("right") {
+            Some(Align::End)
+        }
+        else {
+            None
+        }
+    }
+
+    pub fn v_from_symbols(symbols: &SymbolSet) -> Option<Align> {
+        if symbols.contains("top") {
+            Some(Align::Start)
+        }
+        else if symbols.contains("middle") {
+            Some(Align::Center)
+        }
+        else if symbols.contains("base") {
+            Some(Align::Ref)
+        }
+        else if symbols.contains("bottom") {
+            Some(Align::End)
+        }
+        else {
+            None
         }
     }
 }
@@ -435,7 +462,7 @@ impl Default for FinalFont {
 
 impl FinalFont {
     fn apply(&self, canvas: &Canvas) {
-        canvas.apply_font(Default::default(), self.size);
+        canvas.apply_font(self.face, self.size);
         self.color.apply(canvas);
     }
 

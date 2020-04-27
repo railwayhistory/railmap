@@ -15,14 +15,18 @@ pub struct Palette {
 impl Palette {
     /// Creates the correct palette for a symbol set.
     pub fn from_symbols(symbols: &SymbolSet) -> Self {
+        Self::opt_from_symbols(symbols).unwrap_or(Palette::OPEN)
+    }
+
+    pub fn opt_from_symbols(symbols: &SymbolSet) -> Option<Self> {
         if symbols.contains("removed") {
-            Palette::REMOVED
+            Some(Palette::REMOVED)
         }
         else if symbols.contains("closed") {
-            Palette::CLOSED
+            Some(Palette::CLOSED)
         }
         else {
-            Palette::OPEN
+            None
         }
     }
 }

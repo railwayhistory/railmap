@@ -7,6 +7,7 @@ use crate::features::marker::RenderMarker;
 use crate::import::{ast, eval};
 use crate::import::Failed;
 use super::colors::Palette;
+use super::fonts;
 use super::markers::StandardMarker;
 use super::track::TrackContour;
 
@@ -133,7 +134,9 @@ const PROCEDURES: &[(
             label::Align::Center, label::Align::Center, Default::default(),
             vec![
                 label::Layout::span(
-                    label::Font::normal(palette.stroke, 5.5), text
+                    label::Font::normal(
+                        palette.stroke, fonts::SIZE_LINE_BADGE
+                    ), text
                 )
             ]
         );
