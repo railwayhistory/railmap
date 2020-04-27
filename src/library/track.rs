@@ -160,7 +160,12 @@ impl RenderContour for TrackContour {
 impl TrackContour {
     fn render_casing(&self, canvas: &Canvas, units: Units, path: &Path) {
         canvas.set_operator(cairo::Operator::Clear);
-        canvas.set_line_width(units.dt);
+        if self.double {
+            canvas.set_line_width(3. * units.dt);
+        }
+        else {
+            canvas.set_line_width(2. * units.dt);
+        }
         path.apply(canvas);
         canvas.stroke();
         canvas.set_operator(cairo::Operator::Over);

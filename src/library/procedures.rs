@@ -109,7 +109,7 @@ const PROCEDURES: &[(
     // Renders a badge containing a line label.
     //
     // ```text
-    // line_badge(position: position, class: symbol-set, text: Text)
+    // line_badge(class: symbol-set, position: position, text: Text)
     // ```
     ("line_badge", &|pos, args, scope, features, err| {
         let mut args = match args.into_n_positionals(3, err) {
@@ -123,8 +123,8 @@ const PROCEDURES: &[(
             }
             Err(Err(_)) => return Err(Failed)
         };
-        let position = args.next().unwrap().into_position(err);
         let class = args.next().unwrap().into_symbol_set(err);
+        let position = args.next().unwrap().into_position(err);
         let text = args.next().unwrap().into_text(err)?.0;
         let position = position?.0;
         let palette = Palette::from_symbols(&class?.0);
@@ -182,7 +182,7 @@ const PROCEDURES: &[(
     // Renders a one-label with small text.
     //
     // ```text
-    // slabel(position, class: symbol-set, text: text|layout)
+    // slabel(class: symbol-set, position, text: text|layout)
     // ```
     ("slabel", &|pos, args, scope, features, err| {
         let mut args = match args.into_n_positionals(3, err) {
@@ -196,8 +196,8 @@ const PROCEDURES: &[(
             }
             Err(Err(_)) => return Err(Failed)
         };
-        let position = args.next().unwrap().into_position(err);
         let class = args.next().unwrap().into_symbol_set(err);
+        let position = args.next().unwrap().into_position(err);
         let text = args.next().unwrap().into_layout_or_text(err);
         let class = class?.0;
         let position = position?.0;
@@ -206,13 +206,13 @@ const PROCEDURES: &[(
         let palette = Palette::from_symbols(&class);
         let text = text.unwrap_or_else(|text| {
             label::Layout::span(
-                label::FontInfo::new(palette.fill, 6.).into_font(),
+                label::FontInfo::new(palette.stroke, 6.).into_font(),
                 text
             )
         });
 
         let (halign, valign) = if class.contains("top") {
-            (label::Align::Center, label::Align::End)
+            (label::Align::Center, label::Align::Ref)
         }
         else if class.contains("left") {
             (label::Align::End, label::Align::Ref)
@@ -221,7 +221,7 @@ const PROCEDURES: &[(
             (label::Align::Center, label::Align::Start)
         }
         else {
-            (label::Align::Start, label::Align::Start)
+            (label::Align::Start, label::Align::Ref)
         };
         features.insert(
             features::Label::new(
@@ -237,7 +237,7 @@ const PROCEDURES: &[(
     // Renders a station label.
     //
     // ```text
-    // station(position, class: symbol-set, name: text|layout, km: text|layout)
+    // station(class: symbol-set, position, name: text|layout, km: text|layout)
     // ```
     ("station", &|pos, args, scope, features, err| {
         let mut args = match args.into_n_positionals(4, err) {
@@ -251,8 +251,8 @@ const PROCEDURES: &[(
             }
             Err(Err(_)) => return Err(Failed)
         };
-        let position = args.next().unwrap().into_position(err);
         let class = args.next().unwrap().into_symbol_set(err);
+        let position = args.next().unwrap().into_position(err);
         let name = args.next().unwrap().into_layout_or_text(err);
         let km = args.next().unwrap().into_layout_or_text(err);
         let class = class?.0;
@@ -263,41 +263,51 @@ const PROCEDURES: &[(
         let palette = Palette::from_symbols(&class);
         let name = name.unwrap_or_else(|name| {
             label::Layout::span(
-                label::FontInfo::new(palette.fill, 7.).into_font(),
+                label::FontInfo::new(palette.stroke, 7.).into_font(),
                 name
             )
         });
         let km = km.unwrap_or_else(|km| {
             label::Layout::span(
-                label::FontInfo::new(palette.fill, 5.).into_font(),
+                label::FontInfo::new(palette.stroke, 5.).into_font(),
                 km
             )
         });
 
+        let halign = if class.contains("left_align") {
+            label::Align::Start
+        }
+        else if class.contains("right_align") {
+            label::Align::End
+        }
+        else {
+            label::Align::Center
+        };
+
         let layout = if class.contains("top") {
             label::Layout::vbox(
-                label::Align::Center, label::Align::End, vec![name, km]
+                halign, label::Align::End, vec![name, km]
             )
         }
         else if class.contains("left") {
             label::Layout::hbox(
                 label::Align::End, label::Align::Ref, vec![
                     label::Layout::vbox(
-                        label::Align::Center, label::Align::Ref, vec![name, km]
+                        halign, label::Align::Ref, vec![name, km]
                     )
                 ]
             )
         }
         else if class.contains("bottom") {
             label::Layout::vbox(
-                label::Align::Center, label::Align::Start, vec![name, km]
+                halign, label::Align::Start, vec![name, km]
             )
         }
         else /* "right" */ {
             label::Layout::hbox(
                 label::Align::Start, label::Align::Ref, vec![
                     label::Layout::vbox(
-                        label::Align::Center, label::Align::Ref, vec![name, km]
+                        halign, label::Align::Ref, vec![name, km]
                     )
                 ]
             )

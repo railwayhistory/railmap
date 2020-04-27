@@ -35,11 +35,11 @@ impl Palette {
 
     pub const CLOSED: Palette = Palette {
         stroke: Color::grey(0.4),
-        fill: Color::grey(0.4),
+        fill: Color::grey(0.5),
     };
 
     pub const REMOVED: Palette = Palette {
-        stroke: Color::grey(0.7),
+        stroke: Color::grey(0.6),
         fill: Color::grey(0.7),
     };
 }
