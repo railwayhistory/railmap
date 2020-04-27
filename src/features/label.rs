@@ -1,6 +1,5 @@
-use std::sync::Arc;
 use kurbo::{Point, Rect};
-use crate::canvas::Canvas;
+use crate::canvas::{Canvas, FontFace};
 use super::color::Color;
 use super::path::Position;
 
@@ -37,8 +36,10 @@ impl Label {
         canvas.translate(point.x, point.y);
         canvas.rotate(angle);
 
+        let font = FinalFont::default();
+
         // Clear out the background of the label.
-        let extent = self.layout.extent(canvas);
+        let extent = self.layout.extent(&font, canvas);
         canvas.set_operator(cairo::Operator::Clear);
         canvas.move_to(extent.x0 - canvas.canvas_bp(), extent.y0);
         canvas.line_to(extent.x0 - canvas.canvas_bp(), extent.y1);
@@ -48,7 +49,7 @@ impl Label {
         canvas.fill();
         canvas.set_operator(cairo::Operator::Over);
 
-        self.layout.render(Point::default(), extent, canvas);
+        self.layout.render(Point::default(), &font, extent, canvas);
         canvas.identity_matrix();
     }
 }
@@ -57,60 +58,86 @@ impl Label {
 //------------ Layout --------------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub enum Layout {
-    Vbox(Vbox),
-    Hbox(Hbox),
-    Span(Span),
+pub struct Layout {
+    /// The content of the layout.
+    content: Content,
+
+    /// The font to use for the layout.
+    font: Font,
 }
 
 impl Layout {
-    pub fn vbox(halign: Align, valign: Align, lines: Vec<Layout>) -> Self {
-        Layout::Vbox(Vbox { halign, valign, lines })
+    fn new(content: Content, font: Font) -> Self {
+        Layout { content, font }
     }
 
-    pub fn hbox(halign: Align, valign: Align, spans: Vec<Layout>) -> Self {
-        Layout::Hbox(Hbox { halign, valign, spans })
+    pub fn vbox(
+        halign: Align, valign: Align, font: Font, lines: Stack,
+    ) -> Self {
+        Layout::new(Content::Vbox(Vbox { halign, valign, lines }), font)
+    }
+
+    pub fn hbox(
+        halign: Align, valign: Align, font: Font, spans: Stack
+    ) -> Self {
+        Layout::new(Content::Hbox(Hbox { halign, valign, spans }), font)
     }
 
     pub fn span(font: Font, content: String) -> Self {
-        Layout::Span(Span { font, content })
+        Layout::new(Content::Span(Span { content }), font)
     }
 
-    fn render(&self, point: Point, extent: Rect, canvas: &Canvas) {
-        match *self {
-            Layout::Vbox(ref value) => value.render(point, extent, canvas),
-            Layout::Hbox(ref value) => value.render(point, extent, canvas),
-            Layout::Span(ref value) => value.render(point, extent, canvas),
+    fn render(
+        &self, point: Point, font: &FinalFont, extent: Rect, canvas: &Canvas
+    ) {
+        let font = font.update(&self.font);
+        match self.content {
+            Content::Vbox(ref v) => v.render(point, &font, extent, canvas),
+            Content::Hbox(ref v) => v.render(point, &font, extent, canvas),
+            Content::Span(ref v) => v.render(point, &font, extent, canvas),
         }
     }
 
     /// The extent of the layout.
     ///
     /// The values are given relative to the layout’s reference point.
-    fn extent(&self, canvas: &Canvas) -> Rect {
-        match *self {
-            Layout::Vbox(ref value) => value.extent(canvas),
-            Layout::Hbox(ref value) => value.extent(canvas),
-            Layout::Span(ref value) => value.extent(canvas),
+    fn extent(&self, font: &FinalFont, canvas: &Canvas) -> Rect {
+        let font = font.update(&self.font);
+        match self.content {
+            Content::Vbox(ref v) => v.extent(&font, canvas),
+            Content::Hbox(ref v) => v.extent(&font, canvas),
+            Content::Span(ref v) => v.extent(&font, canvas),
         }
     }
+}
+
+
+//------------ Content -------------------------------------------------------
+
+#[derive(Clone, Debug)]
+enum Content {
+    Vbox(Vbox),
+    Hbox(Hbox),
+    Span(Span),
 }
 
 
 //------------ Vbox ----------------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct Vbox {
+struct Vbox {
     halign: Align,
     valign: Align,
-    lines: Vec<Layout>,
+    lines: Stack,
 }
 
 impl Vbox {
-    fn render(&self, mut point: Point, extent: Rect, canvas: &Canvas) {
+    fn render(
+        &self, mut point: Point, font: &FinalFont, extent: Rect, canvas: &Canvas
+    ) {
         point.y += extent.y0;
         for layout in &self.lines {
-            let extent = layout.extent(canvas);
+            let extent = layout.extent(font, canvas);
             point.y -= extent.y0;
             match self.halign {
                 Align::Start => {
@@ -119,8 +146,7 @@ impl Vbox {
                             point.x + extent.x0, // x0 is negative.
                             point.y
                         ),
-                        extent,
-                        canvas
+                        font, extent, canvas
                     );
                 }
                 Align::Center => {
@@ -129,12 +155,11 @@ impl Vbox {
                             point.x - extent.width() / 2. - extent.x0,
                             point.y
                         ),
-                        extent,
-                        canvas
+                        font, extent, canvas
                     );
                 }
                 Align::Ref => {
-                    layout.render(point, extent, canvas);
+                    layout.render(point, font, extent, canvas);
                 }
                 Align::End => {
                     layout.render(
@@ -142,8 +167,7 @@ impl Vbox {
                             point.x - extent.x1,
                             point.y
                         ),
-                        extent,
-                        canvas
+                        font, extent, canvas
                     );
                 }
             }
@@ -151,11 +175,11 @@ impl Vbox {
         }
     }
 
-    fn extent(&self, canvas: &Canvas) -> Rect {
+    fn extent(&self, font: &FinalFont, canvas: &Canvas) -> Rect {
         let mut res = Rect::default();
         let mut top = None;
         for layout in &self.lines {
-            let extent = layout.extent(canvas);
+            let extent = layout.extent(font, canvas);
             res.y1 += extent.height();
             if top.is_none() {
                 top = Some(extent.y0);
@@ -203,17 +227,19 @@ impl Vbox {
 //------------ Hbox ----------------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct Hbox {
+struct Hbox {
     halign: Align,
     valign: Align,
     spans: Vec<Layout>,
 }
 
 impl Hbox {
-    fn render(&self, mut point: Point, extent: Rect, canvas: &Canvas) {
+    fn render(
+        &self, mut point: Point, font: &FinalFont, extent: Rect, canvas: &Canvas
+    ) {
         point.x += extent.x0;
         for layout in &self.spans {
-            let extent = layout.extent(canvas);
+            let extent = layout.extent(font, canvas);
             point.x -= extent.x0;
             match self.valign {
                 Align::Start => {
@@ -222,8 +248,7 @@ impl Hbox {
                             point.x,
                             point.y - extent.y0
                         ),
-                        extent,
-                        canvas
+                        font, extent, canvas
                     )
                 }
                 Align::Center => {
@@ -232,12 +257,11 @@ impl Hbox {
                             point.x,
                             point.y - 0.5 * extent.height() - extent.y0
                         ),
-                        extent,
-                        canvas
+                        font, extent, canvas
                     )
                 }
                 Align::Ref => {
-                    layout.render(point, extent, canvas)
+                    layout.render(point, font, extent, canvas)
                 }
                 Align::End => {
                     layout.render(
@@ -245,8 +269,7 @@ impl Hbox {
                             point.x,
                             point.y - extent.y1
                         ),
-                        extent,
-                        canvas
+                        font, extent, canvas
                     )
                 }
             }
@@ -254,11 +277,11 @@ impl Hbox {
         }
     }
 
-    fn extent(&self, canvas: &Canvas) -> Rect {
+    fn extent(&self, font: &FinalFont, canvas: &Canvas) -> Rect {
         let mut res = Rect::default();
         let mut left = None;
         for layout in &self.spans {
-            let extent = layout.extent(canvas);
+            let extent = layout.extent(font, canvas);
             res.x1 += extent.width();
             if left.is_none() {
                 left = Some(extent.x0);
@@ -306,23 +329,21 @@ impl Hbox {
 //------------ Span ----------------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct Span {
-    font: Font,
+struct Span {
     content: String,
 }
 
 impl Span {
-    fn render(&self, point: Point, _extent: Rect, canvas: &Canvas) {
-        canvas.set_font_face(canvas.fira());
-        canvas.set_font_size(self.font.0.size * canvas.canvas_bp());
-        self.font.0.color.apply(canvas);
+    fn render(
+        &self, point: Point, font: &FinalFont, _extent: Rect, canvas: &Canvas
+    ) {
+        font.apply(canvas);
         canvas.move_to(point.x, point.y);
         canvas.show_text(&self.content);
     }
 
-    fn extent(&self, canvas: &Canvas) -> Rect {
-        canvas.set_font_face(canvas.fira());
-        canvas.set_font_size(self.font.0.size * canvas.canvas_bp());
+    fn extent(&self, font: &FinalFont, canvas: &Canvas) -> Rect {
+        font.apply(canvas);
 
         // We take the width from the text extents and the height from the
         // font extents. This assumes that the text is one line exactly.
@@ -369,26 +390,72 @@ impl Align {
 
 //------------ Font ----------------------------------------------------------
 
-#[derive(Clone, Debug)]
-pub struct Font(Arc<FontInfo>);
+#[derive(Clone, Debug, Default)]
+pub struct Font {
+    face: Option<FontFace>,
+    color: Option<Color>,
+    size: Option<f64>,
+}
 
+impl Font {
+    pub fn new(
+        face: Option<FontFace>, color: Option<Color>, size: Option<f64>
+    ) -> Self {
+        Font { face, color, size }
+    }
+
+    pub fn normal(color: Color, size: f64) -> Self {
+        Font::new(None, Some(color), Some(size))
+    }
+
+    pub fn black(size: f64) -> Self {
+        Self::new(None, Some(Color::BLACK), Some(size))
+    }
+}
+
+//------------ FinalFont -----------------------------------------------------
+
+/// A font ready to be applied to a canvas.
 #[derive(Clone, Debug)]
-pub struct FontInfo {
+struct FinalFont {
+    face: FontFace,
     color: Color,
     size: f64,
 }
 
-impl FontInfo {
-    pub fn new(color: Color, size: f64) -> Self {
-        FontInfo { color, size }
-    }
-
-    pub fn black(size: f64) -> Self {
-        FontInfo::new(Color::BLACK, size)
-    }
-
-    pub fn into_font(self) -> Font {
-        Font(Arc::new(self))
+impl Default for FinalFont {
+    fn default() -> Self {
+        FinalFont {
+            face: FontFace::default(),
+            color: Color::BLACK,
+            size: 10.
+        }
     }
 }
+
+impl FinalFont {
+    fn apply(&self, canvas: &Canvas) {
+        canvas.apply_font(Default::default(), self.size);
+        self.color.apply(canvas);
+    }
+
+    fn update(&self, other: &Font) -> Self {
+        let mut res = self.clone();
+        if let Some(face) = other.face {
+            res.face = face
+        }
+        if let Some(color) = other.color {
+            res.color = color
+        }
+        if let Some(size) = other.size {
+            res.size = size
+        }
+        res
+    }
+}
+
+
+//------------ Stack ---------------------------------------------------------
+
+pub type Stack = Vec<Layout>;
 

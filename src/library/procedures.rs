@@ -130,14 +130,10 @@ const PROCEDURES: &[(
         let palette = Palette::from_symbols(&class?.0);
 
         let layout = label::Layout::hbox(
-            label::Align::Center, label::Align::Center,
+            label::Align::Center, label::Align::Center, Default::default(),
             vec![
                 label::Layout::span(
-                    label::FontInfo::new(
-                        palette.fill,
-                        5.5
-                    ).into_font(),
-                    text
+                    label::Font::normal(palette.stroke, 5.5), text
                 )
             ]
         );
@@ -206,7 +202,7 @@ const PROCEDURES: &[(
         let palette = Palette::from_symbols(&class);
         let text = text.unwrap_or_else(|text| {
             label::Layout::span(
-                label::FontInfo::new(palette.stroke, 6.).into_font(),
+                label::Font::normal(palette.stroke, 6.),
                 text
             )
         });
@@ -226,7 +222,9 @@ const PROCEDURES: &[(
         features.insert(
             features::Label::new(
                 position, false,
-                label::Layout::hbox(halign, valign, vec![text])
+                label::Layout::hbox(
+                    halign, valign, Default::default(), vec![text]
+                )
             ),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
@@ -263,13 +261,13 @@ const PROCEDURES: &[(
         let palette = Palette::from_symbols(&class);
         let name = name.unwrap_or_else(|name| {
             label::Layout::span(
-                label::FontInfo::new(palette.stroke, 7.).into_font(),
+                label::Font::normal(palette.stroke, 7.),
                 name
             )
         });
         let km = km.unwrap_or_else(|km| {
             label::Layout::span(
-                label::FontInfo::new(palette.stroke, 5.).into_font(),
+                label::Font::normal(palette.stroke, 5.),
                 km
             )
         });
@@ -286,28 +284,32 @@ const PROCEDURES: &[(
 
         let layout = if class.contains("top") {
             label::Layout::vbox(
-                halign, label::Align::End, vec![name, km]
+                halign, label::Align::End, Default::default(), vec![name, km]
             )
         }
         else if class.contains("left") {
             label::Layout::hbox(
-                label::Align::End, label::Align::Ref, vec![
+                label::Align::End, label::Align::Ref, Default::default(),
+                vec![
                     label::Layout::vbox(
-                        halign, label::Align::Ref, vec![name, km]
+                        halign, label::Align::Ref, Default::default(),
+                        vec![name, km]
                     )
                 ]
             )
         }
         else if class.contains("bottom") {
             label::Layout::vbox(
-                halign, label::Align::Start, vec![name, km]
+                halign, label::Align::Start, Default::default(), vec![name, km]
             )
         }
         else /* "right" */ {
             label::Layout::hbox(
-                label::Align::Start, label::Align::Ref, vec![
+                label::Align::Start, label::Align::Ref, Default::default(),
+                vec![
                     label::Layout::vbox(
-                        halign, label::Align::Ref, vec![name, km]
+                        halign, label::Align::Ref, Default::default(),
+                        vec![name, km]
                     )
                 ]
             )

@@ -5,6 +5,7 @@ use kurbo::{
     BezPath, PathEl, ParamCurve, ParamCurveArclen, PathSeg, Point, Rect,
     TranslateScale, Vec2
 };
+use crate::import::eval::SymbolSet;
 use crate::features::path::{CANVAS_ACCURACY, SegTime};
 
 
@@ -65,7 +66,8 @@ pub struct Canvas {
     /// Detail level.
     detail: u8,
 
-    fira: cairo::FontFace
+    /// The font table.
+    fonts: FontTable,
 }
 
 impl Canvas {
@@ -117,11 +119,7 @@ impl Canvas {
             equator_scale: scale,
             canvas_bp,
             detail,
-            fira: cairo::FontFace::toy_create(
-                "Fira Sans Regular",
-                cairo::FontSlant::Normal,
-                cairo::FontWeight::Normal,
-            ),
+            fonts: FontTable::new(),
         }
     }
 
@@ -163,15 +161,18 @@ impl Canvas {
         self.detail
     }
 
-    pub fn fira(&self) -> &cairo::FontFace {
-        &self.fira
+    pub fn apply_font(&self, face: FontFace, size: f64) {
+        self.set_font_face(&self.fonts.font_faces[face.0]);
+        self.set_font_size(size * self.canvas_bp());
     }
 
     pub fn mark_point(&self, point: Point) {
         self.set_source_rgb(1., 0., 0.);
         self.set_line_width(0.4 * self.canvas_bp());
         self.new_path();
-        self.arc(point.x, point.y, self.canvas_bp(), 0., 2. * std::f64::consts::PI);
+        self.arc(
+            point.x, point.y, self.canvas_bp(), 0., 2. * std::f64::consts::PI
+        );
         self.stroke();
     }
 }
@@ -387,6 +388,84 @@ impl<'a> Path<'a> {
             PathSeg::Cubic(cubic) => {
                 self.path.curve_to(cubic.p1, cubic.p2, cubic.p3)
             }
+        }
+    }
+}
+
+
+//------------ FontFace ------------------------------------------------------
+
+/// A font face.
+///
+/// We use a fixed set of base font faces that are created only once and held
+/// by the canvas in a table. The `FontFace` type is a simple index into this
+/// table.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FontFace(usize);
+
+impl FontFace {
+    /// Returns the font face described by the symbol set.
+    pub fn new(symbols: &SymbolSet) -> Self {
+        let mut index = if symbols.contains("bold") {
+            1
+        }
+        else if symbols.contains("light") {
+            2
+        }
+        else {
+            0
+        };
+        if symbols.contains("italic") {
+            index += 3
+        }
+        if symbols.contains("condensed") {
+            index += 6
+        }
+        FontFace(index)
+    }
+}
+
+
+//------------ FontTable -----------------------------------------------------
+
+/// Global information shared by all canvases.
+#[derive(Clone, Debug)]
+pub struct FontTable {
+    /// The table of font faces.
+    ///
+    /// The order is: normal, bold, light, normal italic, bold italic,
+    /// light italic. Then same again in compressed.
+    font_faces: [cairo::FontFace; 12],
+}
+
+impl FontTable {
+    pub fn new() -> Self {
+        use cairo::FontFace;
+        use cairo::FontSlant::{Italic, Normal};
+        use cairo::FontWeight::Normal as Regular;
+
+        const FONT_NORMAL: &str = "Fira Sans Normal";
+        const FONT_BOLD: &str = "Fira Sans Medium";
+        const FONT_LIGHT: &str = "Fira Sans Light";
+        const FONT_NORMAL_COND: &str = "Fira Sans Condensed";
+        const FONT_BOLD_COND: &str = "Fira Sans Condensed Medium";
+        const FONT_LIGHT_COND: &str = "Fira Sans Condensed Light";
+
+        FontTable {
+            font_faces: [
+                FontFace::toy_create(FONT_NORMAL, Normal, Regular),
+                FontFace::toy_create(FONT_BOLD, Normal, Regular),
+                FontFace::toy_create(FONT_LIGHT, Normal, Regular),
+                FontFace::toy_create(FONT_NORMAL, Italic, Regular),
+                FontFace::toy_create(FONT_BOLD, Italic, Regular),
+                FontFace::toy_create(FONT_LIGHT, Italic, Regular),
+                FontFace::toy_create(FONT_NORMAL_COND, Normal, Regular),
+                FontFace::toy_create(FONT_BOLD_COND, Normal, Regular),
+                FontFace::toy_create(FONT_LIGHT_COND, Normal, Regular),
+                FontFace::toy_create(FONT_NORMAL_COND, Italic, Regular),
+                FontFace::toy_create(FONT_BOLD_COND, Italic, Regular),
+                FontFace::toy_create(FONT_LIGHT_COND, Italic, Regular),
+            ],
         }
     }
 }
