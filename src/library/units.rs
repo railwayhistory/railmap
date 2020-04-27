@@ -9,7 +9,8 @@ pub const PT: f64 = 1.;
 
 pub const DL: f64 = 0.5 * DT;
 pub const DT: f64 = 0.75 * MM;
-pub const SW: f64 = 6.;
+pub const SW: f64 = 3.2 * DT;
+pub const SH: f64 = 3. * DT;
 pub const SSW: f64 = 1.6 * DT;
 
 pub const M: f64 = 1_000. * (72./25.4);
@@ -32,6 +33,7 @@ pub const CANVAS_DISTANCES: &[(&str, f64)] = &[
     ("dt", DT), // Distance between tracks. 0.5 mm
     ("dl", DL), // Length of a track crossing between two tracks one dt apart.
     ("sw", SW),
+    ("sh", SH),
     ("ssw", SSW),
 ];
 

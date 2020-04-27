@@ -48,12 +48,11 @@ struct Units {
 impl Units {
     fn new(canvas: &Canvas) -> Self {
         if canvas.detail() > 3 {
-            let base = units::SW * canvas.canvas_bp();
             Units {
                 dt: units::DT * canvas.canvas_bp(),
-                sw: base,
-                sh: 0.96 * base,
-                ds: 0.05 * base,
+                sw: units::SW * canvas.canvas_bp(),
+                sh: units::SH * canvas.canvas_bp(),
+                ds: units::SH * canvas.canvas_bp() * 0.05,
                 sp: 0.8 * canvas.canvas_bp(),
                 bp: 0.6 * canvas.canvas_bp(),
             }

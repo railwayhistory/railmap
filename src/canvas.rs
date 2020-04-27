@@ -15,7 +15,7 @@ use crate::features::path::{CANVAS_ACCURACY, SegTime};
 ///
 /// This value will be multiplied with length and height of the bounding box
 /// and then added on each side.
-const BOUNDS_CORRECTION: f64 = 0.5;
+const BOUNDS_CORRECTION: f64 = 1.;
 
 
 //------------ Canvas --------------------------------------------------------
