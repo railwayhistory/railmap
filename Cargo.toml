@@ -18,7 +18,7 @@ osmxml = { git = "https://github.com/partim/osmxml.git" }
 pango = "0.8"
 pangocairo = "0.9"
 rstar = "0.7.1"
-tokio = { version = "0.2", features = ["macros"] }
+tokio = { version = "0.2", features = ["macros", "rt-threaded"] }
 
 [[bin]]
 name = "railmap"
