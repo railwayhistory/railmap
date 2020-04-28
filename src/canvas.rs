@@ -463,9 +463,9 @@ impl FontTable {
         use cairo::FontSlant::{Italic, Normal};
         use cairo::FontWeight::{Bold, Normal as Regular};
 
-        const FONT_NORMAL: &str = "Fira Sans Normal";
-        const FONT_BOLD: &str = "Fira Sans Normal";
-        const FONT_LIGHT: &str = "Fira Sans Light";
+        const FONT_NORMAL: &str = "Fira Sans Book";
+        const FONT_BOLD: &str = "Fira Sans";
+        const FONT_LIGHT: &str = "Fira Sans ExtraLight";
         const FONT_NORMAL_COND: &str = "Fira Sans Condensed";
         const FONT_BOLD_COND: &str = "Fira Sans Condensed Normal";
         const FONT_LIGHT_COND: &str = "Fira Sans Condensed Light";

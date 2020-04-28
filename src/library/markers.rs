@@ -226,6 +226,20 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.stroke();
     }),
 
+    ("de.zst", &|canvas, u| {
+        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
+        canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
+        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh - 0.5 * u.sp);
+        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.);
+        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.5 * u.sp);
+        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh - 0.5 * u.sp);
+        canvas.move_to(0.5 * u.sw - 0.5 * u.sp, 0.5 * u.sp);
+        canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
+        canvas.set_line_width(u.sp);
+        canvas.stroke();
+    }),
+
+
     ("statdt", &|canvas, u| {
         canvas.set_line_width(u.bp);
         canvas.move_to(0., 0.);

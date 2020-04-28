@@ -135,62 +135,6 @@ impl StoredPath {
                 }
             }
         }
-
-        /*
-
-        // The reference point is at the beginning of the segment `node`.
-        let conv_pt = self.get_seg(at).unwrap().p0();
-
-        let time = match distance.world {
-            Some(world) => {
-                let mut storage = to_storage_distance(world, conv_pt);
-                if storage < 0. {
-                    if node >= self.node_len() {
-                        return self.max_location()
-                    }
-                    storage = -storage;
-                    loop {
-                        let seg = self.get_seg(node).unwrap();
-                        let arclen = seg.arclen_storage();
-                        if storage >= arclen {
-                            match node.checked_sub(1) {
-                                Some(val) => node = val,
-                                None => return self.min_location()
-                            }
-                            storage -= arclen;
-                        }
-                        else {
-                            break 1. - seg.rev().arctime_storage(storage)
-                        }
-                    }
-                }
-                else {
-                    loop {
-                        let seg = match self.get_seg(node) {
-                            Some(seg) => seg,
-                            None => return self.max_location()
-                        };
-                        let arclen = seg.arclen_storage();
-                        if storage >= arclen {
-                            node += 1;
-                            storage -= arclen
-                        }
-                        else {
-                            break seg.arctime_storage(storage)
-                        }
-                    }
-                }
-            }
-            None => 0.
-        };
-        let canvas = distance.canvas.unwrap_or(0.);
-        if node == self.node_len() {
-            Location::new(SegTime::new(node - 1, 1.), canvas)
-        }
-        else {
-            Location::new(SegTime::new(node, time), canvas)
-        }
-        */
     }
 
     /// Returns the time value for a location on a given canvas.
@@ -731,7 +675,7 @@ impl<'a> SubpathSegmentIter<'a> {
         subpath: &'a Subpath, canvas: &'a Canvas,
         mut start: SegTime, end: SegTime
     ) -> Self {
-        if start.time == 0. {
+        if start.time == 0. && start.seg > 1 {
             start = SegTime::new(start.seg - 1, 1.);
         }
         let (first, middle, last) = if start.seg == end.seg {
