@@ -205,7 +205,7 @@ const PROCEDURES: &[(
         let palette = Palette::from_symbols(&class);
         let text = text.unwrap_or_else(|text| {
             label::Layout::span(
-                label::Font::normal(palette.stroke, 6.),
+                label::Font::normal(palette.stroke, fonts::SIZE_S),
                 text
             )
         });
@@ -264,13 +264,13 @@ const PROCEDURES: &[(
         let palette = Palette::from_symbols(&class);
         let name = name.unwrap_or_else(|name| {
             label::Layout::span(
-                label::Font::normal(palette.stroke, 7.),
+                label::Font::normal(palette.stroke, fonts::SIZE_M),
                 name
             )
         });
         let km = km.unwrap_or_else(|km| {
             label::Layout::span(
-                label::Font::normal(palette.stroke, 5.),
+                label::Font::normal(palette.stroke, fonts::SIZE_XS),
                 km
             )
         });

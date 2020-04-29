@@ -57,7 +57,7 @@ impl<'a> Scope<'a> {
 
 #[derive(Clone, Debug, Default)]
 pub struct RenderParams {
-    detail: Option<u8>,
+    detail: Option<(u8, u8)>,
     layer: f64,
 }
 
@@ -86,11 +86,32 @@ impl RenderParams {
         match value.value {
             ExprVal::Number(val) => {
                 match val.into_u8() {
-                    Ok(val) => self.detail = Some(val),
+                    Ok(val) => self.detail = Some((val, val)),
                     Err(_) => err.add(value.pos, "expected 8-bit integer"),
                 }
             }
-            _ => err.add(value.pos, "expected number"),
+            ExprVal::List(val) => {
+                if val.len() != 2 {
+                    err.add(value.pos, "expected number or pair of numbers");
+                    return;
+                }
+                let mut val = val.into_iter();
+                let left = match val.next().unwrap().into_u8(err) {
+                    Ok(left) => left.0,
+                    Err(_) => return,
+                };
+                let right = match val.next().unwrap().into_u8(err) {
+                    Ok(right) => right.0,
+                    Err(_) => return,
+                };
+                self.detail = Some(if left < right {
+                    (left, right)
+                }
+                else {
+                    (right, left)
+                });
+            }
+            _ => err.add(value.pos, "expected number or pair of numbers"),
         }
     }
 
@@ -109,7 +130,7 @@ impl RenderParams {
 
     pub fn detail(
         &self, pos: ast::Pos, err: &mut Error
-    ) -> Result<u8, Failed> {
+    ) -> Result<(u8, u8), Failed> {
         match self.detail {
             Some(detail) => Ok(detail),
             None => {
@@ -173,6 +194,19 @@ impl Expression {
             ExprVal::Number(val) => Ok((val, self.pos)),
             _ => {
                 err.add(self.pos, "expected number");
+                Err(Failed)
+            }
+        }
+    }
+
+    pub fn into_u8(
+        self, err: &mut Error
+    ) -> Result<(u8, ast::Pos), Failed> {
+        let (val, pos) = self.into_number(err)?;
+        match val.into_u8() {
+            Ok(val) => Ok((val, pos)),
+            Err(msg) => {
+                err.add(pos, msg);
                 Err(Failed)
             }
         }

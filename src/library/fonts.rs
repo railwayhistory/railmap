@@ -8,11 +8,11 @@ use super::colors::Palette;
 
 // Font sizes
 //
-const SIZE_XS: f64 = 3.8;
-const SIZE_S: f64 = 5.;
-const SIZE_M: f64 = 7.;
-const SIZE_L: f64 = 9.;
-const SIZE_XL: f64 = 11.;
+pub const SIZE_XS: f64 = 5.;
+pub const SIZE_S: f64 = 6.;
+pub const SIZE_M: f64 = 7.;
+pub const SIZE_L: f64 = 9.;
+pub const SIZE_XL: f64 = 11.;
 
 pub const SIZE_LINE_BADGE: f64 = 5.5;
 

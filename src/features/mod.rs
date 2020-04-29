@@ -35,7 +35,7 @@ impl FeatureSet {
     pub fn insert(
         &mut self,
         feature: impl Into<Feature>,
-        detail: u8,
+        detail: (u8, u8),
         layer: f64
     ) {
         self.features.insert(
@@ -76,15 +76,15 @@ pub struct StoredFeature {
 }
 
 impl StoredFeature {
-    pub fn new(feature: Feature, detail: u8, layer: f64) -> Self {
+    pub fn new(feature: Feature, detail: (u8, u8), layer: f64) -> Self {
         let bounds = feature.storage_bounds();
-        let detail = f64::from(detail);
+        let detail = (f64::from(detail.0), f64::from(detail.1));
         StoredFeature {
             feature,
             layer,
             bounds: AABB::from_corners(
-                [detail - 0.4, bounds.x0, bounds.y0],
-                [detail + 0.4, bounds.x1, bounds.y1]
+                [detail.0 - 0.4, bounds.x0, bounds.y0],
+                [detail.1 + 0.4, bounds.x1, bounds.y1]
             )
         }
     }

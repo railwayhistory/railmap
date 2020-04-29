@@ -45,6 +45,8 @@ pub const CANVAS_DISTANCES: &[(&str, f64)] = &[
 pub const WORLD_DISTANCES: &[(&str, f64)] = &[
     ("m",  M),
     ("km", KM),
+
+    ("wl", 30. * M),
 ];
 
 

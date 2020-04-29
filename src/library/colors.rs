@@ -19,7 +19,10 @@ impl Palette {
     }
 
     pub fn opt_from_symbols(symbols: &SymbolSet) -> Option<Self> {
-        if symbols.contains("removed") {
+        if symbols.contains("gone") {
+            Some(Palette::GONE)
+        }
+        else if symbols.contains("removed") {
             Some(Palette::REMOVED)
         }
         else if symbols.contains("closed") {
@@ -45,5 +48,10 @@ impl Palette {
     pub const REMOVED: Palette = Palette {
         stroke: Color::grey(0.6),
         fill: Color::grey(0.7),
+    };
+
+    pub const GONE: Palette = Palette {
+        stroke: Color::grey(0.8),
+        fill: Color::grey(0.9),
     };
 }

@@ -737,7 +737,10 @@ impl List {
         let (input, content) = terminated(
             preceded(
                 tag_char('['),
-                many0(opt_ws(Expression::parse))
+                separated_list(
+                    opt_ws(tag_char(',')),
+                    opt_ws(Expression::parse)
+                )
             ),
             opt_ws(tag_char(']'))
         )(input)?;

@@ -136,6 +136,16 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.stroke();
     }),
 
+    ("de.anst", &|canvas, u| {
+        canvas.set_line_width(u.sp);
+        canvas.move_to(0., 0.);
+        canvas.line_to(0., 0.5 * u.sh);
+        canvas.move_to(-0.5 * u.sw, u.sh);
+        canvas.line_to(0., 0.5 * u.sh);
+        canvas.line_to(0.5 * u.sw, u.sh);
+        canvas.stroke();
+    }),
+
     ("de.awanst", &|canvas, u| {
         canvas.set_line_width(u.sp);
         canvas.move_to(0., 0.);
@@ -223,6 +233,36 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.line_to(0., 0.);
         canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh);
         canvas.set_line_width(u.sp);
+        canvas.stroke();
+    }),
+
+    ("de.ldst", &|canvas, u| {
+        canvas.set_line_width(u.sp);
+        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
+        canvas.line_to(0., u.sh - 0.5 * u.sp);
+        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.);
+        canvas.stroke();
+    }),
+
+    ("de.stw", &|canvas, u| {
+        canvas.set_line_width(u.sp);
+        canvas.move_to(0., 0.);
+        canvas.line_to(0., 2. * u.dt);
+        canvas.move_to(-u.dt, u.dt);
+        canvas.line_to(u.dt, u.dt);
+        canvas.stroke();
+    }),
+
+    ("de.uest", &|canvas, u| {
+        canvas.set_line_width(u.sp);
+        canvas.move_to(0., 0.);
+        canvas.line_to(0., 0.5 * u.sh);
+        canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
+        canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
+        canvas.move_to(-0.25 * u.sw, 0.5 * u.sh);
+        canvas.line_to(-0.25 * u.sw, u.sh);
+        canvas.move_to(0.25 * u.sw, 0.5 * u.sh);
+        canvas.line_to(0.25 * u.sw, u.sh);
         canvas.stroke();
     }),
 
