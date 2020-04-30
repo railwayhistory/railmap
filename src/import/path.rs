@@ -406,6 +406,7 @@ impl From<io::Error> for PathError {
 
 //------------ Error ---------------------------------------------------------
 
+#[derive(Debug)]
 pub enum Error {
     NonPathRelation { rel: i64 },
     MissingKey { rel: i64 },
@@ -423,9 +424,7 @@ pub enum Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            _ => f.write_str("error"),
-        }
+        write!(f, "{:?}", self)
     }
 }
 

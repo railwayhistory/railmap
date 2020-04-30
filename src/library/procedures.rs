@@ -211,7 +211,7 @@ const PROCEDURES: &[(
         });
 
         let (halign, valign) = if class.contains("top") {
-            (label::Align::Center, label::Align::Ref)
+            (label::Align::Center, label::Align::End)
         }
         else if class.contains("left") {
             (label::Align::End, label::Align::Ref)
