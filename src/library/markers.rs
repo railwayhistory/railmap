@@ -91,9 +91,9 @@ impl StandardMarker {
     pub fn create(
         pos: ast::Pos, symbols: SymbolSet, err: &mut Error
     ) -> Result<Self, Failed> {
-        let rotation = if symbols.contains("top") { 0.5 * PI }
+        let rotation = if symbols.contains("top") { 1.5 * PI }
                        else if symbols.contains("left") { PI }
-                       else if symbols.contains("bottom") { 1.5 * PI }
+                       else if symbols.contains("bottom") { 0.5 * PI }
                        else { 0. };
         for (index, marker) in MARKERS.iter().enumerate() {
             if symbols.contains(marker.0) {
@@ -143,6 +143,20 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.move_to(-0.5 * u.sw, u.sh);
         canvas.line_to(0., 0.5 * u.sh);
         canvas.line_to(0.5 * u.sw, u.sh);
+        canvas.stroke();
+    }),
+
+    ("de.aw", &|canvas, u| {
+        canvas.set_line_width(2. * u.sp);
+        canvas.new_path();
+        canvas.arc(0., 0.5 * u.sh, 0.5 * u.sh - u.sp, 0., 2. * PI);
+        let seg = PI * (0.5 * u.sh - u.sp) / 6.;
+        canvas.set_dash(&[seg, seg], 0.);
+        canvas.stroke();
+        canvas.set_dash(&[], 0.);
+        canvas.set_line_width(u.sp);
+        canvas.new_path();
+        canvas.arc(0., 0.5 * u.sh, 0.5 * u.sh - 1.5 * u.sp, 0., 2. * PI);
         canvas.stroke();
     }),
 
