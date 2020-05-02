@@ -229,6 +229,18 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.fill();
     }),
 
+    ("de.dkst", &|canvas, u| {
+        canvas.set_line_width(u.sp);
+        canvas.move_to(0., 0.);
+        canvas.line_to(0., 0.5 * u.sh);
+        canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
+        canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
+        canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
+        canvas.line_to(0., u.sh);
+        canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
+        canvas.stroke();
+    }),
+
     ("de.hp", &|canvas, u| {
         canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
         canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
