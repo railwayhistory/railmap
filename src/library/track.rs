@@ -67,6 +67,8 @@ struct Units {
     /// The width of a station, private, or tram track.
     other_width: f64,
 
+    guide_width: f64,
+
     /// The length of a segment of markings.
     seg: f64,
 
@@ -85,6 +87,7 @@ impl Units {
         Units {
             line_width:     0.6 * canvas.canvas_bp(),
             other_width:    0.4 * canvas.canvas_bp(),
+            guide_width:    0.2 * canvas.canvas_bp(),
             seg:            5.0 * super::units::DT * canvas.canvas_bp(),
             dt:             super::units::DT * canvas.canvas_bp(),
             elmark:         0.5 * super::units::DT * canvas.canvas_bp(),
@@ -264,6 +267,7 @@ impl TrackContour {
         canvas.set_dash(&[], 0.);
         canvas.set_line_width(
             if self.category.is_line() { units.line_width }
+            else if self.category.is_guide() { units.guide_width }
             else { units.other_width }
         );
         self.palette.stroke.apply(canvas);
@@ -354,6 +358,7 @@ enum Category {
     Tram,
     Private,
     Station,
+    Guide,
 }
 
 impl Category {
@@ -364,12 +369,20 @@ impl Category {
         else if symbols.contains("third") { Category::Third }
         else if symbols.contains("tram") { Category::Tram }
         else if symbols.contains("private") { Category::Private }
+        else if symbols.contains("guide") { Category::Guide }
         else { Category::Station }
     }
 
     fn is_line(self) -> bool {
         match self {
             Category::First | Category::Second | Category::Third => true,
+            _ => false
+        }
+    }
+
+    fn is_guide(self) -> bool {
+        match self {
+            Category::Guide => true,
             _ => false
         }
     }
