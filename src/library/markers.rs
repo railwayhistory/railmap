@@ -250,6 +250,15 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.stroke();
     }),
 
+    ("de.hpext", &|canvas, u| {
+        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
+        canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, u.dt);
+        canvas.move_to(0.5 * u.sw - 0.5 * u.sp, u.dt);
+        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.);
+        canvas.set_line_width(u.sp);
+        canvas.stroke();
+    }),
+
     ("de.hst", &|canvas, u| {
         canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
         canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
