@@ -124,6 +124,9 @@ pub struct TrackContour {
 
     /// The status of third rail electrification.
     rail: Status,
+
+    /// The gauge of track.
+    gauge: Gauge,
 }
 
 impl TrackContour {
@@ -141,6 +144,11 @@ impl TrackContour {
             rail: if symbols.contains("rail") { Status::Active }
                   else if symbols.contains("exrail") { Status:: Ex }
                   else { Status::Never },
+            gauge: if symbols.contains("minimum") { Gauge::Minimum }
+                   else if symbols.contains("narrower") { Gauge::Narrower }
+                   else if symbols.contains("narrow") { Gauge::Narrow }
+                   else if symbols.contains("broad") { Gauge::Broad }
+                   else { Gauge::Standard }
         }
     }
 }
@@ -202,8 +210,7 @@ impl TrackContour {
         }
 
         // Classification
-        if !self.station && self.category.has_class() {
-            self.apply_class_properties(canvas, units);
+        if self.apply_class_properties(canvas, units) {
             canvas.set_line_width(units.mark);
             if self.flip {
                 path.apply_offset(0.5 * units.mark, canvas);
@@ -213,6 +220,9 @@ impl TrackContour {
             }
             canvas.stroke();
         }
+
+        // Narrow-gauge
+
 
         // Base track
         if self.category.has_base() {
@@ -240,8 +250,7 @@ impl TrackContour {
         }
 
         // Classification
-        if !self.station && self.category.has_class() {
-            self.apply_class_properties(canvas, units);
+        if self.apply_class_properties(canvas, units) {
             canvas.set_line_width(units.mark);
             if self.flip {
                 path.apply_offset(0.5 * (units.mark + units.dt), canvas);
@@ -321,28 +330,54 @@ impl TrackContour {
         }
     }
 
-    fn apply_class_properties(&self, canvas: &Canvas, units: Units) {
-        match self.category {
-            Category::Second => {
-                canvas.set_dash(
-                    &[ units.line_width, units.seg - units.line_width ],
-                    0.
-                )
-            }
-            Category::Third => {
-                canvas.set_dash(
-                    &[
-                        units.line_width,
-                        units.line_width,
-                        units.line_width,
-                        units.seg - 3. * units.line_width
-                    ],
-                    1.5 * units.line_width
-                )
-            }
-            _ => unreachable!()
+    fn apply_class_properties(&self, canvas: &Canvas, units: Units) -> bool {
+        // Never decorate in stations.
+        if self.station {
+            return false
         }
-        self.palette.stroke.apply(canvas);
+        
+        let w = units.line_width;
+        let seg = units.seg;
+        
+        let res = match (self.category, self.gauge) {
+            (_, Gauge::Narrow) => {
+                // three strokes
+                canvas.set_dash(
+                    &[w, w, w, w, w, seg - 5. * w],
+                    0.5 * (seg + 5. * w)
+                );
+                true
+            }
+            (_, Gauge::Narrower) => {
+                // four strokes
+                canvas.set_dash(
+                    &[w, w, w, w, w, w, w, seg - 7. * w],
+                    0.5 * (seg + 7. * w)
+                );
+                true
+            }
+            (Category::Second, Gauge::Standard) => {
+                // one stroke
+                canvas.set_dash(
+                    &[w, seg - w],
+                    0.5 * (seg + w)
+                );
+                true
+            }
+            (Category::Third, Gauge::Standard) => {
+                // two strokes
+                canvas.set_dash(
+                    &[w, w, w, seg - 3. * w],
+                    0.5 * (seg + 3. * w)
+                );
+                true
+            }
+            _ => false
+        };
+        if res {
+            self.palette.stroke.apply(canvas);
+        }
+        res
     }
 }
 
@@ -393,14 +428,6 @@ impl Category {
             _ => true
         }
     }
-
-    fn has_class(self) -> bool {
-        match self {
-            Category::Second => true,
-            Category::Third => true,
-            _ => false,
-        }
-    }
 }
 
 
@@ -429,4 +456,17 @@ impl Status {
         }
     }
 }
+
+
+//------------ Gauge ---------------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+enum Gauge {
+    Minimum,
+    Narrower,
+    Narrow,
+    Standard,
+    Broad,
+}
+
 
