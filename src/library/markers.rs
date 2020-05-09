@@ -35,6 +35,12 @@ struct Units {
     /// The height of a station symbol.
     sh: f64,
 
+    /// The width of a reduced size station symbol.
+    ksw: f64,
+
+    /// The height of a reduced size station symbol.
+    ksh: f64,
+
     /// The radius of curves on station symbols.
     ds: f64,
 
@@ -49,12 +55,14 @@ impl Units {
     fn new(canvas: &Canvas) -> Self {
         if canvas.detail() > 3 {
             Units {
-                dt: units::DT * canvas.canvas_bp(),
-                sw: units::SW * canvas.canvas_bp(),
-                sh: units::SH * canvas.canvas_bp(),
-                ds: units::SH * canvas.canvas_bp() * 0.05,
-                sp: 0.8 * canvas.canvas_bp(),
-                bp: 0.6 * canvas.canvas_bp(),
+                dt:  units::DT * canvas.canvas_bp(),
+                sw:  units::SW * canvas.canvas_bp(),
+                sh:  units::SH * canvas.canvas_bp(),
+                ksw: 0.8 * units::SW * canvas.canvas_bp(),
+                ksh: 0.8 * units::SH * canvas.canvas_bp(),
+                ds:  units::SH * canvas.canvas_bp() * 0.05,
+                sp:  0.8 * canvas.canvas_bp(),
+                bp:  0.6 * canvas.canvas_bp(),
             }
         }
         else {
@@ -63,6 +71,8 @@ impl Units {
                 dt: units::DT * canvas.canvas_bp(),
                 sw: base,
                 sh: 0.96 * base,
+                ksw: base,
+                ksh: 0.96 * base,
                 ds: 0.05 * base,
                 sp: 0.4 * canvas.canvas_bp(),
                 bp: 0.4 * canvas.canvas_bp(),
@@ -329,6 +339,61 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.stroke();
     }),
 
+    ("de.kabzw", &|canvas, u| {
+        canvas.set_line_width(u.sp);
+        canvas.move_to(0., 0.);
+        canvas.line_to(0., 0.5 * u.ksh);
+        canvas.move_to(-0.5 * u.ksw, 0.5 * u.ksh);
+        canvas.line_to(0.5 * u.ksw, 0.5 * u.ksh);
+        canvas.move_to(-0.5 * u.ksw, u.ksh);
+        canvas.line_to(0., 0.5 * u.ksh);
+        canvas.line_to(0.5 * u.ksw, u.ksh);
+        canvas.stroke();
+    }),
+
+    ("de.kbf", &|canvas, u| {
+        canvas.move_to(-0.5 * u.ksw, 0.);
+        canvas.line_to(-0.5 * u.ksw, u.ksh - u.ds);
+        canvas.curve_to(
+            -0.5 * u.ksw, u.ksh - 1.5 * u.ds,
+            -0.5 * u.ksw + 0.5 * u.ds, u.ksh,
+            -0.5 * u.ksw + u.ds, u.ksh
+        );
+        canvas.line_to(0.5 * u.ksw - u.ds, u.ksh);
+        canvas.curve_to(
+            0.5 * u.ksw - 0.5 * u.ds, u.ksh,
+            0.5 * u.ksw, u.ksh - 0.5 * u.ds,
+            0.5 * u.ksw, u.ksh - u.ds
+        );
+        canvas.line_to(0.5 * u.ksw, 0.);
+        canvas.close_path();
+        canvas.fill();
+    }),
+
+    ("de.khp", &|canvas, u| {
+        canvas.move_to(-0.5 * u.ksw + 0.5 * u.sp, 0.);
+        canvas.line_to(-0.5 * u.ksw + 0.5 * u.sp, u.ksh - 0.5 * u.sp);
+        canvas.line_to(0.5 * u.ksw - 0.5 * u.sp, u.ksh - 0.5 * u.sp);
+        canvas.line_to(0.5 * u.ksw - 0.5 * u.sp, 0.);
+        canvas.set_line_width(u.sp);
+        canvas.stroke();
+    }),
+
+    ("de.kzst", &|canvas, u| {
+        canvas.move_to(-0.5 * u.ksw + 0.5 * u.sp, 0.);
+        canvas.line_to(-0.5 * u.ksw + 0.5 * u.sp, u.ksh - 0.5 * u.sp);
+        canvas.line_to(0.5 * u.ksw - 0.5 * u.sp, u.ksh - 0.5 * u.sp);
+        canvas.line_to(0.5 * u.ksw - 0.5 * u.sp, 0.);
+        canvas.move_to(-0.5 * u.ksw + 0.5 * u.sp, 0.5 * u.sp);
+        canvas.set_line_width(u.sp);
+        canvas.stroke();
+        canvas.move_to(-0.5 * u.ksw + 0.5 * u.sp, u.ksh - 0.5 * u.sp);
+        canvas.line_to(0., 0.3 * u.ksh);
+        canvas.line_to(0.5 * u.ksw - 0.5 * u.sp, u.ksh - 0.5 * u.sp);
+        canvas.close_path();
+        canvas.fill();
+    }),
+
     ("de.ldst", &|canvas, u| {
         canvas.set_line_width(u.sp);
         canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
@@ -365,11 +430,13 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh - 0.5 * u.sp);
         canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.);
         canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.5 * u.sp);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.move_to(0.5 * u.sw - 0.5 * u.sp, 0.5 * u.sp);
-        canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
         canvas.set_line_width(u.sp);
         canvas.stroke();
+        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
+        canvas.line_to(0., 0.3 * u.sh);
+        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh - 0.5 * u.sp);
+        canvas.close_path();
+        canvas.fill();
     }),
 
 
