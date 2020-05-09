@@ -187,6 +187,25 @@ impl Expression {
         }
     }
 
+    pub fn into_based_layout(
+        self, font: label::Font, err: &mut Error
+    ) -> Result<(label::Layout, ast::Pos), Failed> {
+        match self.value {
+            ExprVal::Layout(mut val) => {
+                val.rebase_font(font);
+                Ok((val, self.pos))
+            }
+            ExprVal::Text(val) => {
+                Ok((label::Layout::span(font, val), self.pos))
+            }
+            _ => {
+                err.add(self.pos, "expected layout or text");
+                Err(Failed)
+            }
+        }
+
+    }
+
     pub fn into_number(
         self, err: &mut Error
     ) -> Result<(Number, ast::Pos), Failed> {

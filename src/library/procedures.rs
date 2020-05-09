@@ -43,7 +43,7 @@ const PROCEDURES: &[(
         let layout = args.next().unwrap().into_layout(err)?.0;
         let position = position?.0;
         features.insert(
-            features::Label::new(position, true, layout),
+            features::Label::new(position, true, true, layout),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -100,7 +100,7 @@ const PROCEDURES: &[(
         let layout = args.next().unwrap().into_layout(err)?.0;
         let position = position?.0;
         features.insert(
-            features::Label::new(position, false, layout),
+            features::Label::new(position, false, true, layout),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -142,7 +142,7 @@ const PROCEDURES: &[(
         );
 
         features.insert(
-            features::Label::new(position, true, layout),
+            features::Label::new(position, true, true, layout),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -224,7 +224,7 @@ const PROCEDURES: &[(
         };
         features.insert(
             features::Label::new(
-                position, false,
+                position, false, true,
                 label::Layout::hbox(
                     halign, valign, Default::default(), vec![text]
                 )
@@ -252,28 +252,17 @@ const PROCEDURES: &[(
             }
             Err(Err(_)) => return Err(Failed)
         };
-        let class = args.next().unwrap().into_symbol_set(err);
+        let class = args.next().unwrap().into_symbol_set(err)?.0;
+        let palette = Palette::from_symbols(&class);
+        let name_font = label::Font::normal(palette.stroke, fonts::SIZE_M);
+        let km_font = label::Font::normal(palette.stroke, fonts::SIZE_XS);
+
         let position = args.next().unwrap().into_position(err);
-        let name = args.next().unwrap().into_layout_or_text(err);
-        let km = args.next().unwrap().into_layout_or_text(err);
-        let class = class?.0;
+        let name = args.next().unwrap().into_based_layout(name_font, err);
+        let km = args.next().unwrap().into_based_layout(km_font, err);
         let position = position?.0;
         let name = name?.0;
         let km = km?.0;
-
-        let palette = Palette::from_symbols(&class);
-        let name = name.unwrap_or_else(|name| {
-            label::Layout::span(
-                label::Font::normal(palette.stroke, fonts::SIZE_M),
-                name
-            )
-        });
-        let km = km.unwrap_or_else(|km| {
-            label::Layout::span(
-                label::Font::normal(palette.stroke, fonts::SIZE_XS),
-                km
-            )
-        });
 
         let halign = if class.contains("left_align") {
             label::Align::Start
@@ -319,7 +308,7 @@ const PROCEDURES: &[(
         };
 
         features.insert(
-            features::Label::new(position, false, layout),
+            features::Label::new(position, false, true, layout),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
