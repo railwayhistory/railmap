@@ -195,20 +195,14 @@ const PROCEDURES: &[(
             }
             Err(Err(_)) => return Err(Failed)
         };
-        let class = args.next().unwrap().into_symbol_set(err);
+        let class = args.next().unwrap().into_symbol_set(err)?.0;
+        let palette = Palette::from_symbols(&class);
+        let font = label::Font::normal(palette.stroke, fonts::SIZE_S);
+
         let position = args.next().unwrap().into_position(err);
-        let text = args.next().unwrap().into_layout_or_text(err);
-        let class = class?.0;
+        let text = args.next().unwrap().into_based_layout(font, err);
         let position = position?.0;
         let text = text?.0;
-
-        let palette = Palette::from_symbols(&class);
-        let text = text.unwrap_or_else(|text| {
-            label::Layout::span(
-                label::Font::normal(palette.stroke, fonts::SIZE_S),
-                text
-            )
-        });
 
         let (halign, valign) = if class.contains("top") {
             (label::Align::Center, label::Align::End)
