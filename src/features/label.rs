@@ -355,8 +355,8 @@ impl Span {
         &self, point: Point, font: &FinalFont, clear: bool,
         extent: Rect, _outer: Rect, canvas: &Canvas
     ) {
+        let extent = extent + point.to_vec2();
         if clear {
-            let extent = extent + point.to_vec2();
             canvas.set_operator(cairo::Operator::Clear);
             canvas.move_to(extent.x0 - canvas.canvas_bp(), extent.y0);
             canvas.line_to(extent.x0 - canvas.canvas_bp(), extent.y1);
@@ -365,14 +365,14 @@ impl Span {
             canvas.close_path();
             canvas.fill();
             canvas.set_operator(cairo::Operator::Over);
-            canvas.move_to(extent.x0 - canvas.canvas_bp(), extent.y0);
-            canvas.line_to(extent.x0 - canvas.canvas_bp(), extent.y1);
-            canvas.line_to(extent.x1 + canvas.canvas_bp(), extent.y1);
-            canvas.line_to(extent.x1 + canvas.canvas_bp(), extent.y0);
-            canvas.close_path();
-            Color::rgba(1., 1., 1., 0.5).apply(canvas);
-            canvas.fill();
         }
+        canvas.move_to(extent.x0 - canvas.canvas_bp(), extent.y0);
+        canvas.line_to(extent.x0 - canvas.canvas_bp(), extent.y1);
+        canvas.line_to(extent.x1 + canvas.canvas_bp(), extent.y1);
+        canvas.line_to(extent.x1 + canvas.canvas_bp(), extent.y0);
+        canvas.close_path();
+        Color::rgba(1., 1., 1., 0.5).apply(canvas);
+        canvas.fill();
         font.apply(canvas);
         canvas.move_to(point.x, point.y);
         canvas.show_text(&self.content);

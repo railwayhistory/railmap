@@ -100,7 +100,7 @@ const PROCEDURES: &[(
         let layout = args.next().unwrap().into_layout(err)?.0;
         let position = position?.0;
         features.insert(
-            features::Label::new(position, false, true, layout),
+            features::Label::new(position, false, false, layout),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -218,7 +218,7 @@ const PROCEDURES: &[(
         };
         features.insert(
             features::Label::new(
-                position, false, true,
+                position, false, false,
                 label::Layout::hbox(
                     halign, valign, Default::default(), vec![text]
                 )
@@ -302,7 +302,7 @@ const PROCEDURES: &[(
         };
 
         features.insert(
-            features::Label::new(position, false, true, layout),
+            features::Label::new(position, false, false, layout),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
