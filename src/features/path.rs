@@ -1,20 +1,21 @@
 /// Paths.
 ///
-//  XXX TODO Replace straight segments with actual lines.
 
-use std::{cmp, ops, slice};
-use std::cmp::Ordering;
-use std::convert::TryFrom;
-use std::f64::consts::PI;
-use std::sync::Arc;
-use kurbo::{
-    BezPath, CubicBez, ParamCurve, ParamCurveArclen,
-    ParamCurveExtrema, PathSeg, Point, Rect, Vec2
+pub use self::stored::{
+    Distance, Location, SegTime, StoredPath, StoredPathBuilder
 };
+pub use self::segment::Segment;
+
+mod stored;
+mod segment;
+
+
+use std::slice;
+use std::cmp::Ordering;
+use std::f64::consts::PI;
+use kurbo::{Point, Rect, Vec2};
 use crate::canvas;
 use crate::canvas::Canvas;
-use crate::import::mp_path::velocity;
-use crate::library::units;
 
 
 //------------ Configuration Constants ---------------------------------------
@@ -28,236 +29,6 @@ const STORAGE_ACCURACY: f64 = 1E-11;
 ///
 /// This value assumes about 192 dpi device resolution.
 pub(crate) const CANVAS_ACCURACY: f64 = 0.025;
-
-
-//------------ StoredPath ----------------------------------------------------
-
-/// A basic path.
-#[derive(Clone, Debug)]
-pub struct StoredPath(Arc<BezPath>);
-
-impl StoredPath {
-    pub fn new(path: BezPath) -> Self {
-        StoredPath(Arc::new(path))
-    }
-
-    /// Returns the minimum location of the path.
-    fn min_location(&self) -> Location {
-        Location::new(SegTime::new(1, 0.), 0.)
-    }
-
-    /// Returns the maximum location of the path.
-    fn max_location(&self) -> Location {
-        Location::new(SegTime::new(self.0.elements().len() as u32 - 1, 1.), 0.)
-    }
-
-    /// Returns the location at a distance from a node.
-    fn location(&self, mut node: u32, distance: Distance) -> Location {
-        // `node` is the index of the referenced node. We need to convert
-        // this to the segment index which is the index of the end node of
-        // the segment.
-        //
-        // First let’s make sure there aren’t going to be any surprise.
-        // Nodes are only referenced to by their name, we convert them into
-        // indexes so there shouldn’t be an invalid index.
-        assert!(node < self.node_len());
-        let canvas = distance.canvas.unwrap_or(0.);
-
-        match distance.world {
-            None => {
-                // Let’s do the simple case first. If we don’t have a world
-                // component in `distance`, we only need to convert the node
-                // index into a segment index.
-                if node < self.node_len() - 1 {
-                    Location::new(SegTime::new(node + 1, 0.), canvas)
-                }
-                else {
-                    Location::new(SegTime::new(node, 1.), canvas)
-                }
-            }
-            Some(world) if world < 0. => {
-                // We have a negative world component. We need to go backwards
-                // on segments starting with the one that ends at the node
-                // index.
-                let mut seg = self.get_seg(node).unwrap();
-                let mut storage = to_storage_distance(-world, seg.p3());
-                loop {
-                    let arclen = seg.arclen_storage();
-                    if storage >= arclen {
-                        if node == 1 {
-                            return self.min_location()
-                        }
-                        node -= 1;
-                        seg = self.get_seg(node).unwrap();
-                        storage -= arclen;
-                    }
-                    else {
-                        return Location::new(
-                            SegTime::new(
-                                node,
-                                1. - seg.rev().arctime_storage(storage)
-                            ),
-                            canvas
-                        );
-                    }
-                }
-            }
-            Some(world) => {
-                // We have a positive world component. We need to go forward
-                // starting with the segment beginning at the node, i.e,
-                // segment node + 1. If we are already on the last segment,
-                // we can bail out.
-                if node == self.node_len() - 1 {
-                    return self.max_location()
-                }
-                node += 1;
-                let mut seg = self.get_seg(node).unwrap();
-                let mut storage = to_storage_distance(world, seg.p0());
-                loop {
-                    let arclen = seg.arclen_storage();
-                    if storage >= arclen {
-                        if node == self.node_len() - 1 {
-                            return self.max_location()
-                        }
-                        node += 1;
-                        seg = self.get_seg(node).unwrap();
-                        storage -= arclen
-                    }
-                    else {
-                        return Location::new(
-                            SegTime::new(
-                                node,
-                                seg.arctime_storage(storage)
-                            ),
-                            canvas
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    /// Returns the time value for a location on a given canvas.
-    fn location_time(&self, location: Location, canvas: &Canvas) -> SegTime {
-        self._location_time(
-            Location::new(
-                location.world,
-                location.canvas * canvas.canvas_bp()
-            ),
-            canvas
-        )
-    }
-
-    fn _location_time(&self, location: Location, canvas: &Canvas) -> SegTime {
-        if location.canvas == 0. {
-            location.world
-        }
-        else if location.canvas < 0. {
-            let offset = -location.canvas;
-            let seg = self.segment(location.world.seg).transform(canvas);
-            let before = seg.sub(0., location.world.time);
-            let arclen = before.arclen();
-            if arclen >= offset {
-                let len = seg.sub(location.world.time, 1.).arclen() + offset;
-                SegTime::new(
-                    location.world.seg,
-                    1. - seg.rev().arctime(len)
-                )
-            }
-            else if location.world.seg > 1 {
-                self._location_time(
-                    Location::new(
-                        SegTime::new(location.world.seg - 1, 1.),
-                        -(offset - arclen)
-                    ),
-                    canvas
-                )
-            }
-            else {
-                SegTime::new(1, 0.)
-            }
-        }
-        else {
-            let offset = location.canvas;
-            let seg = self.segment(location.world.seg).transform(canvas);
-            let after = seg.sub(location.world.time, 1.);
-            let arclen = after.arclen();
-            if arclen > offset {
-                let len = seg.sub(0., location.world.time).arclen() + offset;
-                SegTime::new(
-                    location.world.seg, seg.arctime(len)
-                )
-            }
-            else if location.world.seg == self.node_len() - 1 {
-                SegTime::new(location.world.seg, 1.)
-            }
-            else {
-                self._location_time(
-                    Location::new(
-                        SegTime::new(location.world.seg + 1, 0.),
-                        offset - arclen
-                    ),
-                    canvas
-                )
-            }
-        }
-    }
-
-    /// Returns the complete segment with the given index.
-    ///
-    /// # Panic
-    ///
-    /// The method panics of the segment index is out of bounds.
-    fn segment(&self, seg: u32) -> Segment {
-        match self.0.get_seg(seg as usize).unwrap() {
-            PathSeg::Cubic(seg) => Segment(seg),
-            _ => unreachable!()
-        }
-    }
-
-    /// Returns the partial segment before the given location.
-    ///
-    /// The returned segment will start at the node before the location and
-    /// run to the location.
-    fn segment_before(&self, loc: SegTime) -> Segment {
-        self.segment(loc.seg).sub(0., loc.time)
-    }
-
-    /// Returns the partial segment before the given location.
-    ///
-    /// The returned segment will start at the node before the location and
-    /// run to the location.
-    fn segment_after(&self, loc: SegTime) -> Segment {
-        self.segment(loc.seg).sub(loc.time, 1.)
-    }
-
-    fn node_len(&self) -> u32 {
-        self.0.elements().len() as u32
-    }
-
-    /// Returns the segment ending at `idx`.
-    ///
-    /// In other words, the segment will cover the time values between
-    /// `idx - 1` and `idx`.
-    fn get_seg(&self, idx: u32) -> Option<Segment> {
-        let idx = usize::try_from(idx).ok()?;
-        match self.0.get_seg(idx)? {
-            PathSeg::Cubic(seg) => Some(Segment(seg)),
-            _ => unreachable!()
-        }
-    }
-
-    /// Returns the node at the given index.
-    ///
-    /// If the index is out of bounds. Returns the last point.
-    pub fn node_trimmed(&self, at: u32) -> Point {
-        if at == 0 {
-            return self.get_seg(1).unwrap().p0()
-        }
-        let at = cmp::min(at, self.node_len() - 1);
-        self.get_seg(at).unwrap().p3()
-    }
-}
 
 
 //------------ Path ----------------------------------------------------------
@@ -564,14 +335,14 @@ impl Subpath {
             Ordering::Less => {
                 let mut res = self.path.segment_after(start).bounds();
                 for seg in start.seg + 1..end.seg {
-                    res = res.union(self.path.segment(seg).bounds());
+                    res = res.union(self.path.segment(seg).unwrap().bounds());
                 }
                 res.union(self.path.segment_before(end).bounds())
             }
             Ordering::Greater => {
                 let mut res = self.path.segment_before(start).bounds();
                 for seg in end.seg + 1..start.seg {
-                    res = res.union(self.path.segment(seg).bounds());
+                    res = res.union(self.path.segment(seg).unwrap().bounds());
                 }
                 res.union(self.path.segment_after(end).bounds())
             }
@@ -642,7 +413,7 @@ impl<'a> SubpathSegmentIter<'a> {
         let (first, middle, last) = if start.seg == end.seg {
             (
                 Some(
-                    subpath.path.segment(start.seg).sub(
+                    subpath.path.segment(start.seg).unwrap().sub(
                         start.time, end.time
                     ).transf_off(canvas, subpath.offset)
                 ),
@@ -681,7 +452,7 @@ impl<'a> SubpathSegmentIter<'a> {
         let (first, middle, last) = if start.seg == end.seg {
             (
                 Some(
-                    subpath.path.segment(start.seg).sub(
+                    subpath.path.segment(start.seg).unwrap().sub(
                         end.time, start.time
                     ).rev().transf_off(canvas, subpath.offset)
                 ),
@@ -715,7 +486,7 @@ impl<'a> SubpathSegmentIter<'a> {
             return Some(seg)
         }
         if let Some((start, end)) = self.middle {
-            let seg = self.subpath.path.segment(start).transf_off(
+            let seg = self.subpath.path.segment(start).unwrap().transf_off(
                 self.canvas, self.subpath.offset
             );
             let start = start + 1;
@@ -742,7 +513,9 @@ impl<'a> SubpathSegmentIter<'a> {
             return Some(seg)
         }
         if let Some((start, end)) = self.middle {
-            let seg = self.subpath.path.segment(start).rev().transf_off(
+            let seg = self.subpath.path.segment(
+                start
+            ).unwrap().rev().transf_off(
                 self.canvas, self.subpath.offset
             );
             let start = start - 1;
@@ -855,7 +628,7 @@ impl Position {
 
     pub fn resolve(&self, canvas: &Canvas) -> (Point, f64) {
         let loc = self.path.location_time(self.location, canvas);
-        let seg = self.path.segment(loc.seg);
+        let seg = self.path.segment(loc.seg).unwrap();
         let point = seg.point(loc.time);
         let dir = seg.dir(loc.time);
         let shift = self.shift.map(|shift| {
@@ -901,513 +674,11 @@ impl Position {
 }
 
 
-//------------ Distance ------------------------------------------------------
-
-/// Describes a distance from a point.
-///
-/// In feature definitions, locations on paths are defined relative to named
-/// points on the path. They are described as a distance from well-defined
-/// points which is combined from a world distance and a map distance. Thus
-/// way we can create schematic representations that are pleasing at a range
-/// of scales.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Distance {
-    /// The world component of the distance.
-    ///
-    /// This is not yet scaled to storage coordinates, i.e., this value is the
-    /// acutal distance along the face of the Earth in _bp._
-    pub world: Option<f64>,
-
-    /// The canvas component of the distance.
-    ///
-    /// This is the distance along the canvas in _bp._
-    pub canvas: Option<f64>,
-}
-
-impl Distance {
-    /// Creates a new distance from the world and canvas components.
-    pub fn new(world: Option<f64>, canvas: Option<f64>) -> Self {
-        Distance { world, canvas }
-    }
-
-    /// Returns whether both dimensions of the distance are `None`.
-    pub fn is_none(self) -> bool {
-        self.world.is_none() && self.canvas.is_none()
-    }
-
-    /// Resolves the distance at the given point in storage coordinates.
-    fn resolve(self, point: Point, canvas: &Canvas) -> f64 {
-        let world = match self.world {
-            Some(world) => {
-                to_storage_distance(world, point) * canvas.equator_scale()
-            }
-            None => 0.
-        };
-        let canv = match self.canvas {
-            Some(canv) => canv * canvas.canvas_bp(),
-            None => 0.
-        };
-        world + canv
-    }
-}
-
-impl ops::Add for Distance {
-    type Output = Self;
-
-    fn add(mut self, other: Self) -> Self {
-        self += other;
-        self
-    }
-}
-
-impl ops::AddAssign for Distance {
-    fn add_assign(&mut self, other: Distance) {
-        if let Some(o) = other.world {
-            if let Some(s) = self.world.as_mut() {
-                *s += o
-            }
-            else {
-                self.world = Some(o)
-            }
-        }
-        if let Some(o) = other.canvas {
-            if let Some(s) = self.canvas.as_mut() {
-                *s += o
-            }
-            else {
-                self.canvas = Some(o)
-            }
-        }
-    }
-}
-
-impl ops::SubAssign for Distance {
-    fn sub_assign(&mut self, other: Distance) {
-        if let Some(o) = other.world {
-            if let Some(s) = self.world.as_mut() {
-                *s -= o
-            }
-            else {
-                self.world = Some(-o)
-            }
-        }
-        if let Some(o) = other.canvas {
-            if let Some(s) = self.canvas.as_mut() {
-                *s -= o
-            }
-            else {
-                self.canvas = Some(-o)
-            }
-        }
-    }
-}
-
-impl ops::Neg for Distance {
-    type Output = Self;
-
-    fn neg(self) -> Self::Output {
-        Distance {
-            world: self.world.map(|val| -val),
-            canvas: self.canvas.map(|val| -val),
-        }
-    }
-}
-
-
-//------------ Location ------------------------------------------------------
-
-/// Description of a location.
-///
-/// Points on a path are referenced via a floating point value called time.
-/// Its integer part corresponds with the node index of the starting point of
-/// the segment while the fractional part describes how far between start and
-/// end point of the segment the location can be found.
-///
-/// Typically, locations are defined as [distances][`Distance`] from a known
-/// point on a path specified by its time value. Because distances contain a
-/// world and canvas component, we can only calculate the time value of the
-/// location during rendering.
-///
-/// However, since storage coordinates currently are only a scaled value of
-/// canvas coordinates, we can calculate the time value for the world distance
-/// part of the relative location during evaluation. The map distance part
-/// then needs to be added during rendering.
-///
-/// Thus, the location is described by two values: the time value of the point
-/// including relative world distance and the relative distance from that
-/// point on the canvas expressed in the standard canvas unit of _bp._ These
-/// two values are represented by the fields `world`  and `canvas`
-/// respectively.
-///
-/// [`Distance`]: struct.Distance.html
-#[derive(Clone, Copy, Debug)]
-pub struct Location {
-    /// The time value of the world location.
-    pub world: SegTime,
-
-    /// The distance from the time value on the canvas.
-    ///
-    /// Positive values are further along the path, negative values are
-    /// backwards on the path.
-    pub canvas: f64,
-}
-
-impl Location {
-    /// Creates a new location from its components.
-    pub fn new(world: SegTime, canvas: f64) -> Self {
-        Location { world, canvas }
-    }
-}
-
-
-//------------ SegTime -------------------------------------------------------
-
-/// A segment and a time on this segment..
-#[derive(Clone, Copy, Debug)]
-pub struct SegTime {
-    /// A segment index.
-    ///
-    /// Parts indexes are given as the index of the node where the segment
-    /// _ends._ Thus, the smallest index is 1 while the largest index is one
-    /// less than the number of nodes.
-    pub seg: u32,
-
-    /// The time on this index.
-    ///
-    /// This is a floating point value between 0 and 1 where 0 refers to the
-    /// starting node, 1 refers to the end node, and values between are time
-    /// values for the Bezier curve.
-    pub time: f64,
-}
-
-impl SegTime {
-    pub fn new(seg: u32, time: f64) -> Self {
-        SegTime { seg, time }
-    }
-
-    /// Converts the segtime into a clean endpoint.
-    pub fn end(self) -> Self {
-        if self.time == 0. {
-            SegTime::new(self.seg - 1, 1.)
-        }
-        else {
-            self
-        }
-    }
-}
-
-impl PartialEq for SegTime {
-    fn eq(&self, other: &SegTime) -> bool {
-        self.seg == other.seg && self.time == other.time
-    }
-}
-
-impl Eq for SegTime { }
-
-impl PartialOrd for SegTime {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for SegTime {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        match self.seg.cmp(&other.seg) {
-            cmp::Ordering::Equal => {
-                self.time.partial_cmp(&other.time).unwrap()
-            }
-            other => other
-        }
-    }
-}
-
-
-//------------ Segment -------------------------------------------------------
-
-/// A Bezier segment.
-#[derive(Clone, Copy, Debug)]
-pub struct Segment(CubicBez);
-
-impl Segment {
-    /// Creates a new segment from its points.
-    fn new<P: Into<Point>>(p0: P, p1: P, p2: P, p3: P) -> Self {
-        Segment(CubicBez::new(p0, p1, p2, p3))
-    }
-
-    /// Create a segment connecting two path locations.
-    fn connect(
-        before: Segment, post: f64, pre: f64, after: Segment
-    ) -> Segment {
-        let r = before.p3();
-        let s = after.p0();
-
-        let d = s - r;
-        let aa = d.atan2();
-        let theta = before.exit_dir().atan2() - aa;
-        let phi = after.entry_dir().atan2() - aa;
-        let (st, ct) = (theta.sin(), theta.cos());
-        let (sf, cf) = (-phi.sin(), phi.cos());
-        let rr = velocity(st, ct, sf, cf, post);
-        let ss = velocity(sf, cf, st, ct, pre);
-
-        // XXX We are ignoring negative tension ("at least") here because
-        //     we don’t have that in our path expressions (yet).
-
-        Segment::new(
-            r,
-            Point::new(
-                r.x + (d.x * ct - d.y * st) * rr,
-                r.y + (d.y * ct + d.x * st) * rr
-            ),
-            Point::new(
-                s.x - (d.x * cf + d.y * sf) * ss,
-                s.y - (d.y * cf - d.x * sf) * ss
-            ),
-            s
-        )
-    }
-
-    /// Returns whether the segment is straight.
-    fn is_straight(self) -> bool {
-        self.p0() == self.p1() && self.p2() == self.p3()
-    }
-
-    /// Returns the bounding box of the segment.
-    fn bounds(self) -> Rect {
-        self.0.bounding_box()
-    }
-
-    /// Returns the arc length of the segment.
-    fn arclen(self) -> f64 {
-        self.0.arclen(CANVAS_ACCURACY)
-    }
-
-    /// Returns the arc length of the segment.
-    fn arclen_storage(self) -> f64 {
-        self.0.arclen(STORAGE_ACCURACY)
-    }
-
-    /// Returns the time of the point arclen along the path.
-    fn arctime(self, arclen: f64) -> f64 {
-        self.0.inv_arclen(arclen, CANVAS_ACCURACY)
-    }
-
-    /// Returns the time of the point arclen along the path.
-    fn arctime_storage(self, arclen: f64) -> f64 {
-        self.0.inv_arclen(arclen, STORAGE_ACCURACY)
-    }
-
-    /// Reverses the segment.
-    fn rev(self) -> Self {
-        Segment::new(self.p3(), self.p2(), self.p1(), self.p0())
-    }
-
-    /// Scale the segment for use with a canvas.
-    fn transform(self, canvas: &Canvas) -> Segment {
-        Segment(canvas.transform() * self.0)
-    }
-
-    /// Scales the segment and then offsets it if necessary.
-    fn transf_off(self, canvas: &Canvas, offset: Option<Distance>) -> Segment {
-        match offset {
-            Some(offset) => {
-                let offset = offset.resolve(self.p0(), canvas);
-                Segment(canvas.transform() * self.0).offset(offset)
-            }
-            None => Segment(canvas.transform() * self.0),
-        }
-    }
-
-    /// Returns the part of the segment between the two given times.
-    fn sub(self, start: f64, end: f64) -> Self {
-        Segment(self.0.subsegment(start..end))
-    }
-
-    fn p0(self) -> Point { self.0.p0 }
-    fn p1(self) -> Point { self.0.p1 }
-    fn p2(self) -> Point { self.0.p2 }
-    fn p3(self) -> Point { self.0.p3 }
-
-    fn point(self, at: f64) -> Point {
-        self.0.eval(at)
-    }
-
-    fn dir(self, at: f64) -> Vec2 {
-        if self.is_straight() {
-            self.p3() - self.p0()
-        }
-        else {
-            let ta = 1. - at;
-            3. * ta * ta * (self.p1() - self.p0())
-            + 6. * ta * at * (self.p2() - self.p1())
-            + 3. * at * at * (self.p3() - self.p2())
-        }
-    }
-
-    /// Returns a path that is offset to the left by the given value.
-    ///
-    /// This uses the Tiller-Hanson method by just shifting the four points
-    /// in the given direction and will break with tight curves. For now, we
-    /// assume we don’t have those with railways and can get away with this
-    /// approach.
-    fn offset(self, offset: f64) -> Segment {
-        // Let’s change the naming slighly. r and s are the end points, u and
-        // v the control points.
-        let (r, u, v, s) = (self.0.p0, self.0.p1, self.0.p2, self.0.p3);
-
-        // Since control points can be identical (too close to?) to their
-        // nearest endpoint, we end up with four cases.
-        match (r == u, v == s) {
-            (false, false) => {
-                // Four unique points.
-                // 
-                // Get direction vectors out for the connecting lines:
-                let wru = u - r; // direction from r to u.
-                let wuv = v - u; // direction from u to v.
-                let wvs = s - v; // direction from v to s.
-
-                // The start and end points are just out along wru and wvs
-                // rotated 90° and scaled accordingly.
-                let rr = r + rot90(wru).normalize() * offset;
-                let ss = s + rot90(wvs).normalize() * offset;
-
-                // The control points are where the connecting lines meet
-                // after they have been moved out. To construct these we
-                // need a start point for the middle line which we get by
-                // just moving u out along wuv:
-                let uv = u + rot90(wuv).normalize() * offset;
-
-                // Now we can interset the lines.
-                let uu = line_intersect(rr, wru, uv, wuv);
-                let vv = line_intersect(uv, wuv, ss, wvs);
-                Segment::new(rr, uu, vv, ss)
-            }
-            (true, false) => {
-                // r and u are the same.
-                //
-                // We skip calculating uu and just set it rr.
-                let wrv = v - r;
-                let wvs = s - v;
-                let rr = r + rot90(wrv).normalize() * offset;
-                let ss = s + rot90(wvs).normalize() * offset;
-                let vs = v + rot90(wvs).normalize() * offset;
-                let vv = line_intersect(rr, wrv, vs, wvs);
-                Segment::new(rr, rr, vv, ss)
-            }
-            (false, true) => {
-                // v and s are the same.
-                let wru = u - r;
-                let wus = s - u;
-                let rr = r + rot90(wru).normalize() * offset;
-                let ss = s + rot90(wus).normalize() * offset;
-                let us = u + rot90(wus).normalize() * offset;
-                let uu = line_intersect(rr, wru, us, wus);
-                Segment::new(rr, uu, ss, ss)
-            }
-            (true, true) => {
-                // Straight line.
-                let d = rot90(s - r).normalize() * offset;
-                Segment::new(r + d, u + d, v + d, s + d)
-            }
-        }
-    }
-
-    /// Applies the start of the segment to the canvas.
-    fn apply_start(&self, canvas: &Canvas) {
-        canvas.move_to(self.0.p0.x, self.0.p0.y);
-    }
-
-    /// Applies the tail of the segment to the canvas.
-    fn apply_tail(&self, canvas: &Canvas) {
-        /*
-        canvas.stroke();
-        canvas.save();
-        canvas.set_source_rgb(1.0, 0., 0.);
-        canvas.set_line_width(0.5 * canvas.canvas_bp());
-        for p in &[self.p1(), self.p2()] {
-            canvas.arc(
-                p.x, p.y, 1. * canvas.canvas_bp(),
-                0., 2. * std::f64::consts::PI
-            );
-            canvas.stroke();
-        }
-        canvas.set_source_rgb(0., 0., 1.);
-        canvas.arc(
-            self.p3().x, self.p3().y, 1. * canvas.canvas_bp(),
-            0., 2. * std::f64::consts::PI
-        );
-        canvas.stroke();
-        canvas.restore();
-        canvas.move_to(self.0.p0.x, self.0.p0.y);
-        */
-        canvas.curve_to(
-            self.0.p1.x, self.0.p1.y,
-            self.0.p2.x, self.0.p2.y,
-            self.0.p3.x, self.0.p3.y,
-        )
-    }
-
-    /// Returns the direction when entering this segment.
-    fn entry_dir(self) -> Vec2 {
-        if self.p0() == self.p1() {
-            if self.p0() == self.p2() {
-                self.p3() - self.p0()
-            }
-            else {
-                self.p2() - self.p0()
-            }
-        }
-        else {
-            self.p1() - self.p0()
-        }
-    }
-
-    /// Returns the direction when leaving the segment.
-    fn exit_dir(self) -> Vec2 {
-        if self.p3() == self.p2() {
-            if self.p3() == self.p1() {
-                self.p3() - self.p0()
-            }
-            else {
-                self.p3() - self.p1()
-            }
-        }
-        else {
-            self.p3() - self.p2()
-        }
-    }
-
-
-}
-
-
 //------------ Helper Functions ----------------------------------------------
 
 /// Rotates a vector by 90°.
 fn rot90(vec: Vec2) -> Vec2 {
     Vec2::new(vec.y, -vec.x)
-}
-
-/// Determines the intersection point between two lines.
-///
-/// Each line is given by a point and a direction vector.
-fn line_intersect(p1: Point, d1: Vec2, p2: Point, d2: Vec2) -> Point {
-    let t = (-(p1.x - p2.x) * d2.y + (p1.y - p2.y) * d2.x)
-          / (d1.x * d2.y - d1.y * d2.x);
-
-    p1 + t * d1
-}
-
-/// Scale a world distance into a storage distance at the given point.
-///
-/// The point is already in storage coordinates.
-fn to_storage_distance(world: f64, at: Point) -> f64 {
-    (world / units::EQUATOR_BP) * scale_correction(at)
-}
-
-/// The scale correction at a given point
-fn scale_correction(at: Point) -> f64 {
-    (1. + (PI - at.y * 2. * PI).sinh().powi(2)).sqrt()
 }
 
 

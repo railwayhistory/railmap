@@ -85,8 +85,8 @@ struct Units {
 impl Units {
     fn new(canvas: &Canvas) -> Self {
         Units {
-            line_width:     0.6 * canvas.canvas_bp(),
-            other_width:    0.4 * canvas.canvas_bp(),
+            line_width:     0.7 * canvas.canvas_bp(),
+            other_width:    0.5 * canvas.canvas_bp(),
             guide_width:    0.2 * canvas.canvas_bp(),
             seg:            5.0 * super::units::DT * canvas.canvas_bp(),
             dt:             super::units::DT * canvas.canvas_bp(),
@@ -183,46 +183,45 @@ impl TrackContour {
     }
 
     fn render_single(&self, canvas: &Canvas, units: Units, path: &Path) {
-        // Catenary Electrification
-        if self.cat.present() {
-            self.apply_cat_properties(canvas, units);
-            canvas.set_line_width(units.elmark);
-            if self.flip {
-                path.apply_offset(-0.5 * units.elmark, canvas);
+        if !self.station {
+            // Catenary Electrification
+            if self.cat.present() {
+                self.apply_cat_properties(canvas, units);
+                canvas.set_line_width(units.elmark);
+                if self.flip {
+                    path.apply_offset(-0.5 * units.elmark, canvas);
+                }
+                else {
+                    path.apply_offset(0.5 * units.elmark, canvas);
+                }
+                canvas.stroke();
             }
-            else {
-                path.apply_offset(0.5 * units.elmark, canvas);
+
+            // Third-rail Electrification
+            if self.rail.present() {
+                self.apply_rail_properties(canvas, units);
+                canvas.set_line_width(units.elmark);
+                if self.flip {
+                    path.apply_offset(-0.5 * units.elmark, canvas);
+                }
+                else {
+                    path.apply_offset(0.5 * units.elmark, canvas);
+                }
+                canvas.stroke();
             }
-            canvas.stroke();
+
+            // Classification
+            if self.apply_class_properties(canvas, units) {
+                canvas.set_line_width(units.mark);
+                if self.flip {
+                    path.apply_offset(0.5 * units.mark, canvas);
+                }
+                else {
+                    path.apply_offset(-0.5 * units.mark, canvas);
+                }
+                canvas.stroke();
+            }
         }
-
-        // Third-rail Electrification
-        if self.rail.present() {
-            self.apply_rail_properties(canvas, units);
-            canvas.set_line_width(units.elmark);
-            if self.flip {
-                path.apply_offset(-0.5 * units.elmark, canvas);
-            }
-            else {
-                path.apply_offset(0.5 * units.elmark, canvas);
-            }
-            canvas.stroke();
-        }
-
-        // Classification
-        if self.apply_class_properties(canvas, units) {
-            canvas.set_line_width(units.mark);
-            if self.flip {
-                path.apply_offset(0.5 * units.mark, canvas);
-            }
-            else {
-                path.apply_offset(-0.5 * units.mark, canvas);
-            }
-            canvas.stroke();
-        }
-
-        // Narrow-gauge
-
 
         // Base track
         if self.category.has_base() {
@@ -233,32 +232,34 @@ impl TrackContour {
      }
 
     fn render_double(&self, canvas: &Canvas, units: Units, path: &Path) {
-        // Catenary electrification
-        if self.cat.present() {
-            self.apply_cat_properties(canvas, units);
-            canvas.set_line_width(units.dt);
-            path.apply(canvas);
-            canvas.stroke();
-        }
-
-        // Third-rail electrification
-        if self.rail.present() {
-            self.apply_rail_properties(canvas, units);
-            canvas.set_line_width(units.dt);
-            path.apply(canvas);
-            canvas.stroke();
-        }
-
-        // Classification
-        if self.apply_class_properties(canvas, units) {
-            canvas.set_line_width(units.mark);
-            if self.flip {
-                path.apply_offset(0.5 * (units.mark + units.dt), canvas);
+        if !self.station {
+            // Catenary electrification
+            if self.cat.present() {
+                self.apply_cat_properties(canvas, units);
+                canvas.set_line_width(units.dt);
+                path.apply(canvas);
+                canvas.stroke();
             }
-            else {
-                path.apply_offset(-0.5 * (units.mark + units.dt), canvas);
+
+            // Third-rail electrification
+            if self.rail.present() {
+                self.apply_rail_properties(canvas, units);
+                canvas.set_line_width(units.dt);
+                path.apply(canvas);
+                canvas.stroke();
             }
-            canvas.stroke();
+
+            // Classification
+            if self.apply_class_properties(canvas, units) {
+                canvas.set_line_width(units.mark);
+                if self.flip {
+                    path.apply_offset(0.5 * (units.mark + units.dt), canvas);
+                }
+                else {
+                    path.apply_offset(-0.5 * (units.mark + units.dt), canvas);
+                }
+                canvas.stroke();
+            }
         }
 
         // Base tracks

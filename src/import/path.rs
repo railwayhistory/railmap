@@ -292,7 +292,7 @@ impl ImportPath {
                 )
             }).collect()
         );
-        StoredPath::new(segment.to_bez_path())
+        segment.to_path()
     }
 }
 

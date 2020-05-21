@@ -72,6 +72,7 @@ impl RenderParams {
         match target {
             "detail" => self.update_detail(value, err),
             "layer" => self.update_layer(value, err),
+            "link" => self.update_link(value, err),
             _ => {
                 err.add(pos, format!("unknown render param {}", target));
             }
@@ -126,6 +127,14 @@ impl RenderParams {
             }
             _ => err.add(value.pos, "expected number"),
         }
+    }
+
+    fn update_link(
+        &mut self,
+        value: Expression,
+        err: &mut Error
+    ) {
+        let _ = value.into_text(err);
     }
 
     pub fn detail(
