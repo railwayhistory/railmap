@@ -9,7 +9,7 @@ use crate::features::{
     FeatureSet,
     //SymbolRule,
 };
-use crate::features::path::{Distance, Path, Position, Subpath};
+use crate::features::path::{Distance, Line, Path, Position, Subpath};
 use crate::import::Failed;
 use crate::import::path::{ImportPath, PathSet};
 use crate::library::units;
@@ -798,14 +798,50 @@ impl ast::Expression {
     fn eval(
         self, scope: &Scope, err: &mut Error
     ) -> Result<Expression, Failed> {
-        if self.connected.is_empty() {
-            Ok(Expression::new(self.first.eval_simple(scope, err)?, self.pos))
+        if self.fragments.len() == 1 {
+            let first = self.fragments.into_iter().next().unwrap();
+            Ok(Expression::new(first.1.eval_simple(scope, err)?, self.pos))
         }
         else {
-            let mut path = Path::new(self.first.eval_subpath(scope, err)?);
-            for (conn, frag) in self.connected {
+            let mut path = Path::new();
+            let mut fragments = self.fragments.into_iter();
+            while let Some((conn, frag)) = fragments.next() {
                 let (post, pre) = conn.tension();
-                path.push(post, pre, frag.eval_subpath(scope, err)?);
+                match frag.eval_path_component(scope, err)? {
+                    Ok(subpath) => path.push_subpath(post, pre, subpath),
+                    Err(pos) => {
+                        let (end_conn, end_frag) = match fragments.next() {
+                            Some(stuff) => stuff,
+                            None => {
+                                err.add(
+                                    self.pos,
+                                    "path ends after sole position"
+                                );
+                                return Err(Failed)
+                            }
+                        };
+                        if end_conn != ast::Connector::Straight {
+                            err.add(
+                                self.pos,
+                                "smooth connector in position pair"
+                            );
+                            return Err(Failed)
+                        }
+                        let end_pos = match end_frag.eval_path_component(
+                            scope, err
+                        )? {
+                            Err(pos) => pos,
+                            Ok(_) => {
+                                err.add(
+                                    self.pos,
+                                    "lone position in path definition"
+                                );
+                                return Err(Failed)
+                            }
+                        };
+                        path.push_line(post, pre, Line::new(pos, end_pos));
+                    }
+                }
             }
             Ok(Expression::new(ExprVal::Path(path), self.pos))
         }
@@ -824,13 +860,15 @@ impl ast::Fragment {
         }
     }
 
-    fn eval_subpath(
+    fn eval_path_component(
         self, scope: &Scope, err: &mut Error
-    ) -> Result<Subpath, Failed> {
+    ) -> Result<Result<Subpath, Position>, Failed> {
         match self {
-            ast::Fragment::Complex(frag) => frag.eval_subpath(scope, err),
+            ast::Fragment::Complex(frag) => {
+                frag.eval_path_component(scope, err)
+            }
             _ => {
-                err.add(self.pos(), "expected section");
+                err.add(self.pos(), "expected path component");
                 Err(Failed)
             }
         }
@@ -850,12 +888,12 @@ impl ast::Complex {
         }
     }
 
-    fn eval_subpath(
+    fn eval_path_component(
         self, scope: &Scope, err: &mut Error
-    ) -> Result<Subpath, Failed> {
+    ) -> Result<Result<Subpath, Position>, Failed> {
         let base = self.external.eval_import_path(scope, err);
         match self.section {
-            Some(section) => section.eval_subpath(base?, scope, err),
+            Some(section) => section.eval_either(base?, scope, err),
             None => {
                 err.add(self.pos, "expected section");
                 Err(Failed)
@@ -985,12 +1023,25 @@ impl ast::Section {
         ))
     }
 
+    fn eval_either(
+        self, base: &ImportPath, scope: &Scope, err: &mut Error
+    ) -> Result<Result<Subpath, Position>, Failed> {
+        if self.end.is_some() {
+            self.eval_subpath(base, scope, err).map(Ok)
+        }
+        else {
+            self.eval_position(base, scope, err).map(Err)
+        }
+    }
+
     fn eval_expr(
         self, base: &ImportPath, scope: &Scope, err: &mut Error
     ) -> Result<ExprVal, Failed> {
         if self.end.is_some() {
             self.eval_subpath(base, scope, err).map(|subpath| {
-                ExprVal::Path(Path::new(subpath))
+                let mut path = Path::new();
+                path.push_subpath(1., 1., subpath);
+                ExprVal::Path(path)
             })
         }
         else {

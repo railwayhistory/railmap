@@ -37,7 +37,7 @@ pub(crate) const CANVAS_ACCURACY: f64 = 0.025;
 ///
 /// This path is constructed as a sequence of connected subpaths referencing
 /// `StoredPath`s.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Path {
     /// The sequence of parts.
     ///
@@ -46,20 +46,17 @@ pub struct Path {
     parts: Vec<(f64, f64, Section)>,
 }
 
-enum Section {
-    Subpath(Subpath),
-    Line(Line),
-}
-
 impl Path {
-    pub fn new(first: Subpath) -> Self {
-        Path {
-            parts: vec![(1., 1., first)]
-        }
+    pub fn new() -> Self {
+        Default::default()
     }
 
-    pub fn push(&mut self, post: f64, pre: f64, segment: Subpath) {
-        self.parts.push((post, pre, segment))
+    pub fn push_subpath(&mut self, post: f64, pre: f64, section: Subpath) {
+        self.parts.push((post, pre, Section::Subpath(section)))
+    }
+
+    pub fn push_line(&mut self, post: f64, pre: f64, section: Line) {
+        self.parts.push((post, pre, Section::Line(section)))
     }
 
     pub fn apply(&self, canvas: &Canvas) {
@@ -88,7 +85,7 @@ impl Path {
         res
     }
 
-    pub fn parts(&self) -> PathPartsIter {
+    fn parts(&self) -> PathPartsIter {
         self.parts.iter()
     }
 
@@ -110,7 +107,7 @@ impl Path {
 //------------ PathPartsIter -------------------------------------------------
 
 /// An iterator over the parts of the path.
-pub type PathPartsIter<'a> = slice::Iter<'a, (f64, f64, Subpath)>;
+type PathPartsIter<'a> = slice::Iter<'a, (f64, f64, Section)>;
 
 
 //------------ PathSegmentIter -----------------------------------------------
@@ -124,7 +121,7 @@ pub struct PathSegmentIter<'a> {
     /// An iterator producing the next segment of the current part.
     ///
     /// If this is `None`, we need a new part.
-    next_seg: SubpathSegmentIter<'a>,
+    next_seg: SectionSegmentIter<'a>,
 
     /// The last segment we returned.
     ///
@@ -137,7 +134,7 @@ pub struct PathSegmentIter<'a> {
 
 impl<'a> PathSegmentIter<'a> {
     fn new(path: &'a Path, canvas: &'a Canvas) -> Self {
-        let mut next_part = path.parts.iter();
+        let mut next_part = path.parts();
         let &(_, _, ref part) = next_part.next().unwrap();
         PathSegmentIter {
             next_part,
@@ -268,6 +265,56 @@ impl<'a> Iterator for PathPartitionIter<'a> {
             }
         }
         Some(res)
+    }
+}
+
+
+//------------ Section -------------------------------------------------------
+
+/// A section of a path.
+#[derive(Clone, Debug)]
+enum Section {
+    Subpath(Subpath),
+    Line(Line),
+}
+
+impl Section {
+    fn storage_bounds(&self) -> Rect {
+        match *self {
+            Section::Subpath(ref section) => section.storage_bounds(),
+            Section::Line(ref section) => section.storage_bounds(),
+        }
+    }
+
+    fn iter<'a>(&'a self, canvas: &'a Canvas) -> SectionSegmentIter<'a> {
+        match *self {
+            Section::Subpath(ref subpath) => {
+                SectionSegmentIter::Subpath(subpath.iter(canvas))
+            }
+            Section::Line(ref line) => {
+                SectionSegmentIter::Line(line.iter(canvas))
+            }
+        }
+    }
+}
+
+
+//------------ SectionSegmentIter --------------------------------------------
+
+#[derive(Clone, Debug)]
+enum SectionSegmentIter<'a> {
+    Subpath(SubpathSegmentIter<'a>),
+    Line(LineSegmentIter<'a>)
+}
+
+impl<'a> Iterator for SectionSegmentIter<'a> {
+    type Item = Segment;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match *self {
+            SectionSegmentIter::Subpath(ref mut section) => section.next(),
+            SectionSegmentIter::Line(ref mut section) => section.next(),
+        }
     }
 }
 
@@ -566,7 +613,44 @@ pub struct Line {
     end: Position
 }
 
+impl Line {
+    pub fn new(start: Position, end: Position) -> Self {
+        Line { start, end }
+    }
 
+    fn storage_bounds(&self) -> Rect {
+        self.start.storage_bounds().union(
+            self.end.storage_bounds()
+        )
+    }
+
+    fn iter<'a>(&'a self, canvas: &'a Canvas) -> LineSegmentIter<'a> {
+        LineSegmentIter {
+            line: Some(self),
+            canvas
+        }
+    }
+}
+
+
+//------------ LineSegmentIter -----------------------------------------------
+
+#[derive(Clone, Debug)]
+struct LineSegmentIter<'a> {
+    line: Option<&'a Line>,
+    canvas: &'a Canvas,
+}
+
+impl<'a> Iterator for LineSegmentIter<'a> {
+    type Item = Segment;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let line = self.line.take()?;
+        let start = line.start.resolve(self.canvas).0;
+        let end = line.end.resolve(self.canvas).0;
+        Some(Segment::line(start, end, None))
+    }
+}
 
 
 //------------ Position ------------------------------------------------------

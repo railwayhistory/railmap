@@ -372,11 +372,10 @@ impl Argument {
 /// expression,_ otherwise it is a _connected expression._
 #[derive(Clone, Debug)]
 pub struct Expression {
-    /// The first fragment.
-    pub first: Fragment,
-
-    /// The, possibly empty, sequence of connected fragments.
-    pub connected: Vec<(Connector, Fragment)>,
+    /// The fragments.
+    ///
+    /// The connector of the first fragment is meaningless.
+    pub fragments: Vec<(Connector, Fragment)>,
 
     /// The position of the start of the expression in the source.
     pub pos: Pos
@@ -386,13 +385,18 @@ impl Expression {
     fn parse(input: Span) -> IResult<Span, Self> {
         let pos = Pos::capture(&input);
         let (input, first) = Fragment::parse(input)?;
-        let (input, connected) = many0(
+        let (input, fragments) = fold_many0(
             tuple((
                 opt_ws(Connector::parse),
                 opt_ws(Fragment::parse),
-            ))
+            )),
+            vec![(Connector::Smooth, first)],
+            |mut vec, item| {
+                vec.push(item);
+                vec
+            }
         )(input)?;
-        Ok((input, Expression { first, connected, pos }))
+        Ok((input, Expression { fragments, pos }))
     }
 }
 
@@ -1214,7 +1218,7 @@ impl Direction {
 ///
 /// The connector `..` connects the paths smoothly, while `--` connects them
 /// in a straight line.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Connector {
     Straight,
     Smooth,
