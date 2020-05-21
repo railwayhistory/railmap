@@ -43,7 +43,12 @@ pub struct Path {
     ///
     /// The first two elements are the tensions when leaving the previous
     /// part and entering this part. The third element is the part itself.
-    parts: Vec<(f64, f64, Subpath)>,
+    parts: Vec<(f64, f64, Section)>,
+}
+
+enum Section {
+    Subpath(Subpath),
+    Line(Line),
 }
 
 impl Path {
@@ -550,6 +555,18 @@ impl<'a> Iterator for SubpathSegmentIter<'a> {
         }
     }
 }
+
+
+//------------ Line ----------------------------------------------------------
+
+/// A straight line between two positions.
+#[derive(Clone, Debug)]
+pub struct Line {
+    start: Position,
+    end: Position
+}
+
+
 
 
 //------------ Position ------------------------------------------------------
