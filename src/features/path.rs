@@ -730,18 +730,18 @@ impl Position {
     pub fn resolve(&self, canvas: &Canvas) -> (Point, f64) {
         let loc = self.path.location_time(self.location, canvas);
         let seg = self.path.segment(loc.seg).unwrap();
-        let point = seg.point(loc.time);
+        let storage_point = seg.point(loc.time);
         let dir = seg.dir(loc.time);
         let shift = self.shift.map(|shift| {
             Vec2::new(
-                shift.0.resolve(point, canvas),
-                shift.1.resolve(point, canvas)
+                shift.0.resolve(storage_point, canvas),
+                shift.1.resolve(storage_point, canvas)
             )
         });
-        let mut point = canvas.transform() * point;
+        let mut point = canvas.transform() * storage_point;
         let angle = dir.atan2() + self.rotation.unwrap_or(0.);
         if let Some(sideways) = self.sideways {
-            let sideways= sideways.resolve(point, canvas);
+            let sideways= sideways.resolve(storage_point, canvas);
             let dir = sideways * rot90(dir).normalize();
             point += dir;
         }
