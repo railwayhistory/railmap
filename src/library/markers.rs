@@ -227,6 +227,25 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.fill();
     }),
 
+    ("de.bftk", &|canvas, u| {
+        canvas.move_to(-0.2 * u.sw, 0.);
+        canvas.line_to(-0.2 * u.sw, u.sh - u.ds);
+        canvas.curve_to(
+            -0.2 * u.sw, u.sh - 1.5 * u.ds,
+            -0.2 * u.sw + 0.5 * u.ds, u.sh,
+            -0.2 * u.sw + u.ds, u.sh
+        );
+        canvas.line_to(0.2 * u.sw - u.ds, u.sh);
+        canvas.curve_to(
+            0.2 * u.sw - 0.5 * u.ds, u.sh,
+            0.2 * u.sw, u.sh - 0.5 * u.ds,
+            0.2 * u.sw, u.sh - u.ds
+        );
+        canvas.line_to(0.2 * u.sw, 0.);
+        canvas.close_path();
+        canvas.fill();
+    }),
+
     ("de.bftp", &|canvas, u| {
         canvas.move_to(-0.3 * u.sw, 0.);
         canvas.line_to(-0.3 * u.sw, u.sh - u.ds);
