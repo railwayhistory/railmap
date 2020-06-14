@@ -377,6 +377,26 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.stroke();
     }),
 
+    ("de.inbf", &|canvas, u| {
+        let sh = 2.0 * u.dt;
+        canvas.move_to(-0.5 * u.sw, 0.);
+        canvas.line_to(-0.5 * u.sw, sh - u.ds);
+        canvas.curve_to(
+            -0.5 * u.sw, sh - 1.5 * u.ds,
+            -0.5 * u.sw + 0.5 * u.ds, sh,
+            -0.5 * u.sw + u.ds, sh
+        );
+        canvas.line_to(0.5 * u.sw - u.ds, sh);
+        canvas.curve_to(
+            0.5 * u.sw - 0.5 * u.ds, sh,
+            0.5 * u.sw, sh - 0.5 * u.ds,
+            0.5 * u.sw, sh - u.ds
+        );
+        canvas.line_to(0.5 * u.sw, 0.);
+        canvas.close_path();
+        canvas.fill();
+    }),
+
     ("de.kabzw", &|canvas, u| {
         canvas.set_line_width(u.sp);
         canvas.move_to(0., 0.);
