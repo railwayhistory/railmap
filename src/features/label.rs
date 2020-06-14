@@ -366,10 +366,10 @@ impl Span {
             canvas.fill();
             canvas.set_operator(cairo::Operator::Over);
         }
-        canvas.move_to(extent.x0 - canvas.canvas_bp(), extent.y0);
-        canvas.line_to(extent.x0 - canvas.canvas_bp(), extent.y1);
-        canvas.line_to(extent.x1 + canvas.canvas_bp(), extent.y1);
-        canvas.line_to(extent.x1 + canvas.canvas_bp(), extent.y0);
+        canvas.move_to(extent.x0, extent.y0);
+        canvas.line_to(extent.x0, extent.y1);
+        canvas.line_to(extent.x1, extent.y1);
+        canvas.line_to(extent.x1, extent.y0);
         canvas.close_path();
         Color::rgba(1., 1., 1., 0.5).apply(canvas);
         canvas.fill();
