@@ -460,6 +460,16 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.stroke();
     }),
 
+    ("de.lgr", &|canvas, u| {
+        let r = 0.8 * u.dt;
+        canvas.set_line_width(u.bp);
+        canvas.move_to(0., -0.5 * u.dt);
+        canvas.line_to(0., 2. * r);
+        canvas.stroke();
+        canvas.arc(0., 3. * r, r, 0., 2. * PI);
+        canvas.fill();
+    }),
+
     ("de.stw", &|canvas, u| {
         canvas.set_line_width(u.sp);
         canvas.move_to(0., 0.);
