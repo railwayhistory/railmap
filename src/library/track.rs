@@ -85,7 +85,11 @@ struct Units {
 impl Units {
     fn new(canvas: &Canvas) -> Self {
         Units {
-            line_width:     0.7 * canvas.canvas_bp(),
+            line_width: if canvas.detail() < 3 {
+                1.0 * canvas.canvas_bp()
+            } else {
+                0.7 * canvas.canvas_bp()
+            },
             other_width:    0.5 * canvas.canvas_bp(),
             guide_width:    0.2 * canvas.canvas_bp(),
             seg:            5.0 * super::units::DT * canvas.canvas_bp(),
@@ -156,7 +160,13 @@ impl TrackContour {
 impl RenderContour for TrackContour {
     fn render(&self, canvas: &Canvas, path: &Path) {
         let units = Units::new(canvas);
-        if self.casing {
+        if canvas.detail() == 1 {
+            self.render_detail_1(canvas, units, path);
+        }
+        else if canvas.detail() == 2 {
+            self.render_detail_2(canvas, units, path);
+        }
+        else if self.casing {
             self.render_casing(canvas, units, path);
         }
         else if self.double {
@@ -169,6 +179,30 @@ impl RenderContour for TrackContour {
 }
 
 impl TrackContour {
+    fn render_detail_1(&self, canvas: &Canvas, units: Units, path: &Path) {
+        canvas.set_line_width(units.line_width);
+        self.palette.stroke.apply(canvas);
+        path.apply(canvas);
+        canvas.stroke();
+    }
+
+    fn render_detail_2(&self, canvas: &Canvas, units: Units, path: &Path) {
+        if self.category.is_main_line() {
+            if self.double {
+                canvas.set_line_width(2.0 * units.line_width);
+            }
+            else {
+                canvas.set_line_width(units.line_width);
+            }
+        }
+        else {
+            canvas.set_line_width(units.other_width);
+        }
+        self.palette.stroke.apply(canvas);
+        path.apply(canvas);
+        canvas.stroke();
+    }
+
     fn render_casing(&self, canvas: &Canvas, units: Units, path: &Path) {
         canvas.set_operator(cairo::Operator::Clear);
         if self.double {
@@ -412,6 +446,13 @@ impl Category {
     fn is_line(self) -> bool {
         match self {
             Category::First | Category::Second | Category::Third => true,
+            _ => false
+        }
+    }
+
+    fn is_main_line(self) -> bool {
+        match self {
+            Category::First | Category::Second => true,
             _ => false
         }
     }
