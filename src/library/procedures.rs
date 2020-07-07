@@ -22,6 +22,33 @@ const PROCEDURES: &[(
         &mut eval::Error
     ) -> Result<(), Failed>
 )] = &[
+    // Draws an area.
+    ("area", &|pos, args, scope, features, err| {
+        let mut args = match args.into_n_positionals(2, err) {
+            Ok(args) => args.into_iter(),
+            Err(Ok(args)) => {
+                err.add(
+                    args.pos(),
+                    "expected exactly two positional arguments"
+                );
+                return Err(Failed);
+            }
+            Err(Err(_)) => return Err(Failed)
+        };
+
+        let class = args.next().unwrap().into_symbol_set(err)?.0;
+        let palette = Palette::from_symbols(&class);
+        let path = args.next().unwrap().into_path(err)?.0;
+        features.insert(
+            features::Contour::new(
+                path, features::contour::fill(palette.fill)
+            ),
+            scope.params().detail(pos, err)?,
+            scope.params().layer(),
+        );
+        Ok(())
+    }),
+
     // Draws a badge.
     //
     // ```text
@@ -240,7 +267,7 @@ const PROCEDURES: &[(
             Err(Ok(args)) => {
                 err.add(
                     args.pos(),
-                    "expected exactly four, positional arguments"
+                    "expected exactly four positional arguments"
                 );
                 return Err(Failed);
             }

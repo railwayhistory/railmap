@@ -467,7 +467,7 @@ impl FontTable {
         const FONT_BOLD: &str = "Fira Sans";
         const FONT_LIGHT: &str = "Fira Sans ExtraLight";
         const FONT_NORMAL_COND: &str = "Fira Sans Condensed";
-        const FONT_BOLD_COND: &str = "Fira Sans Condensed Normal";
+        const FONT_BOLD_COND: &str = "Fira Sans Condensed";
         const FONT_LIGHT_COND: &str = "Fira Sans Condensed Light";
 
         FontTable {

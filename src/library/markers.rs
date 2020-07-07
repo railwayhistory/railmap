@@ -517,6 +517,19 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.fill();
     }),
 
+    ("ref", &|canvas, u| {
+        canvas.set_line_width(u.bp);
+        canvas.move_to(0., 0.);
+        canvas.line_to(0., 0.5 * u.sh);
+        canvas.stroke();
+    }),
+
+    ("refdt", &|canvas, u| {
+        canvas.set_line_width(u.bp);
+        canvas.move_to(0., 0.);
+        canvas.line_to(0., u.dt);
+        canvas.stroke();
+    }),
 
     ("statcase", &|canvas, u| {
         canvas.move_to(-0.5 * u.sw, 0.);

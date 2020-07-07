@@ -95,3 +95,11 @@ pub fn dashed_line(
     }))
 }
 
+pub fn fill(color: Color) -> ContourRule {
+    ContourRule(Arc::new(move |canvas: &Canvas, path: &Path| {
+        color.apply(canvas);
+        path.apply(canvas);
+        canvas.fill();
+    }))
+}
+
