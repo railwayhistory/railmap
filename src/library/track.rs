@@ -11,14 +11,16 @@
 //!    markings are applied on the right-hand side of the right track
 //!    unless `:flip` is provided.
 //!
-//! *  `:flip`: Flips the sides electrification and category markings are
-//!    applied to. Normally, category markings are on the right-hand side,
-//!    electrification markings are on the left-hand side.
-//!
 //! *  `:closed`: The track is not in use anymore but is still present.
 //!
 //! *  `:removed`: The track has been removed. If both `:closed` and
 //!    `:removed` are given, the track is considered removed.
+//!
+//! *  `:gone`: The track has been removed a long time ago.
+//!
+//! *  `:project`: The track is planned or under construction. When combined
+//!    with `closed`, `removed`, or `gone`, the project was abandonned at some
+//!    point in the past.
 //!
 //! *  `:first`, `:second`, `:third`: Marks the track as one of a railway line
 //!    of the given classification. The particular meaning of these classes
@@ -50,6 +52,13 @@
 //! *  `:rail`, `:exrail`: The track is or was electrified with a third rail
 //!    system, respectively.
 //!
+//! *  `:flip`: Flips the sides electrification and category markings are
+//!    applied to. Normally, category markings are on the right-hand side,
+//!    electrification markings are on the left-hand side.
+//!
+//! *  `:tight`: The track runs in close proximity to other features. This
+//!    causes electrification and category markings to be of reduced size.
+//!
 use crate::canvas::Canvas;
 use crate::import::eval::SymbolSet;
 use crate::features::contour::RenderContour;
@@ -75,11 +84,11 @@ struct Units {
     /// The distance between two parallel tracks.
     dt: f64,
 
-    /// The height of single-track electrification markings.
-    elmark: f64,
-
     /// The height of category markings.
     mark: f64,
+
+    /// The height of tight single-track markings.
+    tight_mark: f64,
 }
 
 impl Units {
@@ -94,8 +103,8 @@ impl Units {
             guide_width:    0.2 * canvas.canvas_bp(),
             seg:            5.0 * super::units::DT * canvas.canvas_bp(),
             dt:             super::units::DT * canvas.canvas_bp(),
-            elmark:         0.5 * super::units::DT * canvas.canvas_bp(),
-            mark:           0.5 * super::units::DT * canvas.canvas_bp(),
+            mark:           0.8 * super::units::DT * canvas.canvas_bp(),
+            tight_mark:     0.4 * super::units::DT * canvas.canvas_bp(),
         }
     }
 }
@@ -111,9 +120,6 @@ pub struct TrackContour {
     /// Is this double tracks?
     double: bool,
 
-    /// Are markings flipped?
-    flip: bool,
-
     /// The palette to use for rendering
     palette: Palette,
 
@@ -123,6 +129,9 @@ pub struct TrackContour {
     /// Is this station track?
     station: bool,
 
+    /// Is this a project?
+    project: bool,
+
     /// The status of catenary electrification.
     cat: Status,
 
@@ -131,6 +140,12 @@ pub struct TrackContour {
 
     /// The gauge of track.
     gauge: Gauge,
+
+    /// Are markings flipped?
+    flip: bool,
+
+    /// Should markings be smaller?
+    tight: bool,
 }
 
 impl TrackContour {
@@ -138,10 +153,10 @@ impl TrackContour {
         TrackContour {
             casing,
             double: symbols.contains("double"),
-            flip: symbols.contains("flip"),
             palette: Palette::from_symbols(&symbols),
             category: Category::from_symbols(&symbols),
             station: symbols.contains("station"),
+            project: symbols.contains("project"),
             cat: if symbols.contains("cat") { Status::Active }
                  else if symbols.contains("excat") { Status:: Ex }
                  else { Status::Never },
@@ -152,7 +167,9 @@ impl TrackContour {
                    else if symbols.contains("narrower") { Gauge::Narrower }
                    else if symbols.contains("narrow") { Gauge::Narrow }
                    else if symbols.contains("broad") { Gauge::Broad }
-                   else { Gauge::Standard }
+                   else { Gauge::Standard },
+            flip: symbols.contains("flip"),
+            tight: symbols.contains("tight"),
         }
     }
 }
@@ -221,12 +238,12 @@ impl TrackContour {
             // Catenary Electrification
             if self.cat.present() {
                 self.apply_cat_properties(canvas, units);
-                canvas.set_line_width(units.elmark);
+                canvas.set_line_width(self.mark(units));
                 if self.flip {
-                    path.apply_offset(-0.5 * units.elmark, canvas);
+                    path.apply_offset(-0.5 * self.mark(units), canvas);
                 }
                 else {
-                    path.apply_offset(0.5 * units.elmark, canvas);
+                    path.apply_offset(0.5 * self.mark(units), canvas);
                 }
                 canvas.stroke();
             }
@@ -234,24 +251,24 @@ impl TrackContour {
             // Third-rail Electrification
             if self.rail.present() {
                 self.apply_rail_properties(canvas, units);
-                canvas.set_line_width(units.elmark);
+                canvas.set_line_width(self.mark(units));
                 if self.flip {
-                    path.apply_offset(-0.5 * units.elmark, canvas);
+                    path.apply_offset(-0.5 * self.mark(units), canvas);
                 }
                 else {
-                    path.apply_offset(0.5 * units.elmark, canvas);
+                    path.apply_offset(0.5 * self.mark(units), canvas);
                 }
                 canvas.stroke();
             }
 
             // Classification
             if self.apply_class_properties(canvas, units) {
-                canvas.set_line_width(units.mark);
+                canvas.set_line_width(self.mark(units));
                 if self.flip {
-                    path.apply_offset(0.5 * units.mark, canvas);
+                    path.apply_offset(0.5 * self.mark(units), canvas);
                 }
                 else {
-                    path.apply_offset(-0.5 * units.mark, canvas);
+                    path.apply_offset(-0.5 * self.mark(units), canvas);
                 }
                 canvas.stroke();
             }
@@ -285,12 +302,16 @@ impl TrackContour {
 
             // Classification
             if self.apply_class_properties(canvas, units) {
-                canvas.set_line_width(units.mark);
+                canvas.set_line_width(self.mark(units));
                 if self.flip {
-                    path.apply_offset(0.5 * (units.mark + units.dt), canvas);
+                    path.apply_offset(
+                        0.5 * (self.mark(units) + units.dt), canvas
+                    );
                 }
                 else {
-                    path.apply_offset(-0.5 * (units.mark + units.dt), canvas);
+                    path.apply_offset(
+                        -0.5 * (self.mark(units) + units.dt), canvas
+                    );
                 }
                 canvas.stroke();
             }
@@ -314,6 +335,12 @@ impl TrackContour {
             else if self.category.is_guide() { units.guide_width }
             else { units.other_width }
         );
+        if self.project {
+            canvas.set_dash(
+                &[2. * units.seg / 3., units.seg / 3.],
+                5. * units.seg / 6.
+            );
+        }
         self.palette.stroke.apply(canvas);
     }
 
@@ -413,6 +440,15 @@ impl TrackContour {
             self.palette.stroke.apply(canvas);
         }
         res
+    }
+
+    fn mark(&self, units: Units) -> f64 {
+        if self.tight {
+            units.tight_mark
+        }
+        else {
+            units.mark
+        }
     }
 }
 
