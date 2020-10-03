@@ -442,6 +442,10 @@ impl FontFace {
             ))
         }
     }
+
+    pub fn bold() -> Option<Self> {
+        Some(FontFace(1))
+    }
 }
 
 

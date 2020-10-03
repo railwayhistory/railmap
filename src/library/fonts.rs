@@ -20,7 +20,7 @@ pub const SIZE_LINE_BADGE: f64 = 5.5;
 pub fn font_from_symbols(symbols: &SymbolSet) -> Font {
     Font::new(
         FontFace::from_symbols(symbols),
-        Palette::opt_from_symbols(symbols).map(|pal| pal.stroke),
+        Palette::opt_from_symbols(symbols).map(|pal| pal.text),
         if symbols.contains("xsmall") {
             Some(SIZE_XS)
         }

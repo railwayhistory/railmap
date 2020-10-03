@@ -162,7 +162,7 @@ const PROCEDURES: &[(
             vec![
                 label::Layout::span(
                     label::Font::normal(
-                        palette.stroke, fonts::SIZE_LINE_BADGE
+                        palette.text, fonts::SIZE_LINE_BADGE
                     ), text
                 )
             ]
@@ -205,6 +205,33 @@ const PROCEDURES: &[(
         Ok(())
     }),
 
+    // Draws a platform.
+    ("platform", &|pos, args, scope, features, err| {
+        let mut args = match args.into_n_positionals(2, err) {
+            Ok(args) => args.into_iter(),
+            Err(Ok(args)) => {
+                err.add(
+                    args.pos(),
+                    "expected exactly two positional arguments"
+                );
+                return Err(Failed);
+            }
+            Err(Err(_)) => return Err(Failed)
+        };
+
+        let class = args.next().unwrap().into_symbol_set(err)?.0;
+        let palette = Palette::from_symbols(&class);
+        let path = args.next().unwrap().into_path(err)?.0;
+        features.insert(
+            features::Contour::new(
+                path, features::contour::fill(palette.fill)
+            ),
+            scope.params().detail(pos, err)?,
+            scope.params().layer(),
+        );
+        Ok(())
+    }),
+
     // Renders a one-label with small text.
     //
     // ```text
@@ -224,7 +251,7 @@ const PROCEDURES: &[(
         };
         let class = args.next().unwrap().into_symbol_set(err)?.0;
         let palette = Palette::from_symbols(&class);
-        let font = label::Font::normal(palette.stroke, fonts::SIZE_S);
+        let font = label::Font::normal(palette.text, fonts::SIZE_S);
 
         let position = args.next().unwrap().into_position(err);
         let text = args.next().unwrap().into_based_layout(font, err);
@@ -275,8 +302,8 @@ const PROCEDURES: &[(
         };
         let class = args.next().unwrap().into_symbol_set(err)?.0;
         let palette = Palette::from_symbols(&class);
-        let name_font = label::Font::normal(palette.stroke, fonts::SIZE_M);
-        let km_font = label::Font::normal(palette.stroke, fonts::SIZE_XS);
+        let name_font = label::Font::normal(palette.text, fonts::SIZE_M);
+        let km_font = label::Font::normal(palette.text, fonts::SIZE_XS);
 
         let position = args.next().unwrap().into_position(err);
         let name = args.next().unwrap().into_based_layout(name_font, err);

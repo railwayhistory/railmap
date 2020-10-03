@@ -10,6 +10,12 @@ pub struct Palette {
 
     /// The normal color for filling.
     pub fill: Color,
+
+    /// The color for filling platforms.
+    pub platform: Color,
+
+    /// The color for text.
+    pub text: Color,
 }
 
 impl Palette {
@@ -38,20 +44,28 @@ impl Palette {
     pub const OPEN: Palette = Palette {
         stroke: Color::BLACK,
         fill: Color::BLACK,
+        platform: Color::grey(0.2),
+        text: Color::BLACK,
     };
 
     pub const CLOSED: Palette = Palette {
         stroke: Color::grey(0.4),
         fill: Color::grey(0.5),
+        platform: Color::grey(0.6),
+        text: Color::grey(0.2),
     };
 
     pub const REMOVED: Palette = Palette {
         stroke: Color::grey(0.6),
         fill: Color::grey(0.7),
+        platform: Color::grey(0.8),
+        text: Color::grey(0.4),
     };
 
     pub const GONE: Palette = Palette {
         stroke: Color::grey(0.8),
         fill: Color::grey(0.9),
+        platform: Color::grey(0.9),
+        text: Color::grey(0.6),
     };
 }

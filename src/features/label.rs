@@ -496,6 +496,10 @@ impl Font {
         Font::new(None, Some(color), Some(size))
     }
 
+    pub fn bold(color: Color, size: f64) -> Self {
+        Font::new(FontFace::bold(), Some(color), Some(size))
+    }
+
     pub fn black(size: f64) -> Self {
         Self::new(None, Some(Color::BLACK), Some(size))
     }
