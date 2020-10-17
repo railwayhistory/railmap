@@ -25,7 +25,7 @@ impl Palette {
     }
 
     pub fn opt_from_symbols(symbols: &SymbolSet) -> Option<Self> {
-        if symbols.contains("gone") {
+        if symbols.contains("gone") || symbols.contains("former") {
             Some(Palette::GONE)
         }
         else if symbols.contains("removed") {
