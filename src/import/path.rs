@@ -1,4 +1,4 @@
-use std::{fmt, io, mem, path};
+use std::{fmt, io, iter, mem, path, slice};
 use std::collections::{HashMap, HashSet};
 use std::f64::INFINITY;
 use std::f64::consts::PI;
@@ -9,7 +9,7 @@ use std::sync::{Mutex};
 use ignore::{WalkBuilder, WalkState};
 use ignore::types::TypesBuilder;
 use kurbo::Vec2;
-use osmxml::elements::{MemberType, Osm, Relation};
+use osmxml::elements::{MemberType, Osm, Relation, Way};
 use osmxml::read::read_xml;
 use crate::features::path::StoredPath;
 use super::mp_path;
@@ -182,6 +182,17 @@ impl ImportPath {
                 });
                 continue;
             }
+            let reverse = match member.role() {
+                "reverse" => true,
+                "" => false,
+                some => {
+                    err.add(Error::UnknownRole {
+                        rel: relation.id(), target: member.id(),
+                        role: some.into()
+                    });
+                    continue;
+                }
+            };
             let way = match osm.get_way(member.id()) {
                 Some(way) => way,
                 None => {
@@ -207,7 +218,7 @@ impl ImportPath {
                 err.add(Error::EmptyWay { way: way.id() });
                 continue;
             }
-            let mut way_nodes = way.nodes().iter();
+            let mut way_nodes = WayIter::new(way, reverse);
             if let Some(last) = last_id {
                 let id = way_nodes.next().unwrap();
                 if last != id {
@@ -224,7 +235,7 @@ impl ImportPath {
             }
             for id in way_nodes {
                 let (node, name, post_tension)
-                    = Self::load_node(*id, osm, tension, err);
+                    = Self::load_node(id, osm, tension, err);
                 if let Some(name) = name {
                     if node_names.insert(
                         name.clone(), nodes.len() as u32
@@ -325,6 +336,36 @@ impl Node {
 }
 
 
+//------------ WayIter -------------------------------------------------------
+
+enum WayIter<'a> {
+    Forward(slice::Iter<'a, i64>),
+    Reverse(iter::Rev<slice::Iter<'a, i64>>),
+}
+
+impl<'a> WayIter<'a> {
+    fn new(way: &'a Way, reverse: bool) -> Self {
+        if reverse {
+            WayIter::Reverse(way.nodes().iter().rev())
+        }
+        else {
+            WayIter::Forward(way.nodes().iter())
+        }
+    }
+}
+
+impl<'a> Iterator for WayIter<'a> {
+    type Item = i64;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match *self {
+            WayIter::Forward(ref mut iter) => iter.next().copied(),
+            WayIter::Reverse(ref mut iter) => iter.next().copied(),
+        }
+    }
+}
+
+
 //------------ PathSetError --------------------------------------------------
 
 pub struct PathSetError(Vec<(String, PathError)>);
@@ -409,6 +450,7 @@ impl From<io::Error> for PathError {
 #[derive(Debug)]
 pub enum Error {
     NonPathRelation { rel: i64 },
+    UnknownRole { rel: i64, target: i64, role: String },
     MissingKey { rel: i64 },
     NonWayMember { rel: i64, target: i64 },
     MissingWay { rel: i64, way: i64 },
