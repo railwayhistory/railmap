@@ -558,5 +558,17 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.line_to(0., u.dt);
         canvas.stroke();
     }),
+
+    ("statdot", &|canvas, u| {
+        canvas.move_to(0., 0.);
+        canvas.arc(0., 0., 0.7 * u.dt, 0., 2.0 * PI);
+        canvas.set_line_width(4. * u.sp);
+        canvas.set_operator(cairo::Operator::Clear);
+        canvas.stroke();
+        canvas.set_operator(cairo::Operator::Over);
+        canvas.move_to(0., 0.);
+        canvas.arc(0., 0., 0.7 * u.dt, 0., 2.0 * PI);
+        canvas.fill();
+    }),
 ];
 
