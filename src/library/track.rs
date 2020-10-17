@@ -94,7 +94,7 @@ struct Units {
 impl Units {
     fn new(canvas: &Canvas) -> Self {
         Units {
-            line_width: if canvas.detail() < 3 {
+            line_width: if canvas.detail() == 2 {
                 1.0 * canvas.canvas_bp()
             } else {
                 0.7 * canvas.canvas_bp()
@@ -177,7 +177,7 @@ impl TrackContour {
 impl RenderContour for TrackContour {
     fn render(&self, canvas: &Canvas, path: &Path) {
         let units = Units::new(canvas);
-        if canvas.detail() == 1 {
+        if canvas.detail() <= 1 {
             self.render_detail_1(canvas, units, path);
         }
         else if canvas.detail() == 2 {
@@ -223,10 +223,10 @@ impl TrackContour {
     fn render_casing(&self, canvas: &Canvas, units: Units, path: &Path) {
         canvas.set_operator(cairo::Operator::Clear);
         if self.double {
-            canvas.set_line_width(2.4 * units.dt);
+            canvas.set_line_width(2.6 * units.dt);
         }
         else {
-            canvas.set_line_width(1.4 * units.dt);
+            canvas.set_line_width(1.6 * units.dt);
         }
         path.apply(canvas);
         canvas.stroke();
