@@ -419,7 +419,10 @@ impl FontFace {
             None
         };
 
-        let slant = if symbols.contains("italic") {
+        let slant = if
+            symbols.contains("italic")
+            || symbols.contains("designation")
+        {
             Some(3)
         }
         else {
