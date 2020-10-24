@@ -234,43 +234,31 @@ impl TrackContour {
     }
 
     fn render_single(&self, canvas: &Canvas, units: Units, path: &Path) {
-        if !self.station {
-            // Catenary Electrification
-            if self.cat.present() {
-                self.apply_cat_properties(canvas, units);
-                canvas.set_line_width(self.mark(units));
-                if self.flip {
-                    path.apply_offset(-0.5 * self.mark(units), canvas);
-                }
-                else {
-                    path.apply_offset(0.5 * self.mark(units), canvas);
-                }
-                canvas.stroke();
+        // Category and electrification markings
+        // 
+        // These go first so they get overpainted with the line.
+        if !self.station && (self.has_category() || self.has_electric()) {
+            if self.flip {
+                path.apply_offset(-0.5 * self.mark(units), canvas);
+            }
+            else {
+                path.apply_offset(0.5 * self.mark(units), canvas);
             }
 
-            // Third-rail Electrification
-            if self.rail.present() {
-                self.apply_rail_properties(canvas, units);
-                canvas.set_line_width(self.mark(units));
-                if self.flip {
-                    path.apply_offset(-0.5 * self.mark(units), canvas);
+            canvas.set_line_width(self.mark(units));
+            if self.has_category() {
+                self.apply_category_properties(canvas, units);
+                if self.has_electric() {
+                    canvas.stroke_preserve()
                 }
                 else {
-                    path.apply_offset(0.5 * self.mark(units), canvas);
+                    canvas.stroke()
                 }
-                canvas.stroke();
             }
 
-            // Classification
-            if self.apply_class_properties(canvas, units) {
-                canvas.set_line_width(self.mark(units));
-                if self.flip {
-                    path.apply_offset(0.5 * self.mark(units), canvas);
-                }
-                else {
-                    path.apply_offset(-0.5 * self.mark(units), canvas);
-                }
-                canvas.stroke();
+            if self.has_electric() {
+                self.apply_electric_properties(canvas, units);
+                canvas.stroke()
             }
         }
 
@@ -280,46 +268,79 @@ impl TrackContour {
             path.apply(canvas);
             canvas.stroke();
         }
+
+        // Project.
+        if !self.station && self.project {
+            if self.flip {
+                path.apply_offset(-0.5 * self.mark(units), canvas);
+            }
+            else {
+                path.apply_offset(0.5 * self.mark(units), canvas);
+            }
+            canvas.set_dash(
+                &[0.3 * units.seg, 0.7 * units.seg],
+                1.15 * units.seg
+            );
+            canvas.set_line_width(
+                self.mark(units) + 2. * self.line_width(units)
+            );
+            canvas.set_operator(cairo::Operator::Clear);
+            canvas.stroke();
+            canvas.set_operator(cairo::Operator::Over);
+        }
+
+        /*
+        // Debug helper: marks out segments in red.
+        if self.flip {
+            path.apply_offset(-0.5 * self.mark(units), canvas);
+        }
+        else {
+            path.apply_offset(0.5 * self.mark(units), canvas);
+        }
+        canvas.set_line_width(1.5 * self.line_width(units));
+        crate::features::color::Color::RED.apply(canvas);
+        canvas.set_dash(
+            &[0.04 * units.seg, 0.96 * units.seg],
+            0.0
+        );
+        canvas.stroke();
+        */
      }
 
     fn render_double(&self, canvas: &Canvas, units: Units, path: &Path) {
-        if !self.station {
-            // Catenary electrification
-            if self.cat.present() {
-                self.apply_cat_properties(canvas, units);
-                canvas.set_line_width(units.dt);
-                path.apply(canvas);
-                canvas.stroke();
-            }
-
-            // Third-rail electrification
-            if self.rail.present() {
-                self.apply_rail_properties(canvas, units);
-                canvas.set_line_width(units.dt);
-                path.apply(canvas);
-                canvas.stroke();
-            }
-
-            // Classification
-            if self.apply_class_properties(canvas, units) {
-                canvas.set_line_width(self.mark(units));
+        // Category and electrification markings
+        // 
+        // These go first so they get overpainted with the line.
+        if !self.station && (self.has_category() || self.has_electric()) {
+            if self.has_category() {
                 if self.flip {
-                    path.apply_offset(
-                        0.5 * (self.mark(units) + units.dt), canvas
-                    );
+                    path.apply_offset(-0.5 * self.mark(units), canvas);
                 }
                 else {
-                    path.apply_offset(
-                        -0.5 * (self.mark(units) + units.dt), canvas
-                    );
+                    path.apply_offset(0.5 * self.mark(units), canvas);
                 }
-                canvas.stroke();
+                canvas.set_line_width(self.mark(units));
+                self.apply_category_properties(canvas, units);
+                canvas.stroke()
+            }
+
+            if self.has_electric() {
+                self.apply_electric_properties(canvas, units);
+                path.apply(canvas);
+                canvas.set_line_width(units.dt);
+                canvas.stroke()
             }
         }
 
         // Base tracks
         if self.category.has_base() {
             self.apply_base_properties(canvas, units);
+            if self.project {
+                canvas.set_dash(
+                    &[0.7 * units.seg, 0.3 * units.seg],
+                    0.7 * units.seg
+                );
+            }
             path.apply_offset(0.5 * units.dt, canvas);
             path.apply_offset(-0.5 * units.dt, canvas);
             canvas.stroke();
@@ -327,119 +348,195 @@ impl TrackContour {
     }
 }
 
+/// # Construct Track Markings
+///
+/// We currently use Cairo’s dash pattern feature to construct the markings.
+/// Up to three dashed lines are drawn off to one side of the actual line:
+/// the electrification marking, the category marking, and the project
+/// marking. They have to be drawn individually because their colour and
+/// drawing operator may differ. Specifically, electrification could have been
+/// removed on an active line and the project marking needs to use the clear
+/// operator.
+///
+/// Each pattern repeats after `Units::seg` which we shall refer to as a
+/// *seg* from now on. The various markings need to be arranged evenly within
+/// a *seg* which means the dash pattern of each marking depends on the
+/// presence of the other markings.
+///
+/// The project marking removes 0.15 *seg* at the beginning and end of each
+/// *seg.* In other words, it only leaves 0.7 *seg* at the centre of a
+/// *seg* to apply the other markings to.
+///
+/// The electrification marking is 0.3 *seg* long. For sole overhead line
+/// electrification, it is fully filled. For sole third rail electrification,
+/// it has a gap 0.05 *seg* wide ending 0.05 *seg* before the end of the
+/// marking. If there are both overhead and third rail electrification, the
+/// marking has an equal gap at its start, too.
+///
+/// The category marking consists of up to four strokes one line width wide
+/// and one line width apart. One stroke is for secondary standard gauge
+/// railways, two strokes is for tertiary standard gauge railways, three is
+/// for narrow gauge railways and four strokes for even more narrow gauge
+/// railways.
+///
+/// If there is only electrification marking or only category marking present,
+/// the marking is applied in the centre of each *seg.*
+///
+/// If both these markings are present but there is no project marking, the
+/// category marking is centered around a point 0.25 *seg* into each *seg*
+/// and the electrification marking starts 0.6 *seg* into each seg.
+///
+/// If all three markings are present, the category marking is centered around
+/// a point 0.325 *seg* into each *seg* and the electrification marking starts
+/// 0.5 *seg* into each *seg.* These values may have to be shifted a bit to
+/// make it all look good.
 impl TrackContour {
     fn apply_base_properties(&self, canvas: &Canvas, units: Units) {
         canvas.set_dash(&[], 0.);
-        canvas.set_line_width(
-            if self.category.is_line() { units.line_width }
-            else if self.category.is_guide() { units.guide_width }
-            else { units.other_width }
-        );
+        canvas.set_line_width(self.line_width(units));
+        /*
         if self.project {
+            // Projected lines have an 0.7seg on/0.3 seg off pattern
             canvas.set_dash(
-                &[2. * units.seg / 3., units.seg / 3.],
-                5. * units.seg / 6.
+                &[0.7 * units.seg, 0.3 * units.seg],
+                0.85 * units.seg
             );
+        }
+        */
+        self.palette.stroke.apply(canvas);
+    }
+
+    /// Configures the canvas for drawing 
+
+    /// Configures the canvas for drawing the category markings.
+    ///
+    /// Returns whether category markings need to be draw at all.
+    fn apply_category_properties(
+        &self, canvas: &Canvas, units: Units
+    ) {
+        let strokes = self.category_strokes();
+        let seg = units.seg;
+        let w = self.line_width(units);
+        let center = match (self.project, self.has_electric()) {
+            (_, false) => 0.5 * seg,
+            (false, true) => 0.25 * seg,
+            (true, true) => 0.325 * seg
+        };
+        match strokes {
+            1 => {
+                canvas.set_dash(
+                    &[w, seg - w],
+                    (seg - center) + 0.5 * w
+                );
+            }
+            2 => {
+                canvas.set_dash(
+                    &[w, w, w, seg - 3. * w],
+                    (seg - center) + 1.5 * w
+                );
+            }
+            3 => {
+                canvas.set_dash(
+                    &[w, w, w, w, w, seg - 5. * w],
+                    (seg - center) + 2.5 * w
+                );
+            }
+            4 => {
+                canvas.set_dash(
+                    &[w, w, w, w, w, w, w, seg - 7. * w],
+                    (seg - center) + 3.5 * w
+                );
+            }
+            _ => unreachable!()
         }
         self.palette.stroke.apply(canvas);
     }
 
-    fn apply_cat_properties(&self, canvas: &Canvas, units: Units) {
-        if self.rail.present() {
-            canvas.set_dash(
-                &[units.seg / 4., 7. * units.seg / 4.],
-                5. * units.seg / 8.
-            );
-        }
-        else {
-            canvas.set_dash(
-                &[units.seg / 4., 3. * units.seg / 4.],
-                5. * units.seg / 8.
-            );
-        }
-        if self.cat.is_ex() {
-            Palette::REMOVED.fill.apply(canvas)
-        }
-        else {
-            self.palette.fill.apply(canvas)
-        }
-    }
+    /// Configures the canvas for drawing the electrification markings.
+    ///
+    /// Returns whether category markings need to be draw at all.
+    fn apply_electric_properties(&self, canvas: &Canvas, units: Units) {
+        use Status::*;
 
-    fn apply_rail_properties(&self, canvas: &Canvas, units: Units) {
-        if self.cat.present() {
-            canvas.set_dash(
-                &[
-                    3. * units.seg / 32., 2. * units.seg / 32.,
-                    3. * units.seg / 32., 7. * units.seg / 4.
-                 ],
-                13. * units.seg / 8.
-            );
-        }
-        else {
-            canvas.set_dash(
-                &[
-                    3. * units.seg / 32., 2. * units.seg / 32.,
-                    3. * units.seg / 32., 3. * units.seg / 4.
-                 ],
-                5. * units.seg / 8.
-            );
-        }
-        if self.rail.is_ex() {
-            Palette::REMOVED.fill.apply(canvas)
-        }
-        else {
-            self.palette.fill.apply(canvas)
-        }
-    }
-
-    fn apply_class_properties(&self, canvas: &Canvas, units: Units) -> bool {
-        // Never decorate in stations.
-        if self.station {
-            return false
-        }
-        
-        let w = units.line_width;
         let seg = units.seg;
-        
-        let res = match (self.category, self.gauge) {
-            (_, Gauge::Narrow) => {
-                // three strokes
-                canvas.set_dash(
-                    &[w, w, w, w, w, seg - 5. * w],
-                    0.5 * (seg + 5. * w)
-                );
-                true
-            }
-            (_, Gauge::Narrower) => {
-                // four strokes
-                canvas.set_dash(
-                    &[w, w, w, w, w, w, w, seg - 7. * w],
-                    0.5 * (seg + 7. * w)
-                );
-                true
-            }
-            (Category::Second, Gauge::Standard) => {
-                // one stroke
-                canvas.set_dash(
-                    &[w, seg - w],
-                    0.5 * (seg + w)
-                );
-                true
-            }
-            (Category::Third, Gauge::Standard) => {
-                // two strokes
-                canvas.set_dash(
-                    &[w, w, w, seg - 3. * w],
-                    0.5 * (seg + 3. * w)
-                );
-                true
-            }
-            _ => false
+        let start = match (self.project, self.has_category()) {
+            (_, false) => 0.65 * seg,
+            (false, true) => 0.4 * seg,
+            (true, true) => 0.5 * seg
         };
-        if res {
-            self.palette.stroke.apply(canvas);
+
+        match (self.cat, self.rail) {
+            (Active, Never) | (Active, Ex) => {
+                canvas.set_dash(
+                    &[0.3 * seg, 0.7 * seg],
+                    start
+                );
+                self.palette.stroke.apply(canvas);
+            }
+            (Never, Active) | (Ex, Active) => {
+                canvas.set_dash(
+                    &[0.05 * seg, 0.05 * seg, 0.2 * seg, 0.7 * seg],
+                    start
+                );
+                self.palette.stroke.apply(canvas);
+            }
+            (Active, Active) => {
+                canvas.set_dash(
+                    &[0.05 * seg, 0.05 * seg, 0.1 * seg,
+                      0.05 * seg, 0.05 * seg,  0.7 * seg],
+                    start
+                );
+                self.palette.stroke.apply(canvas);
+            }
+            (Ex, Never) => {
+                canvas.set_dash(
+                    &[0.3 * seg, 0.7 * seg],
+                    start
+                );
+                Palette::REMOVED.stroke.apply(canvas);
+            }
+            (Never, Ex) => {
+                canvas.set_dash(
+                    &[0.05 * seg, 0.05 * seg, 0.2 * seg, 0.7 * seg],
+                    start
+                );
+                Palette::REMOVED.stroke.apply(canvas);
+            }
+            (Ex, Ex) => {
+                canvas.set_dash(
+                    &[0.05 * seg, 0.05 * seg, 0.1 * seg,
+                      0.05 * seg, 0.05 * seg,  0.7 * seg],
+                    start
+                );
+                Palette::REMOVED.stroke.apply(canvas);
+            }
+            (Never, Never) => unreachable!()
         }
-        res
+    }
+
+
+    fn line_width(&self, units: Units) -> f64 {
+        if self.category.is_line() { units.line_width }
+        else if self.category.is_guide() { units.guide_width }
+        else { units.other_width }
+    }
+
+    fn has_electric(&self) -> bool {
+        self.cat.present() || self.rail.present()
+    }
+
+    fn has_category(&self) -> bool {
+        self.category_strokes() != 0
+    }
+
+    fn category_strokes(&self) -> usize {
+        match (self.category, self.gauge) {
+            (_, Gauge::Narrower) => 4,
+            (_, Gauge::Narrow) => 3,
+            (Category::Third, Gauge::Standard) => 2,
+            (Category::Second, Gauge::Standard) => 1,
+            _ => 0
+        }
     }
 
     fn mark(&self, units: Units) -> f64 {
@@ -527,12 +624,14 @@ impl Status {
         }
     }
 
+    /*
     fn is_ex(self) -> bool {
         match self {
             Status::Ex => true,
             _ => false,
         }
     }
+    */
 }
 
 
