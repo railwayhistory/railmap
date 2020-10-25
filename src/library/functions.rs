@@ -33,7 +33,7 @@ const FUNCTIONS: &[(
             args.into_sole_positional(err)?
             .into_number(err)?.0.into_f64();
 
-        Ok(ExprVal::Layout(label::Layout::hbar(width)))
+        Ok(label::LayoutBuilder::hbar(width).into())
     }),
 
     // Produces a horizontal box for a label layout.
@@ -67,11 +67,13 @@ const FUNCTIONS: &[(
         };
         let font = font_from_symbols(&align);
 
-        let mut lines = label::Stack::new();
+        let mut lines = label::StackBuilder::new();
         for expr in args {
             lines.push(expr.into_layout(err)?.0);
         }
-        Ok(ExprVal::Layout(label::Layout::hbox(halign, valign, font, lines)))
+        Ok(label::LayoutBuilder::hbox(
+            halign, valign, font.into(), lines
+        ).into())
     }),
 
     // Resolve a base path.
@@ -106,7 +108,7 @@ const FUNCTIONS: &[(
         let text = args.next().unwrap().into_text(err)?.0;
 
         let font = font_from_symbols(&font?.0);
-        Ok(ExprVal::Layout(label::Layout::span(font, text)))
+        Ok(label::LayoutBuilder::span(text, font.into()).into())
     }),
 
     // Produces a vertical box for a label layout.
@@ -140,11 +142,13 @@ const FUNCTIONS: &[(
         ).unwrap_or(label::Align::Start);
         let font = font_from_symbols(&align);
 
-        let mut lines = label::Stack::new();
+        let mut lines = label::StackBuilder::new();
         for expr in args {
             lines.push(expr.into_layout(err)?.0);
         }
-        Ok(ExprVal::Layout(label::Layout::vbox(halign, valign, font, lines)))
+        Ok(label::LayoutBuilder::vbox(
+            halign, valign, font.into(), lines
+        ).into())
     }),
 ];
 

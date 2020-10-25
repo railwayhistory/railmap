@@ -70,7 +70,7 @@ const PROCEDURES: &[(
         let layout = args.next().unwrap().into_layout(err)?.0;
         let position = position?.0;
         features.insert(
-            features::Label::new(position, true, true, layout),
+            layout.into_label(position, true, label::Background::Clear.into()),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -127,7 +127,10 @@ const PROCEDURES: &[(
         let layout = args.next().unwrap().into_layout(err)?.0;
         let position = position?.0;
         features.insert(
-            features::Label::new(position, false, false, layout),
+            layout.into_label(
+                position, false,
+                Default::default(),
+            ),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -156,20 +159,20 @@ const PROCEDURES: &[(
         let text = args.next().unwrap().into_text(err)?.0;
         let position = position?.0;
         let palette = Palette::from_symbols(&class?.0);
+        let mut properties = label::PropertiesBuilder::from(
+            label::FontBuilder::normal(palette.text, fonts::SIZE_LINE_BADGE) 
+        );
+        properties.set_background(label::Background::Clear);
 
-        let layout = label::Layout::hbox(
+        let layout = label::LayoutBuilder::hbox(
             label::Align::Center, label::Align::Center, Default::default(),
             vec![
-                label::Layout::span(
-                    label::Font::normal(
-                        palette.text, fonts::SIZE_LINE_BADGE
-                    ), text
-                )
+                label::LayoutBuilder::span(text, properties),
             ]
         );
 
         features.insert(
-            features::Label::new(position, true, true, layout),
+            layout.into_label(position, true, Default::default()),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -243,7 +246,7 @@ const PROCEDURES: &[(
             Err(Ok(args)) => {
                 err.add(
                     args.pos(),
-                    "expected exactly four, positional arguments"
+                    "expected exactly three positional arguments"
                 );
                 return Err(Failed);
             }
@@ -251,10 +254,10 @@ const PROCEDURES: &[(
         };
         let class = args.next().unwrap().into_symbol_set(err)?.0;
         let palette = Palette::from_symbols(&class);
-        let font = label::Font::normal(palette.text, fonts::SIZE_S);
+        let font = label::FontBuilder::normal(palette.text, fonts::SIZE_S);
 
         let position = args.next().unwrap().into_position(err);
-        let text = args.next().unwrap().into_based_layout(font, err);
+        let text = args.next().unwrap().into_layout(err);
         let position = position?.0;
         let text = text?.0;
 
@@ -271,12 +274,9 @@ const PROCEDURES: &[(
             (label::Align::Start, label::Align::Ref)
         };
         features.insert(
-            features::Label::new(
-                position, false, false,
-                label::Layout::hbox(
-                    halign, valign, Default::default(), vec![text]
-                )
-            ),
+            label::LayoutBuilder::hbox(
+                halign, valign, font.into(), vec![text]
+            ).into_label(position, false, Default::default()), 
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -302,15 +302,18 @@ const PROCEDURES: &[(
         };
         let class = args.next().unwrap().into_symbol_set(err)?.0;
         let palette = Palette::from_symbols(&class);
-        let name_font = label::Font::normal(palette.text, fonts::SIZE_M);
-        let km_font = label::Font::normal(palette.text, fonts::SIZE_XS);
+        let name_font = label::FontBuilder::normal(palette.text, fonts::SIZE_M);
+        let km_font = label::FontBuilder::normal(palette.text, fonts::SIZE_XS);
 
         let position = args.next().unwrap().into_position(err);
-        let name = args.next().unwrap().into_based_layout(name_font, err);
-        let km = args.next().unwrap().into_based_layout(km_font, err);
+        let name = args.next().unwrap().into_layout(err);
+        let km = args.next().unwrap().into_layout(err);
         let position = position?.0;
-        let name = name?.0;
-        let km = km?.0;
+        let mut name = name?.0;
+        let mut km = km?.0;
+
+        name.properties_mut().font_mut().defaults(&name_font);
+        km.properties_mut().font_mut().defaults(&km_font);
 
         let halign = if class.contains("left_align") {
             label::Align::Start
@@ -323,15 +326,15 @@ const PROCEDURES: &[(
         };
 
         let layout = if class.contains("top") {
-            label::Layout::vbox(
+            label::LayoutBuilder::vbox(
                 halign, label::Align::End, Default::default(), vec![name, km]
             )
         }
         else if class.contains("left") {
-            label::Layout::hbox(
+            label::LayoutBuilder::hbox(
                 label::Align::End, label::Align::Ref, Default::default(),
                 vec![
-                    label::Layout::vbox(
+                    label::LayoutBuilder::vbox(
                         halign, label::Align::Ref, Default::default(),
                         vec![name, km]
                     )
@@ -339,15 +342,15 @@ const PROCEDURES: &[(
             )
         }
         else if class.contains("bottom") {
-            label::Layout::vbox(
+            label::LayoutBuilder::vbox(
                 halign, label::Align::Start, Default::default(), vec![name, km]
             )
         }
         else /* "right" */ {
-            label::Layout::hbox(
+            label::LayoutBuilder::hbox(
                 label::Align::Start, label::Align::Ref, Default::default(),
                 vec![
-                    label::Layout::vbox(
+                    label::LayoutBuilder::vbox(
                         halign, label::Align::Ref, Default::default(),
                         vec![name, km]
                     )
@@ -356,7 +359,7 @@ const PROCEDURES: &[(
         };
 
         features.insert(
-            features::Label::new(position, false, false, layout),
+            layout.into_label(position, false, Default::default()),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );

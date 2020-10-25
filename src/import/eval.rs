@@ -3,12 +3,12 @@ use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
-use crate::features::label;
 use crate::features::{
     //Color, ContourRule, Distance,
     FeatureSet,
     //SymbolRule,
 };
+use crate::features::label::LayoutBuilder;
 use crate::features::path::{Distance, Line, Path, Position, Subpath};
 use crate::import::Failed;
 use crate::import::path::{ImportPath, PathSet};
@@ -173,46 +173,17 @@ impl Expression {
 
     pub fn into_layout(
         self, err: &mut Error
-    ) -> Result<(label::Layout, ast::Pos), Failed> {
+    ) -> Result<(LayoutBuilder, ast::Pos), Failed> {
         match self.value {
             ExprVal::Layout(val) => Ok((val, self.pos)),
-            _ => {
-                err.add(self.pos, "expected layout");
-                Err(Failed)
-            }
-        }
-    }
-
-    pub fn into_layout_or_text(
-        self, err: &mut Error
-    ) -> Result<(Result<label::Layout, String>, ast::Pos), Failed> {
-        match self.value {
-            ExprVal::Layout(val) => Ok((Ok(val), self.pos)),
-            ExprVal::Text(val) => Ok((Err(val), self.pos)),
-            _ => {
-                err.add(self.pos, "expected layout or text");
-                Err(Failed)
-            }
-        }
-    }
-
-    pub fn into_based_layout(
-        self, font: label::Font, err: &mut Error
-    ) -> Result<(label::Layout, ast::Pos), Failed> {
-        match self.value {
-            ExprVal::Layout(mut val) => {
-                val.rebase_font(font);
-                Ok((val, self.pos))
-            }
             ExprVal::Text(val) => {
-                Ok((label::Layout::span(font, val), self.pos))
+                Ok((LayoutBuilder::span(val, Default::default()), self.pos))
             }
             _ => {
-                err.add(self.pos, "expected layout or text");
+                err.add(self.pos, "expected layout or string");
                 Err(Failed)
             }
         }
-
     }
 
     pub fn into_number(
@@ -319,7 +290,7 @@ impl Expression {
 pub enum ExprVal {
     Distance(Distance),
     ImportPath(usize),
-    Layout(label::Layout),
+    Layout(LayoutBuilder),
     List(Vec<Expression>),
     Number(Number),
     Partial(Partial),
@@ -328,6 +299,12 @@ pub enum ExprVal {
     SymbolSet(SymbolSet),
     Text(String),
     Vector((Distance, Distance)),
+}
+
+impl From<LayoutBuilder> for ExprVal {
+    fn from(src: LayoutBuilder) -> Self {
+        ExprVal::Layout(src)
+    }
 }
 
 
