@@ -1,9 +1,10 @@
 /// The function we support during import.
 
 use crate::features::label;
+use crate::features::Color;
 use crate::import::Failed;
 use crate::import::eval;
-use crate::import::eval::ExprVal;
+use crate::import::eval::{ExprVal, SymbolSet};
 use super::fonts::font_from_symbols;
 
 
@@ -65,14 +66,12 @@ const FUNCTIONS: &[(
                 return Err(Err(Failed))
             }
         };
-        let font = font_from_symbols(&align);
-
         let mut lines = label::StackBuilder::new();
         for expr in args {
             lines.push(expr.into_layout(err)?.0);
         }
         Ok(label::LayoutBuilder::hbox(
-            halign, valign, font.into(), lines
+            halign, valign, properties_from_symbols(&align), lines
         ).into())
     }),
 
@@ -106,9 +105,9 @@ const FUNCTIONS: &[(
         let mut args = args.into_n_positionals(2, err)?.into_iter();
         let font = args.next().unwrap().into_symbol_set(err);
         let text = args.next().unwrap().into_text(err)?.0;
-
-        let font = font_from_symbols(&font?.0);
-        Ok(label::LayoutBuilder::span(text, font.into()).into())
+        Ok(label::LayoutBuilder::span(
+                text, properties_from_symbols(&font?.0)
+        ).into())
     }),
 
     // Produces a vertical box for a label layout.
@@ -140,17 +139,31 @@ const FUNCTIONS: &[(
         let valign = label::Align::v_from_symbols(
             &align
         ).unwrap_or(label::Align::Start);
-        let font = font_from_symbols(&align);
 
         let mut lines = label::StackBuilder::new();
         for expr in args {
             lines.push(expr.into_layout(err)?.0);
         }
         Ok(label::LayoutBuilder::vbox(
-            halign, valign, font.into(), lines
+            halign, valign, properties_from_symbols(&align), lines
         ).into())
     }),
 ];
+
+
+//------------ Helpers -------------------------------------------------------
+
+fn properties_from_symbols(symbols: &SymbolSet) -> label::PropertiesBuilder {
+    let mut res = label::PropertiesBuilder::from(
+        font_from_symbols(symbols)
+    );
+    if symbols.contains("frosted") {
+        res.set_background(
+            label::Background::Fill(Color::rgba(1., 1., 1., 0.5))
+        );
+    }
+    res
+}
 
 
 //------------ Function ------------------------------------------------------

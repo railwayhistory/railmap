@@ -36,6 +36,9 @@ pub fn font_from_symbols(symbols: &SymbolSet) -> FontBuilder {
         else if symbols.contains("xlarge") {
             Some(SIZE_XL)
         }
+        else if symbols.contains("badgesize") {
+            Some(SIZE_LINE_BADGE)
+        }
         else {
             None
         }
