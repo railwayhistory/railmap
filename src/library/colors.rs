@@ -8,6 +8,12 @@ pub struct Palette {
     /// The normal color for strokes.
     pub stroke: Color,
 
+    /// The normal color for pale strokes.
+    ///
+    /// This color is used for cases where greyed out lines need to be
+    /// a bit paler.
+    pub pale_stroke: Color,
+
     /// The normal color for filling.
     pub fill: Color,
 
@@ -43,6 +49,7 @@ impl Palette {
 impl Palette {
     pub const OPEN: Palette = Palette {
         stroke: Color::BLACK,
+        pale_stroke: Color::BLACK,
         fill: Color::BLACK,
         platform: Color::grey(0.2),
         text: Color::BLACK,
@@ -50,6 +57,7 @@ impl Palette {
 
     pub const CLOSED: Palette = Palette {
         stroke: Color::grey(0.4),
+        pale_stroke: Color::grey(0.7),
         fill: Color::grey(0.5),
         platform: Color::grey(0.6),
         text: Color::grey(0.2),
@@ -57,6 +65,7 @@ impl Palette {
 
     pub const REMOVED: Palette = Palette {
         stroke: Color::grey(0.6),
+        pale_stroke: Color::grey(0.7),
         fill: Color::grey(0.7),
         platform: Color::grey(0.8),
         text: Color::grey(0.4),
@@ -64,6 +73,7 @@ impl Palette {
 
     pub const GONE: Palette = Palette {
         stroke: Color::grey(0.8),
+        pale_stroke: Color::grey(0.9),
         fill: Color::grey(0.9),
         platform: Color::grey(0.9),
         text: Color::grey(0.6),

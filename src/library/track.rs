@@ -94,16 +94,21 @@ struct Units {
 impl Units {
     fn new(canvas: &Canvas) -> Self {
         Units {
-            line_width: if canvas.detail() == 2 {
+            line_width: if canvas.detail() <= 2 {
                 1.0 * canvas.canvas_bp()
             } else {
-                0.7 * canvas.canvas_bp()
+                0.8 * canvas.canvas_bp()
             },
             other_width:    0.5 * canvas.canvas_bp(),
             guide_width:    0.2 * canvas.canvas_bp(),
             seg:            5.0 * super::units::DT * canvas.canvas_bp(),
             dt:             super::units::DT * canvas.canvas_bp(),
-            mark:           0.8 * super::units::DT * canvas.canvas_bp(),
+            mark: if canvas.detail() < 4 {
+                0.6 * super::units::DT * canvas.canvas_bp()
+            }
+            else {
+                0.8 * super::units::DT * canvas.canvas_bp()
+            },
             tight_mark:     0.4 * super::units::DT * canvas.canvas_bp(),
         }
     }
@@ -177,28 +182,43 @@ impl TrackContour {
 impl RenderContour for TrackContour {
     fn render(&self, canvas: &Canvas, path: &Path) {
         let units = Units::new(canvas);
-        if canvas.detail() <= 1 {
+        if self.casing {
+            self.render_casing(canvas, units, path);
+        }
+        else if canvas.detail() <= 1 {
             self.render_detail_1(canvas, units, path);
         }
         else if canvas.detail() == 2 {
             self.render_detail_2(canvas, units, path);
         }
-        else if self.casing {
-            self.render_casing(canvas, units, path);
-        }
-        else if self.double {
-            self.render_double(canvas, units, path);
-        }
         else {
-            self.render_single(canvas, units, path);
+            self.render_detail_full(canvas, units, path);
         }
     }
 }
 
 impl TrackContour {
+    fn render_casing(&self, canvas: &Canvas, units: Units, path: &Path) {
+        canvas.set_operator(cairo::Operator::Clear);
+        if self.double {
+            canvas.set_line_width(2.6 * units.dt);
+        }
+        else {
+            canvas.set_line_width(1.6 * units.dt);
+        }
+        path.apply(canvas);
+        canvas.stroke();
+        canvas.set_operator(cairo::Operator::Over);
+    }
+
     fn render_detail_1(&self, canvas: &Canvas, units: Units, path: &Path) {
-        canvas.set_line_width(units.line_width);
-        self.palette.stroke.apply(canvas);
+        if self.category.is_main_line() {
+            canvas.set_line_width(units.line_width);
+        }
+        else {
+            canvas.set_line_width(units.other_width);
+        }
+        self.palette.pale_stroke.apply(canvas);
         path.apply(canvas);
         canvas.stroke();
     }
@@ -215,29 +235,25 @@ impl TrackContour {
         else {
             canvas.set_line_width(units.other_width);
         }
-        self.palette.stroke.apply(canvas);
+        self.palette.pale_stroke.apply(canvas);
         path.apply(canvas);
         canvas.stroke();
     }
 
-    fn render_casing(&self, canvas: &Canvas, units: Units, path: &Path) {
-        canvas.set_operator(cairo::Operator::Clear);
+    fn render_detail_full(&self, canvas: &Canvas, units: Units, path: &Path) {
         if self.double {
-            canvas.set_line_width(2.6 * units.dt);
+            self.render_double(canvas, units, path);
         }
         else {
-            canvas.set_line_width(1.6 * units.dt);
+            self.render_single(canvas, units, path);
         }
-        path.apply(canvas);
-        canvas.stroke();
-        canvas.set_operator(cairo::Operator::Over);
     }
 
     fn render_single(&self, canvas: &Canvas, units: Units, path: &Path) {
         // Category and electrification markings
         // 
         // These go first so they get overpainted with the line.
-        if !self.station && (self.has_category() || self.has_electric()) {
+        if !self.station && (self.has_category(canvas) || self.has_electric()) {
             if self.flip {
                 path.apply_offset(-0.5 * self.mark(units), canvas);
             }
@@ -246,7 +262,7 @@ impl TrackContour {
             }
 
             canvas.set_line_width(self.mark(units));
-            if self.has_category() {
+            if self.has_category(canvas) {
                 self.apply_category_properties(canvas, units);
                 if self.has_electric() {
                     canvas.stroke_preserve()
@@ -311,8 +327,8 @@ impl TrackContour {
         // Category and electrification markings
         // 
         // These go first so they get overpainted with the line.
-        if !self.station && (self.has_category() || self.has_electric()) {
-            if self.has_category() {
+        if !self.station && (self.has_category(canvas) || self.has_electric()) {
+            if self.has_category(canvas) {
                 if self.flip {
                     path.apply_offset(-0.5 * self.mark(units), canvas);
                 }
@@ -414,9 +430,9 @@ impl TrackContour {
     fn apply_category_properties(
         &self, canvas: &Canvas, units: Units
     ) {
-        let strokes = self.category_strokes();
+        let strokes = self.category_strokes(canvas);
         let seg = units.seg;
-        let w = self.line_width(units);
+        let w = units.line_width;
         let center = match (self.project, self.has_electric()) {
             (_, false) => 0.5 * seg,
             (false, true) => 0.25 * seg,
@@ -453,13 +469,11 @@ impl TrackContour {
     }
 
     /// Configures the canvas for drawing the electrification markings.
-    ///
-    /// Returns whether category markings need to be draw at all.
     fn apply_electric_properties(&self, canvas: &Canvas, units: Units) {
         use Status::*;
 
         let seg = units.seg;
-        let start = match (self.project, self.has_category()) {
+        let start = match (self.project, self.has_category(canvas)) {
             (_, false) => 0.65 * seg,
             (false, true) => 0.4 * seg,
             (true, true) => 0.5 * seg
@@ -516,7 +530,7 @@ impl TrackContour {
 
 
     fn line_width(&self, units: Units) -> f64 {
-        if self.category.is_line() { units.line_width }
+        if self.category.is_main_line() { units.line_width }
         else if self.category.is_guide() { units.guide_width }
         else { units.other_width }
     }
@@ -525,16 +539,32 @@ impl TrackContour {
         self.cat.present() || self.rail.present()
     }
 
-    fn has_category(&self) -> bool {
-        self.category_strokes() != 0
+    fn has_category(&self, canvas: &Canvas) -> bool {
+        self.category_strokes(canvas) != 0
     }
 
-    fn category_strokes(&self) -> usize {
+    fn category_strokes(&self, canvas: &Canvas) -> usize {
+        if canvas.detail() >= 4 {
+            self.category_strokes_full()
+        }
+        else {
+            self.category_strokes_light()
+        }
+    }
+
+    fn category_strokes_full(&self) -> usize {
         match (self.category, self.gauge) {
-            (_, Gauge::Narrower) => 4,
-            (_, Gauge::Narrow) => 3,
-            (Category::Third, Gauge::Standard) => 2,
+            (_, Gauge::Narrower) => 2,
+            (_, Gauge::Narrow) => 2,
+            (Category::Third, Gauge::Standard) => 0,
             (Category::Second, Gauge::Standard) => 1,
+            _ => 0
+        }
+    }
+
+    fn category_strokes_light(&self) -> usize {
+        match self.category {
+            Category::Second => 1,
             _ => 0
         }
     }
@@ -576,12 +606,14 @@ impl Category {
         else { Category::Station }
     }
 
+    /*
     fn is_line(self) -> bool {
         match self {
             Category::First | Category::Second | Category::Third => true,
             _ => false
         }
     }
+    */
 
     fn is_main_line(self) -> bool {
         match self {
