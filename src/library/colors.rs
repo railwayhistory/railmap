@@ -31,7 +31,10 @@ impl Palette {
     }
 
     pub fn opt_from_symbols(symbols: &SymbolSet) -> Option<Self> {
-        if symbols.contains("gone") || symbols.contains("former") {
+        if symbols.contains("red") {
+            Some(Palette::RED)
+        }
+        else if symbols.contains("gone") || symbols.contains("former") {
             Some(Palette::GONE)
         }
         else if symbols.contains("removed") {
@@ -77,5 +80,13 @@ impl Palette {
         fill: Color::grey(0.9),
         platform: Color::grey(0.9),
         text: Color::grey(0.6),
+    };
+
+    pub const RED: Palette = Palette {
+        stroke: Color::rgb(1.0, 0.0, 0.0),
+        pale_stroke: Color::rgb(1.0, 0.0, 0.0),
+        fill: Color::rgb(1.0, 0.0, 0.0),
+        platform: Color::rgb(1.0, 0.0, 0.0),
+        text: Color::rgb(1.0, 0.0, 0.0),
     };
 }

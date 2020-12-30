@@ -10,6 +10,7 @@ pub use self::marker::{Marker, MarkerRule};
 pub mod color;
 pub mod contour;
 pub mod label;
+//pub mod label2;
 pub mod path;
 pub mod marker;
 

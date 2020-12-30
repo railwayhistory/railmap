@@ -6,8 +6,9 @@ use crate::features::contour::RenderContour;
 use crate::features::marker::RenderMarker;
 use crate::import::{ast, eval};
 use crate::import::Failed;
-use super::colors::Palette;
 use super::fonts;
+use super::border::BorderContour;
+use super::colors::Palette;
 use super::markers::StandardMarker;
 use super::track::TrackContour;
 
@@ -71,6 +72,35 @@ const PROCEDURES: &[(
         let position = position?.0;
         features.insert(
             layout.into_label(position, true, label::Background::Clear.into()),
+            scope.params().detail(pos, err)?,
+            scope.params().layer(),
+        );
+        Ok(())
+    }),
+
+    // Draws a border.
+    //
+    // ```text
+    // border(class: symbol-set, path: path)
+    // ```
+    ("border", &|pos, args, scope, features, err| {
+        let mut args = match args.into_n_positionals(2, err) {
+            Ok(args) => args.into_iter(),
+            Err(Ok(args)) => {
+                err.add(
+                    args.pos(),
+                    "expected exactly two positional arguments"
+                );
+                return Err(Failed);
+            }
+            Err(Err(_)) => return Err(Failed)
+        };
+        let rule = BorderContour::new(
+            args.next().unwrap().into_symbol_set(err)?.0
+        ).into_rule();
+        let path = args.next().unwrap().into_path(err)?.0;
+        features.insert(
+            features::Contour::new(path, rule),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -285,6 +315,8 @@ const PROCEDURES: &[(
 
     // Renders a station label.
     //
+    // This procedure is deprecated. Use statlabel instead.
+    //
     // ```text
     // station(class: symbol-set, position, name: text|layout, km: text|layout)
     // ```
@@ -366,6 +398,42 @@ const PROCEDURES: &[(
         Ok(())
     }),
 
+    /*
+    // Renders a station label.
+    //
+    // ```text
+    // statlabel(class: symbol-set, position, name: layout [, ...], km: layout)
+    // ```
+    //
+    // The class defines where on the stack of name layouts the position is to
+    // be located via the symbols `:n`, `:nw`, `:w`, `:sw`, `:s`, `:se`, `:e`,
+    // and `:ne` which represent compass directions. One of these is
+    // mandatory.
+    //
+    // The class also defines how the
+    // various name boxes are aligned via the `:left`, `:center`, `:right`
+    // symbols. The default if neither of them is present is `:center`. The
+    // _km_ layout will always be centered below the last `name` layout.
+    //
+    // Finally, the class provides defaults for the font properties used by
+    // layouts. Colour properties (such as :removed or :gone) applied to all
+    // layouts. Font variant properties (such as :bold or :designation) are
+    // only applied to the name layouts. Font sizes are ignored.
+    ("statlabel", &|pos, args, scope, features, err| {
+        let args = args.into_positionals(err, |args, err| {
+            if args.positional().len() < 4 {
+                err.add(self.pos, "expected at least 4 positional arguments");
+                Err(Failed)
+            }
+            else {
+                Ok(true)
+            }
+        }).map_err(|_| Failed)?;
+        let mut args = args.into_iter();
+
+        let class = args.next().unwrap().into_symbol_set(err);
+        let position = args.next().unwrap().into_position(err);
+    */
 
     // Renders a bit of track.
     //

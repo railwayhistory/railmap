@@ -49,6 +49,17 @@ impl Label {
 
 //------------ Layout --------------------------------------------------------
 
+/// A layout is an arrangement of text.
+///
+/// The layout can contain final content – a span, an hrule, or a vrule – or
+/// a sequence of other layouts arranged horizontally or vertically – an hbox
+/// or vbox, respecitvely.
+///
+/// For a given canvas, a layout can determine its _extent_ which describes
+/// how far the layout’s content would stretch away from a central point
+/// called the _anchor_ in all four directions. The extent is used to stack
+/// layouts: multiple layouts are placed in such a way that their extents
+/// touch.
 #[derive(Clone, Debug)]
 pub struct Layout {
     /// The content of the layout.
@@ -232,6 +243,7 @@ impl Vbox {
 
 //------------ Hbox ----------------------------------------------------------
 
+/// A sequence of layouts stacked horizontally.
 #[derive(Clone, Debug)]
 struct Hbox {
     halign: Align,
@@ -350,6 +362,14 @@ impl Hbox {
 
 //------------ Span ----------------------------------------------------------
 
+/// A run of text rendered with the same properties.
+///
+/// For the moment, we only support horizontal left-to-right text with no line
+/// breaks.
+///
+/// The extent is anchored at the base line and the start of the first
+/// character. It goes up by the font’s ascent, down by the font’s line height
+/// minus the ascent. It does not goes left but the full advance to the right.
 #[derive(Clone, Debug)]
 struct Span {
     content: String,
@@ -439,11 +459,19 @@ impl Hbar {
 
 //------------ Align ---------------------------------------------------------
 
+/// How layouts are stacked in a box.
 #[derive(Clone, Copy, Debug)]
 pub enum Align {
+    /// The upper or left extent is aligned.
     Start,
+
+    /// The center of each layout is aligned.
     Center,
+
+    /// The anchors of the layouts are aligned.
     Ref,
+
+    /// The lower or right extens is aligned.
     End
 }
 
