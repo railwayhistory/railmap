@@ -59,6 +59,15 @@ impl Path {
         self.parts.push((post, pre, Section::Line(section)))
     }
 
+    pub fn push_path(&mut self, post: f64, pre: f64, path: &Path) {
+        let first = match path.parts.first() {
+            Some(first) => first,
+            None => return
+        };
+        self.parts.push((post, pre, first.2.clone()));
+        self.parts.extend_from_slice(&path.parts[1..]);
+    }
+
     pub fn apply(&self, canvas: &Canvas) {
         let mut segments = self.segments(canvas);
         let seg = segments.next().unwrap();

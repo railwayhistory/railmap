@@ -146,6 +146,22 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.stroke();
     }),
 
+    ("de.abzw.casing", &|canvas, u| {
+        canvas.set_operator(cairo::Operator::Clear);
+        canvas.set_line_cap(cairo::LineCap::Round);
+        canvas.set_line_width(4.0 * u.sp);
+        canvas.move_to(0., 0.);
+        canvas.line_to(0., 0.5 * u.sh);
+        canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
+        canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
+        canvas.move_to(-0.5 * u.sw, u.sh);
+        canvas.line_to(0., 0.5 * u.sh);
+        canvas.line_to(0.5 * u.sw, u.sh);
+        canvas.stroke();
+        canvas.set_operator(cairo::Operator::Over);
+        canvas.set_line_cap(cairo::LineCap::Butt);
+    }),
+
     ("de.anst", &|canvas, u| {
         canvas.set_line_width(u.sp);
         canvas.move_to(0., 0.);
@@ -213,6 +229,27 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.fill();
     }),
 
+    ("de.bf.casing", &|canvas, u| {
+        canvas.move_to(-0.5 * u.sw, 0.);
+        canvas.line_to(-0.5 * u.sw, u.sh - u.ds);
+        canvas.curve_to(
+            -0.5 * u.sw, u.sh - 1.5 * u.ds,
+            -0.5 * u.sw + 0.5 * u.ds, u.sh,
+            -0.5 * u.sw + u.ds, u.sh
+        );
+        canvas.line_to(0.5 * u.sw - u.ds, u.sh);
+        canvas.curve_to(
+            0.5 * u.sw - 0.5 * u.ds, u.sh,
+            0.5 * u.sw, u.sh - 0.5 * u.ds,
+            0.5 * u.sw, u.sh - u.ds
+        );
+        canvas.line_to(0.5 * u.sw, 0.);
+        canvas.set_operator(cairo::Operator::Clear);
+        canvas.set_line_width(3.0 * u.sp);
+        canvas.stroke();
+        canvas.set_operator(cairo::Operator::Over);
+    }),
+
     ("de.bft", &|canvas, u| {
         canvas.move_to(-0.3 * u.sw + 0.5 * u.sp, 0.);
         canvas.line_to(-0.3 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
@@ -225,6 +262,17 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.line_to(-0.3 * u.sw + 0.5 * u.sp, 0.);
         canvas.close_path();
         canvas.fill();
+    }),
+
+    ("de.bft.casing", &|canvas, u| {
+        canvas.move_to(-0.3 * u.sw + 0.5 * u.sp, 0.);
+        canvas.line_to(-0.3 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
+        canvas.line_to(0.3 * u.sw - 0.5 * u.sp, u.sh - 0.5 * u.sp);
+        canvas.line_to(0.3 * u.sw - 0.5 * u.sp, 0.);
+        canvas.set_operator(cairo::Operator::Clear);
+        canvas.set_line_width(3.0 * u.sp);
+        canvas.stroke();
+        canvas.set_operator(cairo::Operator::Over);
     }),
 
     ("de.bftk", &|canvas, u| {
@@ -263,6 +311,22 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.line_to(0.3 * u.sw, 0.);
         canvas.close_path();
         canvas.fill();
+    }),
+
+    ("de.bft.abzw", &|canvas, u| {
+        canvas.move_to(-0.3 * u.sw, 0.);
+        canvas.line_to(-0.3 * u.sw, 0.5 * u.sh);
+        canvas.line_to(0.3 * u.sw, 0.5 * u.sh);
+        canvas.line_to(0.3 * u.sw, 0.);
+        canvas.close_path();
+        canvas.fill();
+        canvas.set_line_width(u.sp);
+        canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
+        canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
+        canvas.move_to(-0.5 * u.sw, u.sh);
+        canvas.line_to(0., 0.5 * u.sh);
+        canvas.line_to(0.5 * u.sw, u.sh);
+        canvas.stroke();
     }),
 
     ("de.bk", &|canvas, u| {

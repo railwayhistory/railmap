@@ -199,16 +199,17 @@ impl RenderContour for TrackContour {
 
 impl TrackContour {
     fn render_casing(&self, canvas: &Canvas, units: Units, path: &Path) {
-        canvas.set_operator(cairo::Operator::Clear);
+        //canvas.set_operator(cairo::Operator::Clear);
+        canvas.set_source_rgba(1., 1., 1., 0.7);
         if self.double {
-            canvas.set_line_width(2.6 * units.dt);
+            canvas.set_line_width(2.2 * units.dt);
         }
         else {
-            canvas.set_line_width(1.6 * units.dt);
+            canvas.set_line_width(1.2 * units.dt);
         }
         path.apply(canvas);
         canvas.stroke();
-        canvas.set_operator(cairo::Operator::Over);
+        //canvas.set_operator(cairo::Operator::Over);
     }
 
     fn render_detail_1(&self, canvas: &Canvas, units: Units, path: &Path) {

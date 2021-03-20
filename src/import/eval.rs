@@ -39,12 +39,16 @@ impl<'a> Scope<'a> {
         &self.paths
     }
 
-    pub fn get_var(&self, ident: &str) -> Option<ExprVal> {
-        self.variables.get(ident).cloned()
-    }
-
     pub fn set_var(&mut self, ident: String, value: ExprVal) {
         self.variables.insert(ident.clone(), value);
+    }
+
+    pub fn get_var(&self, ident: &str) -> Option<&ExprVal> {
+        self.variables.get(ident)
+    }
+
+    pub fn get_var_cloned(&self, ident: &str) -> Option<ExprVal> {
+        self.variables.get(ident).cloned()
     }
 
     pub fn params(&self) -> &RenderParams {
@@ -662,7 +666,7 @@ impl ast::Procedure {
     ) -> Result<(), Failed> {
         let args = self.args.eval(scope, err)?;
         
-        match scope.get_var(self.ident.as_ref()) {
+        match scope.get_var_cloned(self.ident.as_ref()) {
             Some(ExprVal::Partial(mut func)) => {
                 func.extend(args, self.pos);
                 func.eval_procedure(scope, features, err)
@@ -785,8 +789,10 @@ impl ast::Expression {
             while let Some((conn, frag)) = fragments.next() {
                 let (post, pre) = conn.tension();
                 match frag.eval_path_component(scope, err)? {
-                    Ok(subpath) => path.push_subpath(post, pre, subpath),
-                    Err(pos) => {
+                    PathComponent::Subpath(subpath) => {
+                        path.push_subpath(post, pre, subpath)
+                    }
+                    PathComponent::Position(pos) => {
                         let (end_conn, end_frag) = match fragments.next() {
                             Some(stuff) => stuff,
                             None => {
@@ -807,8 +813,8 @@ impl ast::Expression {
                         let end_pos = match end_frag.eval_path_component(
                             scope, err
                         )? {
-                            Err(pos) => pos,
-                            Ok(_) => {
+                            PathComponent::Position(pos) => pos,
+                            _ => {
                                 err.add(
                                     self.pos,
                                     "lone position in path definition"
@@ -817,6 +823,9 @@ impl ast::Expression {
                             }
                         };
                         path.push_line(post, pre, Line::new(pos, end_pos));
+                    }
+                    PathComponent::Path(val) => {
+                        path.push_path(post, pre, val)
                     }
                 }
             }
@@ -837,9 +846,9 @@ impl ast::Fragment {
         }
     }
 
-    fn eval_path_component(
-        self, scope: &Scope, err: &mut Error
-    ) -> Result<Result<Subpath, Position>, Failed> {
+    fn eval_path_component<'s>(
+        self, scope: &'s Scope, err: &mut Error
+    ) -> Result<PathComponent<'s>, Failed> {
         match self {
             ast::Fragment::Complex(frag) => {
                 frag.eval_path_component(scope, err)
@@ -865,15 +874,16 @@ impl ast::Complex {
         }
     }
 
-    fn eval_path_component(
-        self, scope: &Scope, err: &mut Error
-    ) -> Result<Result<Subpath, Position>, Failed> {
-        let base = self.external.eval_import_path(scope, err);
+    fn eval_path_component<'s>(
+        self, scope: &'s Scope, err: &mut Error
+    ) -> Result<PathComponent<'s>, Failed> {
         match self.section {
-            Some(section) => section.eval_either(base?, scope, err),
+            Some(section) => {
+                let base = self.external.eval_import_path(scope, err);
+                section.eval_either(base?, scope, err)
+            }
             None => {
-                err.add(self.pos, "expected section");
-                Err(Failed)
+                self.external.eval_path_component(scope, err)
             }
         }
     }
@@ -886,7 +896,7 @@ impl ast::External {
         match self.args {
             Some(args) => {
                 let args = args.eval(scope, err)?;
-                let func = match scope.get_var(&self.ident.ident) {
+                let func = match scope.get_var_cloned(&self.ident.ident) {
                     Some(ExprVal::Partial(mut func)) => {
                         func.extend(args, self.pos);
                         Ok(func)
@@ -908,7 +918,7 @@ impl ast::External {
                 func.eval_expr(scope, err)
             }
             None => {
-                match scope.get_var(&self.ident.ident) {
+                match scope.get_var_cloned(&self.ident.ident) {
                     Some(val) => Ok(val),
                     None => {
                         err.add(
@@ -935,6 +945,22 @@ impl ast::External {
             }
             _ => {
                 err.add(pos, "expected import path");
+                Err(Failed)
+            }
+        }
+    }
+
+    fn eval_path_component<'s>(
+        self, scope: &'s Scope, err: &mut Error
+    ) -> Result<PathComponent<'s>, Failed> {
+        if self.args.is_some() {
+            err.add(self.pos, "expected path variable");
+            return Err(Failed)
+        }
+        match scope.get_var(self.ident.as_ref()) {
+            Some(&ExprVal::Path(ref path)) => Ok(PathComponent::Path(path)),
+            _ => {
+                err.add(self.pos, "expected path variable");
                 Err(Failed)
             }
         }
@@ -1000,14 +1026,14 @@ impl ast::Section {
         ))
     }
 
-    fn eval_either(
-        self, base: &ImportPath, scope: &Scope, err: &mut Error
-    ) -> Result<Result<Subpath, Position>, Failed> {
+    fn eval_either<'s>(
+        self, base: &ImportPath, scope: &'s Scope, err: &mut Error
+    ) -> Result<PathComponent<'s>, Failed> {
         if self.end.is_some() {
-            self.eval_subpath(base, scope, err).map(Ok)
+            self.eval_subpath(base, scope, err).map(PathComponent::Subpath)
         }
         else {
-            self.eval_position(base, scope, err).map(Err)
+            self.eval_position(base, scope, err).map(PathComponent::Position)
         }
     }
 
@@ -1237,6 +1263,13 @@ impl ast::Identifier {
 }
 
 
+//------------ PathComponent -------------------------------------------------
+
+enum PathComponent<'s> {
+    Subpath(Subpath),
+    Position(Position),
+    Path(&'s Path),
+}
 
 
 //============ Errors ========================================================

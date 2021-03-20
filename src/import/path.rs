@@ -204,7 +204,7 @@ impl ImportPath {
             };
             let tension = match way.tags().get("type") {
                 None => 1.,
-                Some("curved") => 1.,
+                Some("curved") | Some("arc") => 1.,
                 Some("straight") => INFINITY,
                 Some(value) => {
                     err.add(Error::IllegalWayType {
