@@ -18,7 +18,7 @@ use crate::features::path::Position;
 use crate::import::ast;
 use crate::import::Failed;
 use crate::import::eval::{Error, SymbolSet};
-use super::colors::Palette;
+use super::colors::{Palette, Style};
 use super::units;
 
 
@@ -90,7 +90,7 @@ pub struct StandardMarker {
     rotation: f64,
 
     /// The palette to use for rendering the symbol.
-    palette: Palette,
+    palette: &'static Palette,
 
     /// The index of the marker to use.
     marker: usize
@@ -99,7 +99,10 @@ pub struct StandardMarker {
 
 impl StandardMarker {
     pub fn create(
-        pos: ast::Pos, symbols: SymbolSet, err: &mut Error
+        pos: ast::Pos,
+        style: &'static Style,
+        symbols: SymbolSet,
+        err: &mut Error
     ) -> Result<Self, Failed> {
         let rotation = if symbols.contains("top") { 1.5 * PI }
                        else if symbols.contains("left") { PI }
@@ -109,7 +112,7 @@ impl StandardMarker {
             if symbols.contains(marker.0) {
                 return Ok(StandardMarker {
                     rotation,
-                    palette: Palette::from_symbols(&symbols),
+                    palette: style.palette(&symbols),
                     marker: index
                 })
             }
@@ -336,6 +339,16 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
         canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
         canvas.stroke();
+    }),
+    ("de.bk.casing", &|canvas, u| {
+        canvas.set_line_width(3. * u.sp);
+        canvas.move_to(0., 0.);
+        canvas.line_to(0., u.sh + u.sp);
+        canvas.move_to(-0.5 * u.sw - u.sp, 0.5 * u.sh);
+        canvas.line_to(0.5 * u.sw + u.sp, 0.5 * u.sh);
+        canvas.set_operator(cairo::Operator::Clear);
+        canvas.stroke();
+        canvas.set_operator(cairo::Operator::Over);
     }),
 
     ("de.bw", &|canvas, u| {

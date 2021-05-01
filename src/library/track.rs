@@ -63,7 +63,7 @@ use crate::canvas::Canvas;
 use crate::import::eval::SymbolSet;
 use crate::features::contour::RenderContour;
 use crate::features::path::Path;
-use super::colors::Palette;
+use super::colors::{Palette, Style};
 
 
 //------------ Units ---------------------------------------------------------
@@ -126,7 +126,10 @@ pub struct TrackContour {
     double: bool,
 
     /// The palette to use for rendering
-    palette: Palette,
+    palette: &'static Palette,
+
+    /// The style to use for markings.
+    style: &'static Style,
 
     /// The category of the track.
     category: Category,
@@ -154,11 +157,14 @@ pub struct TrackContour {
 }
 
 impl TrackContour {
-    pub fn new(casing: bool, symbols: SymbolSet) -> Self {
+    pub fn new(
+        style: &'static Style, casing: bool, symbols: SymbolSet
+    ) -> Self {
         TrackContour {
             casing,
             double: symbols.contains("double"),
-            palette: Palette::from_symbols(&symbols),
+            palette: style.palette(&symbols),
+            style,
             category: Category::from_symbols(&symbols),
             station: symbols.contains("station"),
             project: symbols.contains("project"),
@@ -331,10 +337,16 @@ impl TrackContour {
         if !self.station && (self.has_category(canvas) || self.has_electric()) {
             if self.has_category(canvas) {
                 if self.flip {
-                    path.apply_offset(-0.5 * self.mark(units), canvas);
+                    path.apply_offset(
+                        -0.5 * self.mark(units) - 0.5 * units.dt,
+                        canvas
+                    );
                 }
                 else {
-                    path.apply_offset(0.5 * self.mark(units), canvas);
+                    path.apply_offset(
+                        0.5 * self.mark(units) + 0.5 * units.dt,
+                        canvas
+                    );
                 }
                 canvas.set_line_width(self.mark(units));
                 self.apply_category_properties(canvas, units);
@@ -508,14 +520,14 @@ impl TrackContour {
                     &[0.3 * seg, 0.7 * seg],
                     start
                 );
-                Palette::REMOVED.stroke.apply(canvas);
+                self.style.removed.stroke.apply(canvas);
             }
             (Never, Ex) => {
                 canvas.set_dash(
                     &[0.05 * seg, 0.05 * seg, 0.2 * seg, 0.7 * seg],
                     start
                 );
-                Palette::REMOVED.stroke.apply(canvas);
+                self.style.removed.stroke.apply(canvas);
             }
             (Ex, Ex) => {
                 canvas.set_dash(
@@ -523,7 +535,7 @@ impl TrackContour {
                       0.05 * seg, 0.05 * seg,  0.7 * seg],
                     start
                 );
-                Palette::REMOVED.stroke.apply(canvas);
+                self.style.removed.stroke.apply(canvas);
             }
             (Never, Never) => unreachable!()
         }

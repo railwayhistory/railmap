@@ -8,7 +8,7 @@ use crate::import::{ast, eval};
 use crate::import::Failed;
 use super::fonts;
 use super::border::BorderContour;
-use super::colors::Palette;
+use super::colors::Style;
 use super::markers::StandardMarker;
 use super::track::TrackContour;
 
@@ -38,7 +38,7 @@ const PROCEDURES: &[(
         };
 
         let class = args.next().unwrap().into_symbol_set(err)?.0;
-        let palette = Palette::from_symbols(&class);
+        let palette = Style::from_name(scope.params().style()).palette(&class);
         let path = args.next().unwrap().into_path(err)?.0;
         features.insert(
             features::Contour::new(
@@ -124,8 +124,9 @@ const PROCEDURES: &[(
             }
             Err(Err(_)) => return Err(Failed)
         };
+        let style = Style::from_name(scope.params().style());
         let rule = TrackContour::new(
-            true, args.next().unwrap().into_symbol_set(err)?.0
+            style, true, args.next().unwrap().into_symbol_set(err)?.0
         ).into_rule();
         let path = args.next().unwrap().into_path(err)?.0;
         features.insert(
@@ -188,7 +189,9 @@ const PROCEDURES: &[(
         let position = args.next().unwrap().into_position(err);
         let text = args.next().unwrap().into_text(err)?.0;
         let position = position?.0;
-        let palette = Palette::from_symbols(&class?.0);
+        let palette = Style::from_name(
+            scope.params().style()
+        ).palette(&class?.0);
         let mut properties = label::PropertiesBuilder::from(
             label::FontBuilder::normal(palette.text, fonts::SIZE_LINE_BADGE) 
         );
@@ -227,7 +230,10 @@ const PROCEDURES: &[(
             Err(Err(_)) => return Err(Failed)
         };
         let rule = StandardMarker::create(
-            pos, args.next().unwrap().into_symbol_set(err)?.0, err,
+            pos,
+            Style::from_name(scope.params().style()),
+            args.next().unwrap().into_symbol_set(err)?.0,
+            err,
         );
         let position = args.next().unwrap().into_position(err)?.0;
         features.insert(
@@ -253,7 +259,7 @@ const PROCEDURES: &[(
         };
 
         let class = args.next().unwrap().into_symbol_set(err)?.0;
-        let palette = Palette::from_symbols(&class);
+        let palette = Style::from_name(scope.params().style()).palette(&class);
         let path = args.next().unwrap().into_path(err)?.0;
         features.insert(
             features::Contour::new(
@@ -283,7 +289,7 @@ const PROCEDURES: &[(
             Err(Err(_)) => return Err(Failed)
         };
         let class = args.next().unwrap().into_symbol_set(err)?.0;
-        let palette = Palette::from_symbols(&class);
+        let palette = Style::from_name(scope.params().style()).palette(&class);
         let font = label::FontBuilder::normal(palette.text, fonts::SIZE_S);
 
         let position = args.next().unwrap().into_position(err);
@@ -333,7 +339,7 @@ const PROCEDURES: &[(
             Err(Err(_)) => return Err(Failed)
         };
         let class = args.next().unwrap().into_symbol_set(err)?.0;
-        let palette = Palette::from_symbols(&class);
+        let palette = Style::from_name(scope.params().style()).palette(&class);
         let name_font = label::FontBuilder::normal(palette.text, fonts::SIZE_M);
         let km_font = label::FontBuilder::normal(palette.text, fonts::SIZE_XS);
 
@@ -452,8 +458,9 @@ const PROCEDURES: &[(
             }
             Err(Err(_)) => return Err(Failed)
         };
+        let style = Style::from_name(scope.params().style());
         let rule = TrackContour::new(
-            false, args.next().unwrap().into_symbol_set(err)?.0
+            style, false, args.next().unwrap().into_symbol_set(err)?.0
         ).into_rule();
         let path = args.next().unwrap().into_path(err)?.0;
         features.insert(

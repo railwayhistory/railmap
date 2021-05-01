@@ -3,7 +3,7 @@
 use crate::canvas::FontFace;
 use crate::features::label::FontBuilder;
 use crate::import::eval::SymbolSet;
-use super::colors::Palette;
+use super::colors::Style;
 
 
 // Font sizes
@@ -17,10 +17,13 @@ pub const SIZE_XL: f64 = 11.;
 pub const SIZE_LINE_BADGE: f64 = 5.5;
 
 
-pub fn font_from_symbols(symbols: &SymbolSet) -> FontBuilder {
+pub fn font_from_symbols(
+    symbols: &SymbolSet,
+    style: &'static Style,
+) -> FontBuilder {
     FontBuilder::new(
         FontFace::from_symbols(symbols),
-        Palette::opt_from_symbols(symbols).map(|pal| pal.text),
+        style.opt_palette(symbols).map(|pal| pal.text),
         if symbols.contains("xsmall") {
             Some(SIZE_XS)
         }

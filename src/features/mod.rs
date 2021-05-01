@@ -17,7 +17,7 @@ pub mod marker;
 
 use std::ops;
 use kurbo::Rect;
-use rstar::{AABB, RTree, RTreeObject};
+use rstar::{AABB, Envelope, RTree, RTreeObject};
 use crate::canvas::Canvas;
 
 
@@ -26,6 +26,7 @@ use crate::canvas::Canvas;
 #[derive(Default)]
 pub struct FeatureSet {
     features: RTree<StoredFeature>,
+    bounds: Option<AABB<[f64; 3]>>
 }
 
 impl FeatureSet {
@@ -39,14 +40,34 @@ impl FeatureSet {
         detail: (u8, u8),
         layer: f64
     ) {
-        self.features.insert(
-            StoredFeature::new(feature.into(), detail, layer)
-        )
+        let feature = StoredFeature::new(feature.into(), detail, layer);
+        if let Some(bounds) = self.bounds.as_mut() {
+            bounds.merge(&feature.bounds)
+        }
+        else {
+            self.bounds = Some(feature.bounds)
+        };
+        self.features.insert(feature);
     }
 
     pub fn render(&self, canvas: &Canvas) {
         for feature in self.locate(canvas.detail(), canvas.feature_bounds()) {
             feature.render(canvas)
+        }
+    }
+
+    pub fn is_covered(&self, detail: u8, bounds: Rect) -> bool {
+        match self.bounds {
+            Some(feature_bounds) => {
+                let detail = f64::from(detail);
+                feature_bounds.contains_envelope(
+                    &AABB::from_corners(
+                        [detail - 0.2, bounds.x0, bounds.y0],
+                        [detail + 0.2, bounds.x1, bounds.y1]
+                    )
+                )
+            }
+            None => false
         }
     }
 

@@ -1,6 +1,5 @@
 use std::{fmt, ops};
 use std::str::FromStr;
-use hyper::body::Bytes;
 use kurbo::Point;
 use crate::features::FeatureSet;
 use crate::canvas::Canvas;
@@ -42,7 +41,7 @@ impl Tile {
         self.id.content_type()
     }
 
-    pub fn render(&self, features: &FeatureSet) -> Bytes {
+    pub fn render(&self, features: &FeatureSet) -> Vec<u8> {
         let surface = Surface::new(self.id.format);
         self.render_surface(&surface, features);
         surface.finalize()
@@ -81,16 +80,10 @@ impl TileId {
     /// The format of the path is expected to be:
     ///
     /// ```text
-    /// /{zoom}/{x}/{y}.{fmt}
+    /// {zoom}/{x}/{y}.{fmt}
     /// ```
     pub fn from_path(path: &str) -> Result<Self, TileIdError> {
         let mut path = path.split('/');
-
-        // Consume the initial "/"
-        if path.next() != Some("") {
-            return Err(TileIdError)
-        }
-
 
         let zoom = u8::from_str(
             path.next().ok_or(TileIdError)?
@@ -148,6 +141,15 @@ impl TileId {
             TileFormat::Png => "image/png",
             TileFormat::Svg => "image/svg+xml",
         }
+    }
+
+    pub fn is_covered(&self, features: &FeatureSet) -> bool {
+        features.is_covered(
+            DETAILS[self.zoom as usize],
+            Canvas::calc_feature_bounds(
+                Point::new(1., 1.), self.nw(), self.n()
+            )
+        )
     }
 }
 
@@ -229,17 +231,17 @@ impl Surface {
         }
     }
 
-    fn finalize(self) -> Bytes {
+    fn finalize(self) -> Vec<u8> {
         match self {
             Surface::Png(surface) => {
                 let mut data = Vec::new();
                 surface.write_to_png(&mut data).unwrap();
-                data.into()
+                data
             }
             Surface::Svg(surface) => {
                 let stream = surface.finish_output_stream().unwrap();
                 let stream = *(stream.downcast::<Vec<u8>>().unwrap());
-                stream.into()
+                stream
             }
         }
     }

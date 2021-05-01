@@ -13,9 +13,9 @@ use crate::features::path::{CANVAS_ACCURACY, SegTime};
 
 /// Size correction for feature bounds.
 ///
-/// This value will be multiplied with length and height of the bounding box
-/// and then added on each side.
-const BOUNDS_CORRECTION: f64 = 1.;
+/// This value will be multiplied with detail level, then length and height of
+/// the bounding box and then added on each side.
+const BOUNDS_CORRECTION: f64 = 0.3;
 
 
 //------------ Canvas --------------------------------------------------------
@@ -92,8 +92,8 @@ impl Canvas {
 
         // The bounds correction in storage coordinates.
         let correct = Point::new(
-            feature_size.x * BOUNDS_CORRECTION,
-            feature_size.y * BOUNDS_CORRECTION,
+            feature_size.x * BOUNDS_CORRECTION * detail as f64,
+            feature_size.y * BOUNDS_CORRECTION * detail as f64,
         );
 
         let context = cairo::Context::new(surface);
@@ -121,6 +121,27 @@ impl Canvas {
             detail,
             fonts: FontTable::new(),
         }
+    }
+
+    /// Returns the feature bounds for the given parameters.
+    pub fn calc_feature_bounds(
+        size: Point, nw: Point, scale: f64
+    ) -> Rect {
+        // The size in storage coordinates.
+        let feature_size = Point::new(size.x / scale, size.y / scale);
+
+        // The bounds correction in storage coordinates.
+        let correct = Point::new(
+            feature_size.x * BOUNDS_CORRECTION,
+            feature_size.y * BOUNDS_CORRECTION,
+        );
+
+        Rect::new(
+            nw.x - correct.x,
+            nw.y - correct.y,
+            nw.x + feature_size.x + correct.x,
+            nw.y + feature_size.y + correct.y,
+        )
     }
 
     /// Returns a reference to the Cairo rendering context.

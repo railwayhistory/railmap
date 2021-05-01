@@ -63,6 +63,7 @@ impl<'a> Scope<'a> {
 pub struct RenderParams {
     detail: Option<(u8, u8)>,
     layer: f64,
+    style: Option<String>,
 }
 
 impl RenderParams {
@@ -77,6 +78,7 @@ impl RenderParams {
             "detail" => self.update_detail(value, err),
             "layer" => self.update_layer(value, err),
             "link" => self.update_link(value, err),
+            "style" => self.update_style(value, err),
             _ => {
                 err.add(pos, format!("unknown render param {}", target));
             }
@@ -141,6 +143,16 @@ impl RenderParams {
         let _ = value.into_text(err);
     }
 
+    fn update_style(
+        &mut self,
+        value: Expression,
+        err: &mut Error
+    ) {
+        if let Ok(value) = value.into_text(err) {
+            self.style = Some(value.0)
+        }
+    }
+
     pub fn detail(
         &self, pos: ast::Pos, err: &mut Error
     ) -> Result<(u8, u8), Failed> {
@@ -155,6 +167,10 @@ impl RenderParams {
 
     pub fn layer(&self) -> f64 {
         self.layer
+    }
+
+    pub fn style(&self) -> Option<&str> {
+        self.style.as_ref().map(String::as_str)
     }
 }
 

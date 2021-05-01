@@ -5,6 +5,7 @@ use crate::features::Color;
 use crate::import::Failed;
 use crate::import::eval;
 use crate::import::eval::{ExprVal, SymbolSet};
+use super::colors::Style;
 use super::fonts::font_from_symbols;
 
 
@@ -44,7 +45,7 @@ const FUNCTIONS: &[(
     //     alignment, layout *[, layout]
     // )
     // ```
-    ("hbox", &|args, _, err| {
+    ("hbox", &|args, scope, err| {
         let args = args.into_positionals(err, |args, _| {
             if args.positional().len() < 2 {
                 Ok(false)
@@ -71,7 +72,13 @@ const FUNCTIONS: &[(
             lines.push(expr.into_layout(err)?.0);
         }
         Ok(label::LayoutBuilder::hbox(
-            halign, valign, properties_from_symbols(&align), lines
+            halign,
+            valign,
+            properties_from_symbols(
+                &align,
+                Style::from_name(scope.params().style()),
+            ),
+            lines,
         ).into())
     }),
 
@@ -101,12 +108,16 @@ const FUNCTIONS: &[(
     // ```text
     // span(font: symbol-set, text)
     // ```
-    ("span", &|args, _, err| {
+    ("span", &|args, scope, err| {
         let mut args = args.into_n_positionals(2, err)?.into_iter();
         let font = args.next().unwrap().into_symbol_set(err);
         let text = args.next().unwrap().into_text(err)?.0;
         Ok(label::LayoutBuilder::span(
-                text, properties_from_symbols(&font?.0)
+            text,
+            properties_from_symbols(
+                &font?.0,
+                Style::from_name(scope.params().style()),
+            ),
         ).into())
     }),
 
@@ -117,7 +128,7 @@ const FUNCTIONS: &[(
     //     alignment, layout *[, layout]
     // )
     // ```
-    ("vbox", &|args, _, err| {
+    ("vbox", &|args, scope, err| {
         let args = args.into_positionals(err, |args, _| {
             if args.positional().len() < 2 {
                 Ok(false)
@@ -145,7 +156,13 @@ const FUNCTIONS: &[(
             lines.push(expr.into_layout(err)?.0);
         }
         Ok(label::LayoutBuilder::vbox(
-            halign, valign, properties_from_symbols(&align), lines
+            halign,
+            valign,
+            properties_from_symbols(
+                &align,
+                Style::from_name(scope.params().style()),
+            ),
+            lines,
         ).into())
     }),
 ];
@@ -153,9 +170,11 @@ const FUNCTIONS: &[(
 
 //------------ Helpers -------------------------------------------------------
 
-fn properties_from_symbols(symbols: &SymbolSet) -> label::PropertiesBuilder {
+fn properties_from_symbols(
+    symbols: &SymbolSet, style: &'static Style
+) -> label::PropertiesBuilder {
     let mut res = label::PropertiesBuilder::from(
-        font_from_symbols(symbols)
+        font_from_symbols(symbols, style)
     );
     if symbols.contains("frosted") {
         res.set_background(
