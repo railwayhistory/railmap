@@ -53,17 +53,38 @@ impl Server {
     async fn process(
         &self, request: Request<Body>
     ) -> Result<Response<Body>, Infallible> {
-        if request.uri().path() == "/" {
-            return Ok(Response::builder()
-                .header("Content-Type", "text/html")
-                .body(From::<&'static [u8]>::from(
-                        include_bytes!("../html/index.html").as_ref()
-                ))
-                .unwrap()
-            )
+        match request.uri().path() {
+            "/" => {
+                return Ok(Response::builder()
+                    .header("Content-Type", "text/html")
+                    .body(From::<&'static [u8]>::from(
+                            include_bytes!("../html/index.html").as_ref()
+                    ))
+                    .unwrap()
+                )
+            }
+            "/ol.js" => {
+                return Ok(Response::builder()
+                    .header("Content-Type", "application/javascript")
+                    .body(From::<&'static [u8]>::from(
+                            include_bytes!("../html/ol.js").as_ref()
+                    ))
+                    .unwrap()
+                )
+            }
+            "/ol.css" => {
+                return Ok(Response::builder()
+                    .header("Content-Type", "text/css")
+                    .body(From::<&'static [u8]>::from(
+                            include_bytes!("../html/ol.css").as_ref()
+                    ))
+                    .unwrap()
+                )
+            }
+            _ => { }
         }
 
-        let tile = match TileId::from_path(request.uri().path()) {
+        let tile = match TileId::from_path(&request.uri().path()[1..]) {
             Ok(tile) => tile,
             Err(_) => {
                 return Ok(Response::builder()
@@ -78,7 +99,9 @@ impl Server {
         let body = match cached {
             Some(bytes) => bytes.into(),
             None => {
-                let bytes = Tile::new(tile).render(&self.features);
+                let bytes: Bytes = Tile::new(tile).render(
+                    &self.features
+                ).into();
                 self.cache.lock().unwrap().put(tile, bytes.clone());
                 bytes.into()
             }
