@@ -4,9 +4,8 @@ use std::convert::TryInto;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use crate::features::{
-    //Color, ContourRule, Distance,
+    Color,
     FeatureSet,
-    //SymbolRule,
 };
 use crate::features::label::LayoutBuilder;
 use crate::features::path::{Distance, Line, Path, Position, Subpath};
@@ -148,7 +147,7 @@ impl RenderParams {
         value: Expression,
         err: &mut Error
     ) {
-        if let Ok(value) = value.into_text(err) {
+        if let Ok(value) = value.into_symbol(err) {
             self.style = Some(value.0)
         }
     }
@@ -191,6 +190,30 @@ impl Expression {
         Expression { value, pos }
     }
 
+    pub fn into_color(
+        self, err: &mut Error
+    ) -> Result<(Color, ast::Pos), Failed> {
+        match self.value {
+            ExprVal::Color(val) => Ok((val, self.pos)),
+            _ => {
+                err.add(self.pos, "expected distance");
+                Err(Failed)
+            }
+        }
+    }
+
+    pub fn into_distance(
+        self, err: &mut Error
+    ) -> Result<(Distance, ast::Pos), Failed> {
+        match self.value {
+            ExprVal::Distance(val) => Ok((val, self.pos)),
+            _ => {
+                err.add(self.pos, "expected distance");
+                Err(Failed)
+            }
+        }
+    }
+
     pub fn into_layout(
         self, err: &mut Error
     ) -> Result<(LayoutBuilder, ast::Pos), Failed> {
@@ -216,6 +239,12 @@ impl Expression {
                 Err(Failed)
             }
         }
+    }
+
+    pub fn into_f64(
+        self, err: &mut Error
+    ) -> Result<(f64, ast::Pos), Failed> {
+        self.into_number(err).map(|(val, pos)| (val.into_f64(), pos))
     }
 
     pub fn into_u8(
@@ -308,6 +337,7 @@ impl Expression {
 /// This has a shorthand name because we are going to type it a lot.
 #[derive(Clone, Debug)]
 pub enum ExprVal {
+    Color(Color),
     Distance(Distance),
     ImportPath(usize),
     Layout(LayoutBuilder),

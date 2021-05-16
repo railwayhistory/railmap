@@ -23,7 +23,10 @@ impl Style {
     pub fn from_name(name: Option<&str>) -> &'static Self {
         match name {
             Some("red") => &RED,
+            Some("tram") => &TRAM,
             Some("de.sbahn") => &DE_SBAHN,
+            Some("nl.ns.ic") => &NL_NS_IC,
+            Some("nl.ns.spr") => &NL_NS_SPR,
             _ => &DEFAULT,
         }
     }
@@ -70,33 +73,6 @@ pub struct Palette {
     /// The color for text.
     pub text: Color,
 }
-
-/*
-impl Palette {
-    /// Creates the correct palette for a symbol set.
-    pub fn from_symbols(symbols: &SymbolSet) -> Self {
-        Self::opt_from_symbols(symbols).unwrap_or(Palette::OPEN)
-    }
-
-    pub fn opt_from_symbols(symbols: &SymbolSet) -> Option<Self> {
-        if symbols.contains("red") {
-            Some(Palette::RED)
-        }
-        else if symbols.contains("gone") || symbols.contains("former") {
-            Some(Palette::GONE)
-        }
-        else if symbols.contains("removed") {
-            Some(Palette::REMOVED)
-        }
-        else if symbols.contains("closed") {
-            Some(Palette::CLOSED)
-        }
-        else {
-            None
-        }
-    }
-}
-*/
 
 static DEFAULT: Style = Style {
     open: Palette {
@@ -161,6 +137,43 @@ static RED: Style = Style {
 };
 
 
+const TRAM_OPEN: Color = Color::rgb(0., 0.329, 0.561);
+const TRAM_CLOSED: Color = Color::rgb(0.145, 0.420, 0.612);
+const TRAM_REMOVED: Color = Color::rgb(0.475, 0.623, 0.733);
+const TRAM_GONE: Color = Color::rgb(0.690, 0.784, 0.851);
+
+static TRAM: Style = Style {
+    open: Palette {
+        stroke: TRAM_OPEN,
+        pale_stroke: TRAM_OPEN,
+        fill: TRAM_OPEN,
+        platform: TRAM_OPEN,
+        text: TRAM_OPEN,
+    },
+    closed: Palette {
+        stroke: TRAM_CLOSED,
+        pale_stroke: TRAM_CLOSED,
+        fill: TRAM_CLOSED,
+        platform: TRAM_CLOSED,
+        text: TRAM_CLOSED,
+    },
+    removed: Palette {
+        stroke: TRAM_REMOVED,
+        pale_stroke: TRAM_REMOVED,
+        fill: TRAM_REMOVED,
+        platform: TRAM_REMOVED,
+        text: TRAM_REMOVED,
+    },
+    gone: Palette {
+        stroke: TRAM_GONE,
+        pale_stroke: TRAM_GONE,
+        fill: TRAM_GONE,
+        platform: TRAM_GONE,
+        text: TRAM_GONE,
+    },
+};
+
+
 const DE_SBAHN_OPEN: Color = Color::rgb(0., 0.474, 0.255);
 const DE_SBAHN_CLOSED: Color = Color::rgb(0.212, 0.608, 0.416);
 const DE_SBAHN_REMOVED: Color = Color::rgb(0.353, 0.674, 0.525);
@@ -198,47 +211,68 @@ static DE_SBAHN: Style = Style {
 };
 
 
-/*
-impl Palette {
-    pub const OPEN: Palette = Palette {
-        stroke: Color::BLACK,
-        pale_stroke: Color::BLACK,
-        fill: Color::BLACK,
-        platform: Color::grey(0.2),
-        text: Color::BLACK,
-    };
+const NL_NS_IC_ALL: Color = Color::rgb(0.706, 0.565, 0.071);
+const NL_NS_SPR_ALL: Color = Color::rgb(0., 0.188, 0.510);
 
-    pub const CLOSED: Palette = Palette {
-        stroke: Color::grey(0.4),
-        pale_stroke: Color::grey(0.7),
-        fill: Color::grey(0.5),
-        platform: Color::grey(0.6),
-        text: Color::grey(0.2),
-    };
+static NL_NS_IC: Style = Style {
+    open: Palette {
+        stroke: NL_NS_IC_ALL,
+        pale_stroke: NL_NS_IC_ALL,
+        fill: NL_NS_IC_ALL,
+        platform: NL_NS_IC_ALL,
+        text: NL_NS_IC_ALL,
+    },
+    closed: Palette {
+        stroke: NL_NS_IC_ALL,
+        pale_stroke: NL_NS_IC_ALL,
+        fill: NL_NS_IC_ALL,
+        platform: NL_NS_IC_ALL,
+        text: NL_NS_IC_ALL,
+    },
+    removed: Palette {
+        stroke: NL_NS_IC_ALL,
+        pale_stroke: NL_NS_IC_ALL,
+        fill: NL_NS_IC_ALL,
+        platform: NL_NS_IC_ALL,
+        text: NL_NS_IC_ALL,
+    },
+    gone: Palette {
+        stroke: NL_NS_IC_ALL,
+        pale_stroke: NL_NS_IC_ALL,
+        fill: NL_NS_IC_ALL,
+        platform: NL_NS_IC_ALL,
+        text: NL_NS_IC_ALL,
+    },
+};
 
-    pub const REMOVED: Palette = Palette {
-        stroke: Color::grey(0.6),
-        pale_stroke: Color::grey(0.7),
-        fill: Color::grey(0.7),
-        platform: Color::grey(0.8),
-        text: Color::grey(0.4),
-    };
-
-    pub const GONE: Palette = Palette {
-        stroke: Color::grey(0.8),
-        pale_stroke: Color::grey(0.9),
-        fill: Color::grey(0.9),
-        platform: Color::grey(0.9),
-        text: Color::grey(0.6),
-    };
-
-    pub const RED: Palette = Palette {
-        stroke: Color::rgb(1.0, 0.0, 0.0),
-        pale_stroke: Color::rgb(1.0, 0.0, 0.0),
-        fill: Color::rgb(1.0, 0.0, 0.0),
-        platform: Color::rgb(1.0, 0.0, 0.0),
-        text: Color::rgb(1.0, 0.0, 0.0),
-    };
-}
-*/
+static NL_NS_SPR: Style = Style {
+    open: Palette {
+        stroke: NL_NS_SPR_ALL,
+        pale_stroke: NL_NS_SPR_ALL,
+        fill: NL_NS_SPR_ALL,
+        platform: NL_NS_SPR_ALL,
+        text: NL_NS_SPR_ALL,
+    },
+    closed: Palette {
+        stroke: NL_NS_SPR_ALL,
+        pale_stroke: NL_NS_SPR_ALL,
+        fill: NL_NS_SPR_ALL,
+        platform: NL_NS_SPR_ALL,
+        text: NL_NS_SPR_ALL,
+    },
+    removed: Palette {
+        stroke: NL_NS_SPR_ALL,
+        pale_stroke: NL_NS_SPR_ALL,
+        fill: NL_NS_SPR_ALL,
+        platform: NL_NS_SPR_ALL,
+        text: NL_NS_SPR_ALL,
+    },
+    gone: Palette {
+        stroke: NL_NS_SPR_ALL,
+        pale_stroke: NL_NS_SPR_ALL,
+        fill: NL_NS_SPR_ALL,
+        platform: NL_NS_SPR_ALL,
+        text: NL_NS_SPR_ALL,
+    },
+};
 

@@ -803,10 +803,10 @@ pub enum Atom {
 impl Atom {
     fn parse(input: Span) -> IResult<Span, Self> {
         alt((
+            map(UnitNumber::parse, Atom::UnitNumber),
             map(Number::parse, Atom::Number),
             map(SymbolSet::parse, Atom::SymbolSet),
             map(Text::parse, Atom::Text),
-            map(UnitNumber::parse, Atom::UnitNumber),
         ))(input)
     }
 

@@ -647,5 +647,74 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.arc(0., 0., 0.7 * u.dt, 0., 2.0 * PI);
         canvas.fill();
     }),
+
+
+    ("dot.filled", &|canvas, u| {
+        canvas.move_to(0., 0.);
+        canvas.arc(0., 0., 0.7 * u.dt + 0.5 * u.sp, 0., 2.0 * PI);
+        canvas.fill();
+    }),
+    ("dot.open", &|canvas, u| {
+        canvas.move_to(0.7 * u.dt, 0.);
+        canvas.arc(0., 0., 0.7 * u.dt, 0., 2.0 * PI);
+        canvas.set_line_width(u.sp);
+        canvas.stroke();
+    }),
+    ("dot.casing", &|canvas, u| {
+        canvas.move_to(0., 0.);
+        canvas.arc(0., 0., 0.7 * u.dt, 0., 2.0 * PI);
+        canvas.set_line_width(3. * u.sp);
+        canvas.set_operator(cairo::Operator::Clear);
+        canvas.stroke();
+        canvas.set_operator(cairo::Operator::Over);
+    }),
+    ("dot.filled.casing", &|canvas, u| {
+        canvas.move_to(0., 0.);
+        canvas.arc(0., 0., 0.7 * u.dt, 0., 2.0 * PI);
+        canvas.set_line_width(3. * u.sp);
+        canvas.set_operator(cairo::Operator::Clear);
+        canvas.stroke();
+        canvas.set_operator(cairo::Operator::Over);
+        canvas.move_to(0., 0.);
+        canvas.arc(0., 0., 0.7 * u.dt + 0.5 * u.sp, 0., 2.0 * PI);
+        canvas.fill();
+    }),
+    ("dot.open.casing", &|canvas, u| {
+        canvas.move_to(0., 0.);
+        canvas.arc(0., 0., 0.7 * u.dt, 0., 2.0 * PI);
+        canvas.set_line_width(2. * u.sp);
+        canvas.set_operator(cairo::Operator::Clear);
+        canvas.stroke();
+        canvas.set_operator(cairo::Operator::Over);
+        canvas.move_to(0.7 * u.dt, 0.);
+        canvas.arc(0., 0., 0.7 * u.dt, 0., 2.0 * PI);
+        canvas.set_line_width(u.sp);
+        canvas.stroke();
+    }),
+
+    ("sdot", &|canvas, u| {
+        canvas.move_to(0., 0.);
+        canvas.arc(0., 0., 0.5 * u.dt, 0., 2.0 * PI);
+        canvas.set_line_width(2. * u.sp);
+        canvas.set_operator(cairo::Operator::Clear);
+        canvas.stroke();
+        canvas.set_operator(cairo::Operator::Over);
+        canvas.move_to(0., 0.);
+        canvas.arc(0., 0., 0.5 * u.dt, 0., 2.0 * PI);
+        canvas.fill();
+    }),
+    ("sdot.filled", &|canvas, u| {
+        canvas.move_to(0., 0.);
+        canvas.arc(0., 0., 0.5 * u.dt, 0., 2.0 * PI);
+        canvas.fill();
+    }),
+    ("sdot.casing", &|canvas, u| {
+        canvas.move_to(0., 0.);
+        canvas.arc(0., 0., 0.5 * u.dt, 0., 2.0 * PI);
+        canvas.set_line_width(2. * u.sp);
+        canvas.set_operator(cairo::Operator::Clear);
+        canvas.stroke();
+        canvas.set_operator(cairo::Operator::Over);
+    }),
 ];
 

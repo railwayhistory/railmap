@@ -441,6 +441,43 @@ const PROCEDURES: &[(
         let position = args.next().unwrap().into_position(err);
     */
 
+    // Renders a stroke.
+    //
+    // ```text
+    // stroke(width: distance, color: color, path: path)
+    // ```
+    ("stroke", &|pos, args, scope, features, err| {
+        let mut args = match args.into_n_positionals(3, err) {
+            Ok(args) => args.into_iter(),
+            Err(Ok(args)) => {
+                err.add(
+                    args.pos(),
+                    "expected exactly three positional arguments"
+                );
+                return Err(Failed);
+            }
+            Err(Err(_)) => return Err(Failed)
+        };
+        let (width, wpos) = args.next().unwrap().into_distance(err)?;
+        if width.world.is_some() {
+            err.add(
+                wpos, "stroke width cannot have a world component"
+            );
+            return Err(Failed)
+        }
+        let width = width.canvas.unwrap_or(0.);
+        let color = args.next().unwrap().into_color(err)?.0;
+        let path = args.next().unwrap().into_path(err)?.0;
+        features.insert(
+            features::Contour::new(
+                path, features::contour::simple(color, width)
+            ),
+            scope.params().detail(pos, err)?,
+            scope.params().layer(),
+        );
+        Ok(())
+    }),
+
     // Renders a bit of track.
     //
     // ```text

@@ -82,6 +82,48 @@ const FUNCTIONS: &[(
         ).into())
     }),
 
+    // Resolves a color from a string of hex digits.
+    //
+    // ```text
+    // hexcolor(code: string) -> color
+    // ```
+    ("hexcolor", &|args, _, err| {
+        let color = args.into_sole_positional(err)?;
+        let (color, pos) = color.into_text(err)?;
+
+        if color.len() != 6 {
+            err.add(pos, "expected color code");
+            return Err(Err(Failed))
+        }
+        if !color.is_ascii() {
+            err.add(pos, "expected color code");
+            return Err(Err(Failed))
+        }
+        let red = match u8::from_str_radix(&color[0..2], 16) {
+            Ok(red) => f64::from(red) / 255.,
+            Err(_) => {
+                err.add(pos, "expected color code");
+                return Err(Err(Failed))
+            }
+        };
+        let green = match u8::from_str_radix(&color[2..4], 16) {
+            Ok(red) => f64::from(red) / 255.,
+            Err(_) => {
+                err.add(pos, "expected color code");
+                return Err(Err(Failed))
+            }
+        };
+        let blue = match u8::from_str_radix(&color[4..6], 16) {
+            Ok(red) => f64::from(red) / 255.,
+            Err(_) => {
+                err.add(pos, "expected color code");
+                return Err(Err(Failed))
+            }
+        };
+        Ok(ExprVal::Color(Color::rgb(red, green, blue)))
+    }),
+
+
     // Resolve a base path.
     //
     // ```text
@@ -101,6 +143,22 @@ const FUNCTIONS: &[(
                 Err(Err(Failed))
             }
         }
+    }),
+
+    // Returns a color expression.
+    //
+    // ```text
+    // rgb(red, green, blue)
+    // ```
+    ("rgb", &|args, _, err| {
+        let mut args = args.into_n_positionals(3, err)?.into_iter();
+        Ok(ExprVal::Color(
+            Color::rgb(
+                args.next().unwrap().into_f64(err)?.0,
+                args.next().unwrap().into_f64(err)?.0,
+                args.next().unwrap().into_f64(err)?.0,
+            )
+        ))
     }),
 
     // Produces a span of text.
