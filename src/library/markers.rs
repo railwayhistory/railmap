@@ -578,6 +578,22 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.line_to(0.25 * u.sw, u.sh);
         canvas.stroke();
     }),
+    ("de.uest.casing", &|canvas, u| {
+        canvas.set_operator(cairo::Operator::Clear);
+        canvas.set_line_cap(cairo::LineCap::Round);
+        canvas.set_line_width(4.0 * u.sp);
+        canvas.move_to(0., 0.);
+        canvas.line_to(0., 0.5 * u.sh);
+        canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
+        canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
+        canvas.move_to(-0.25 * u.sw, 0.5 * u.sh);
+        canvas.line_to(-0.25 * u.sw, u.sh);
+        canvas.move_to(0.25 * u.sw, 0.5 * u.sh);
+        canvas.line_to(0.25 * u.sw, u.sh);
+        canvas.stroke();
+        canvas.set_operator(cairo::Operator::Over);
+        canvas.set_line_cap(cairo::LineCap::Butt);
+    }),
 
     ("de.zst", &|canvas, u| {
         canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
