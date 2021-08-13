@@ -20,7 +20,7 @@ const DETAILS: &[u8] = &[
 /// The mapping of zoom levels to magnification.
 const MAG: &[f64] = &[
     1., 1., 1., 1., 1., 
-    1., 1., 1., 1., 1., 
+    1., 1., 1., 1.3, 1., 
     1., 1.3, 1., 1.5, 1.2,
     1.7, 2., 3., 1., 1.,
 ];
