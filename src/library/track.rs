@@ -219,7 +219,7 @@ impl TrackContour {
     }
 
     fn render_detail_1(&self, canvas: &Canvas, units: Units, path: &Path) {
-        if self.category.is_main_line() {
+        if self.double {
             canvas.set_line_width(units.line_width);
         }
         else {
@@ -242,9 +242,16 @@ impl TrackContour {
         else {
             canvas.set_line_width(units.other_width);
         }
+        if self.project {
+            canvas.set_dash(
+                &[0.7 * units.seg, 0.3 * units.seg],
+                0.15 * units.seg
+            );
+        }
         self.palette.pale_stroke.apply(canvas);
         path.apply(canvas);
         canvas.stroke();
+        canvas.set_dash(&[], 0.);
     }
 
     fn render_detail_full(&self, canvas: &Canvas, units: Units, path: &Path) {
