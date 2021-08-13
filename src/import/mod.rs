@@ -13,9 +13,11 @@ use self::features::FeatureSetError;
 use self::path::{PathSet, PathSetError};
 
 
-pub fn load(import_dir: &FsPath) -> Result<FeatureSet, ImportError> {
-    let paths = PathSet::load(&import_dir.join("paths"))?;
-    features::load(&import_dir.join("rules"), &paths).map_err(Into::into)
+pub fn load(
+    path_dir: &FsPath, rules_dir: &FsPath
+) -> Result<FeatureSet, ImportError> {
+    let paths = PathSet::load(path_dir)?;
+    features::load(rules_dir, &paths).map_err(Into::into)
 }
 
 
