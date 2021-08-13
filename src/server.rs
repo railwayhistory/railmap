@@ -19,9 +19,10 @@ pub struct Server {
 
 impl Server {
     pub fn new(
-        import_dir: impl AsRef<Path>,
+        path_dir: impl AsRef<Path>,
+        rules_dir: impl AsRef<Path>,
     ) -> Result<Server, import::ImportError> {
-        import::load(import_dir.as_ref()).map(|features| {
+        import::load(path_dir.as_ref(), rules_dir.as_ref()).map(|features| {
             Server {
                 features: Arc::new(features),
                 cache: Arc::new(Mutex::new(LruCache::new(10_000))),
