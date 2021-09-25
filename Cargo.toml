@@ -12,8 +12,8 @@ hyper =   "0.13"
 ignore = "0.4.14"
 kurbo = "0.5.11"
 lru = "0.4.3"
-nom = "5.1.1"
-nom_locate = "2.0.0"
+nom = "7"
+nom_locate = "4.0.0"
 osmxml = { git = "https://github.com/partim/osmxml.git" }
 rstar = "0.7.1"
 tokio = { version = "0.2", features = ["macros", "rt-threaded"] }

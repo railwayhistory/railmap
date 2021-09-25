@@ -13,8 +13,8 @@ use nom::bytes::complete::{
 };
 use nom::character::complete::{char as tag_char, multispace1, none_of, one_of};
 use nom::combinator::{all_consuming, map, opt, recognize};
-use nom::error::ErrorKind;
-use nom::multi::{fold_many0, fold_many1, many0, many1, separated_list};
+use nom::error::{Error as NomError, ErrorKind};
+use nom::multi::{fold_many0, fold_many1, many0, many1, separated_list0};
 use nom::number::complete::recognize_float;
 use nom::sequence::{preceded, terminated, tuple};
 
@@ -261,7 +261,7 @@ pub struct AssignmentList {
 impl AssignmentList {
     fn parse(input: Span) -> IResult<Span, Self> {
         let pos = Pos::capture(&input);
-        let (input, assignments) = separated_list(
+        let (input, assignments) = separated_list0(
             opt_ws(tag_char(',')),
             opt_ws(Assignment::parse)
         )(input)?;
@@ -323,7 +323,7 @@ pub struct ArgumentList {
 impl ArgumentList {
     fn parse_opt(input: Span) -> IResult<Span, Self> {
         let pos = Pos::capture(&input);
-        let (input, arguments) = separated_list(
+        let (input, arguments) = separated_list0(
             opt_ws(tag_char(',')),
             opt_ws(Argument::parse)
         )(input)?;
@@ -385,15 +385,16 @@ impl Expression {
     fn parse(input: Span) -> IResult<Span, Self> {
         let pos = Pos::capture(&input);
         let (input, first) = Fragment::parse(input)?;
-        let (input, fragments) = fold_many0(
+        let mut fragments = vec![(Connector::Smooth, first)];
+        let (input, _) = fold_many0(
             tuple((
                 opt_ws(Connector::parse),
                 opt_ws(Fragment::parse),
             )),
-            vec![(Connector::Smooth, first)],
-            |mut vec, item| {
-                vec.push(item);
-                vec
+            || (),
+            |(), item| {
+                fragments.push(item);
+                ()
             }
         )(input)?;
         Ok((input, Expression { fragments, pos }))
@@ -741,7 +742,7 @@ impl List {
         let (input, content) = terminated(
             preceded(
                 tag_char('['),
-                separated_list(
+                separated_list0(
                     opt_ws(tag_char(',')),
                     opt_ws(Expression::parse)
                 )
@@ -1008,7 +1009,7 @@ impl Quoted {
                 map(tag("\\\\"), |_| '\\'),
                 map(tag("\\\""), |_| '\"'),
             )),
-            String::new(),
+            || String::new(),
             |mut acc: String, ch| { acc.push(ch); acc }
         )(input)?;
         let (input, _) = tag_char('"')(input)?;
@@ -1250,16 +1251,16 @@ impl Connector {
 /// Parses something preceded by mandatory white space.
 fn ws<'a, O, F>(
     parse: F, 
-) -> impl Fn(Span<'a>) -> IResult<Span<'a>, O>
-where F: Fn(Span<'a>) -> IResult<Span, O> {
+) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, O>
+where F: FnMut(Span<'a>) -> IResult<Span, O> {
     preceded(skip_ws, parse)
 }
 
 /// Parses something preceded by optional white space.
 fn opt_ws<'a, O, F>(
     parse: F, 
-) -> impl Fn(Span<'a>) -> IResult<Span<'a>, O>
-where F: Fn(Span<'a>) -> IResult<Span, O> {
+) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, O>
+where F: FnMut(Span<'a>) -> IResult<Span, O> {
     preceded(skip_opt_ws, parse)
 }
 
@@ -1267,14 +1268,22 @@ where F: Fn(Span<'a>) -> IResult<Span, O> {
 ///
 /// White space is all actual white space characters plus comments.
 fn skip_ws(input: Span) -> IResult<Span, ()> {
-    fold_many1(alt((map(multispace1, |_| ()), comment)), (), |_, _| ())(input)
+    fold_many1(
+        alt((map(multispace1, |_| ()), comment)),
+        || (),
+        |_, _| ()
+    )(input)
 }
 
 /// Optional white space.
 ///
 /// White space is all actual white space characters plus comments.
 fn skip_opt_ws(input: Span) -> IResult<Span, ()> {
-    fold_many0(alt((map(multispace1, |_| ()), comment)), (), |_, _| ())(input)
+    fold_many0(
+        alt((map(multispace1, |_| ()), comment)),
+        || (),
+        |_, _| ()
+    )(input)
 }
 
 /// Comments start with a hash and run to the end of a line.
@@ -1320,11 +1329,11 @@ pub struct Error {
     kind: ErrorKind,
 }
 
-impl<'a> From<(Span<'a>, ErrorKind)> for Error {
-    fn from((span, kind): (Span, ErrorKind)) -> Self {
+impl<'a> From<NomError<Span<'a>>> for Error {
+    fn from(err: NomError<Span>) -> Self {
         Error {
-            pos: Pos::capture(&span),
-            kind
+            pos: Pos::capture(&err.input),
+            kind: err.code,
         }
     }
 }
