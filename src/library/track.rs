@@ -219,6 +219,9 @@ impl TrackContour {
     }
 
     fn render_detail_1(&self, canvas: &Canvas, units: Units, path: &Path) {
+        if self.style.name == "red" {
+            self.render_glow(canvas, 2.5 * units.other_width, path);
+        }
         if self.double {
             canvas.set_line_width(units.line_width);
         }
@@ -231,6 +234,9 @@ impl TrackContour {
     }
 
     fn render_detail_2(&self, canvas: &Canvas, units: Units, path: &Path) {
+        if self.style.name == "red" {
+            self.render_glow(canvas, 2.5 * units.other_width, path);
+        }
         if self.category.is_main_line() {
             if self.double {
                 canvas.set_line_width(2.0 * units.line_width);
@@ -381,6 +387,15 @@ impl TrackContour {
             path.apply_offset(-0.5 * units.dt, canvas);
             canvas.stroke();
         }
+    }
+
+    fn render_glow(&self, canvas: &Canvas, width: f64, path: &Path) {
+        canvas.set_line_cap(cairo::LineCap::Round);
+        canvas.set_line_width(3.8 * width);
+        self.palette.stroke.with_alpha(0.2).apply(canvas);
+        path.apply(canvas);
+        canvas.stroke();
+        canvas.set_line_cap(cairo::LineCap::Butt);
     }
 }
 

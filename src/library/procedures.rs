@@ -137,6 +137,40 @@ const PROCEDURES: &[(
         Ok(())
     }),
 
+    // Draws a line attaching a label to something.
+    //
+    // ```text
+    // guide(class: symbol-set, path: path)
+    // ```
+    ("guide", &|pos, args, scope, features, err| {
+        // Currently, this is a track with the "guide" class added to the
+        // classes.
+        let mut args = match args.into_n_positionals(2, err) {
+            Ok(args) => args.into_iter(),
+            Err(Ok(args)) => {
+                err.add(
+                    args.pos(),
+                    "expected exactly two positional arguments"
+                );
+                return Err(Failed);
+            }
+            Err(Err(_)) => return Err(Failed)
+        };
+        let style = Style::from_name(scope.params().style());
+        let mut classes = args.next().unwrap().into_symbol_set(err)?.0;
+        classes.insert("guide".into());
+        let rule = TrackContour::new(
+            style, false, classes,
+        ).into_rule();
+        let path = args.next().unwrap().into_path(err)?.0;
+        features.insert(
+            features::Contour::new(path, rule),
+            scope.params().detail(pos, err)?,
+            scope.params().layer(),
+        );
+        Ok(())
+    }),
+
     // Draws a label.
     //
     // ```text
@@ -173,6 +207,11 @@ const PROCEDURES: &[(
     // ```text
     // line_badge(class: symbol-set, position: position, text: Text)
     // ```
+    /*
+    ("line_badge", &|_, _, _, _, _| {
+        Ok(())
+    }),
+    */
     ("line_badge", &|pos, args, scope, features, err| {
         let mut args = match args.into_n_positionals(3, err) {
             Ok(args) => args.into_iter(),

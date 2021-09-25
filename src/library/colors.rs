@@ -5,6 +5,12 @@ use crate::import::eval::SymbolSet;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Style {
+    /// The name of the style.
+    pub name: &'static str,
+
+    /// The palette for an feature with passenger service.
+    pub pax: Palette,
+
     /// The palette for an open feature.
     pub open: Palette,
 
@@ -46,6 +52,9 @@ impl Style {
         else if symbols.contains("closed") {
             Some(&self.closed)
         }
+        else if symbols.contains("pax") {
+            Some(&self.pax)
+        }
         else {
             None
         }
@@ -74,7 +83,17 @@ pub struct Palette {
     pub text: Color,
 }
 
+const PAX_STROKE: Color = Color::rgb(0.80, 0.36, 0.);
+
 static DEFAULT: Style = Style {
+    name: "default",
+    pax: Palette {
+        stroke: PAX_STROKE, 
+        pale_stroke: PAX_STROKE,
+        fill: Color::BLACK,
+        platform: Color::grey(0.2),
+        text: Color::BLACK,
+    },
     open: Palette {
         stroke: Color::BLACK,
         pale_stroke: Color::BLACK,
@@ -105,34 +124,44 @@ static DEFAULT: Style = Style {
     }
 };
 
+const RED_COLOR: Color = Color::rgb(0.78, 0.0, 0.0);
+
 static RED: Style = Style {
+    name: "red",
+    pax: Palette {
+        stroke: RED_COLOR,
+        pale_stroke: RED_COLOR,
+        fill: RED_COLOR,
+        platform: RED_COLOR,
+        text: RED_COLOR,
+    },
     open: Palette {
-        stroke: Color::rgb(1.0, 0.0, 0.0),
-        pale_stroke: Color::rgb(1.0, 0.0, 0.0),
-        fill: Color::rgb(1.0, 0.0, 0.0),
-        platform: Color::rgb(1.0, 0.0, 0.0),
-        text: Color::rgb(1.0, 0.0, 0.0),
+        stroke: RED_COLOR,
+        pale_stroke: RED_COLOR,
+        fill: RED_COLOR,
+        platform: RED_COLOR,
+        text: RED_COLOR,
     },
     closed: Palette {
-        stroke: Color::rgb(1.0, 0.0, 0.0),
-        pale_stroke: Color::rgb(1.0, 0.0, 0.0),
-        fill: Color::rgb(1.0, 0.0, 0.0),
-        platform: Color::rgb(1.0, 0.0, 0.0),
-        text: Color::rgb(1.0, 0.0, 0.0),
+        stroke: RED_COLOR,
+        pale_stroke: RED_COLOR,
+        fill: RED_COLOR,
+        platform: RED_COLOR,
+        text: RED_COLOR,
     },
     removed: Palette {
-        stroke: Color::rgb(1.0, 0.0, 0.0),
-        pale_stroke: Color::rgb(1.0, 0.0, 0.0),
-        fill: Color::rgb(1.0, 0.0, 0.0),
-        platform: Color::rgb(1.0, 0.0, 0.0),
-        text: Color::rgb(1.0, 0.0, 0.0),
+        stroke: RED_COLOR,
+        pale_stroke: RED_COLOR,
+        fill: RED_COLOR,
+        platform: RED_COLOR,
+        text: RED_COLOR,
     },
     gone: Palette {
-        stroke: Color::rgb(1.0, 0.0, 0.0),
-        pale_stroke: Color::rgb(1.0, 0.0, 0.0),
-        fill: Color::rgb(1.0, 0.0, 0.0),
-        platform: Color::rgb(1.0, 0.0, 0.0),
-        text: Color::rgb(1.0, 0.0, 0.0),
+        stroke: RED_COLOR,
+        pale_stroke: RED_COLOR,
+        fill: RED_COLOR,
+        platform: RED_COLOR,
+        text: RED_COLOR,
     },
 };
 
@@ -143,6 +172,14 @@ const TRAM_REMOVED: Color = Color::rgb(0.475, 0.623, 0.733);
 const TRAM_GONE: Color = Color::rgb(0.690, 0.784, 0.851);
 
 static TRAM: Style = Style {
+    name: "tram",
+    pax: Palette {
+        stroke: TRAM_OPEN,
+        pale_stroke: TRAM_OPEN,
+        fill: TRAM_OPEN,
+        platform: TRAM_OPEN,
+        text: TRAM_OPEN,
+    },
     open: Palette {
         stroke: TRAM_OPEN,
         pale_stroke: TRAM_OPEN,
@@ -180,6 +217,14 @@ const DE_SBAHN_REMOVED: Color = Color::rgb(0.353, 0.674, 0.525);
 const DE_SBAHN_GONE: Color = Color::rgb(0.647, 0.827, 0.745);
 
 static DE_SBAHN: Style = Style {
+    name: "de.sbahn",
+    pax: Palette {
+        stroke: DE_SBAHN_OPEN,
+        pale_stroke: DE_SBAHN_OPEN,
+        fill: DE_SBAHN_OPEN,
+        platform: DE_SBAHN_OPEN,
+        text: DE_SBAHN_OPEN,
+    },
     open: Palette {
         stroke: DE_SBAHN_OPEN,
         pale_stroke: DE_SBAHN_OPEN,
@@ -215,6 +260,14 @@ const NL_NS_IC_ALL: Color = Color::rgb(0.706, 0.565, 0.071);
 const NL_NS_SPR_ALL: Color = Color::rgb(0., 0.188, 0.510);
 
 static NL_NS_IC: Style = Style {
+    name: "ns.ic",
+    pax: Palette {
+        stroke: NL_NS_IC_ALL,
+        pale_stroke: NL_NS_IC_ALL,
+        fill: NL_NS_IC_ALL,
+        platform: NL_NS_IC_ALL,
+        text: NL_NS_IC_ALL,
+    },
     open: Palette {
         stroke: NL_NS_IC_ALL,
         pale_stroke: NL_NS_IC_ALL,
@@ -246,6 +299,14 @@ static NL_NS_IC: Style = Style {
 };
 
 static NL_NS_SPR: Style = Style {
+    name: "ns.spr",
+    pax: Palette {
+        stroke: NL_NS_SPR_ALL,
+        pale_stroke: NL_NS_SPR_ALL,
+        fill: NL_NS_SPR_ALL,
+        platform: NL_NS_SPR_ALL,
+        text: NL_NS_SPR_ALL,
+    },
     open: Palette {
         stroke: NL_NS_SPR_ALL,
         pale_stroke: NL_NS_SPR_ALL,
