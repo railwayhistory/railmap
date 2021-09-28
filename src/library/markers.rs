@@ -646,7 +646,7 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
     }),
 
     ("statdt", &|canvas, u| {
-        canvas.set_line_width(u.bp);
+        canvas.set_line_width(u.sp);
         canvas.move_to(0., 0.);
         canvas.line_to(0., u.dt);
         canvas.stroke();
