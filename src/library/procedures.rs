@@ -175,8 +175,51 @@ const PROCEDURES: &[(
     //
     // ```text
     // label(position: position, layout: layout)
+    // label(class: symbol-set, position: position, layout: layout)
     // ```
     ("label", &|pos, args, scope, features, err| {
+        let args = args.into_positionals(err, |args, err| {
+            if args.positional().len() == 2 || args.positional().len() == 3 {
+                Ok(true)
+            }
+            else {
+                err.add(
+                    args.pos(),
+                    "expected 2 or 3 positional arguments"
+                );
+                Err(Failed)
+            }
+        }).map_err(|_| Failed)?;
+        let three = args.len() > 2;
+        let mut args = args.into_iter();
+        let class = if three {
+            Some(args.next().unwrap().into_symbol_set(err))
+        }
+        else {
+            None
+        };
+        let position = args.next().unwrap().into_position(err);
+        let layout = args.next().unwrap().into_layout(err)?.0;
+        let position = position?.0;
+        match class {
+            Some(class) => class?.0,
+            None => Default::default()
+        };
+
+        // XXX The class is currently unused.
+        let _ = class;
+
+        features.insert(
+            layout.into_label(
+                position, false,
+                Default::default(),
+            ),
+            scope.params().detail(pos, err)?,
+            scope.params().layer(),
+        );
+        Ok(())
+
+        /*
         let mut args = match args.into_n_positionals(2, err) {
             Ok(args) => args.into_iter(),
             Err(Ok(args)) => {
@@ -200,6 +243,7 @@ const PROCEDURES: &[(
             scope.params().layer(),
         );
         Ok(())
+        */
     }),
 
     // Renders a badge containing a line label.
