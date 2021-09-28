@@ -90,9 +90,9 @@ static DEFAULT: Style = Style {
     pax: Palette {
         stroke: PAX_STROKE, 
         pale_stroke: PAX_STROKE,
-        fill: Color::BLACK,
-        platform: Color::grey(0.2),
-        text: Color::BLACK,
+        fill: PAX_STROKE,
+        platform: PAX_STROKE,
+        text: PAX_STROKE,
     },
     open: Palette {
         stroke: Color::BLACK,
