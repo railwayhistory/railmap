@@ -20,7 +20,7 @@ pub fn load(
     Ok(features)
 }
 
-fn load_dir(
+pub fn load_dir(
     path: &FsPath,
     mut context: Scope,
     target: &mut FeatureSet,
@@ -105,6 +105,10 @@ pub struct FeatureSetError(Vec<(String, Error)>);
 impl FeatureSetError {
     fn push(&mut self, path: &FsPath, err: impl Into<Error>) {
         self.0.push((path.to_string_lossy().into(), err.into()))
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     fn check(self) -> Result<(), Self> {

@@ -368,6 +368,7 @@ impl<'a> Iterator for WayIter<'a> {
 
 //------------ PathSetError --------------------------------------------------
 
+#[derive(Default)]
 pub struct PathSetError(Vec<(String, PathError)>);
 
 impl PathSetError {
@@ -377,6 +378,10 @@ impl PathSetError {
 
     pub fn add(&mut self, path: impl AsRef<path::Path>, err: PathError) {
         self.0.push((format!("{}", path.as_ref().display()), err))
+    }
+
+    pub fn extend(&mut self, err: Self) {
+        self.0.extend(err.0)
     }
 
     pub fn is_empty(&self) -> bool {

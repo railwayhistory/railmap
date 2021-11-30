@@ -47,7 +47,7 @@ const PROCEDURES: &[(
                 path, features::contour::fill(class.standard_color())
             ),
             scope.params().detail(pos, err)?,
-            scope.params().layer(),
+            scope.params().layer() - 0.1 + class.layer_offset(),
         );
         Ok(())
     }),
@@ -134,7 +134,7 @@ const PROCEDURES: &[(
         features.insert(
             features::Contour::new(path, rule),
             scope.params().detail(pos, err)?,
-            scope.params().layer(),
+            scope.params().layer() - 0.3,
         );
         Ok(())
     }),
@@ -334,7 +334,7 @@ const PROCEDURES: &[(
         features.insert(
             features::Marker::new(position, rule?.into_rule()),
             scope.params().detail(pos, err)?,
-            scope.params().layer(),
+            scope.params().layer() - 0.2,
         );
         Ok(())
     }),
@@ -362,7 +362,7 @@ const PROCEDURES: &[(
                 path, features::contour::fill(class.standard_color())
             ),
             scope.params().detail(pos, err)?,
-            scope.params().layer(),
+            scope.params().layer() - 0.1 + class.layer_offset(),
         );
         Ok(())
     }),
@@ -599,17 +599,19 @@ const PROCEDURES: &[(
         let symbols = args.next().unwrap().into_symbol_set(err)?.0;
         let path = args.next().unwrap().into_path(err)?.0;
 
-        let track_rule = TrackContour::new(style, false, &symbols,).into_rule();
+        let track_rule = TrackContour::new(style, false, &symbols,);
+        let class = track_rule.class();
+        let track_rule = track_rule.into_rule();
         let shade_rule = TrackShading::new(&symbols).into_rule();
         features.insert(
             features::Contour::new(path.clone(), track_rule),
             scope.params().detail(pos, err)?,
-            scope.params().layer(),
+            scope.params().layer() - 0.1 + class.layer_offset(),
         );
         features.insert(
             features::Contour::new(path, shade_rule),
             scope.params().detail(pos, err)?,
-            scope.params().layer() - 100.,
+            scope.params().layer() - 100. + class.layer_offset(),
         );
 
         Ok(())

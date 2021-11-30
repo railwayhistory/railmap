@@ -188,6 +188,10 @@ impl TrackContour {
             tight: symbols.contains("tight"),
         }
     }
+
+    pub fn class(&self) -> Class {
+        self.class
+    }
 }
 
 impl RenderContour for TrackContour {

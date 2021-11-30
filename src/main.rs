@@ -1,35 +1,74 @@
 use std::net::SocketAddr;
-use std::path::PathBuf;
-use railmap::Server;
+use clap::{Arg, App, crate_version, crate_authors};
+use railmap::{Config, LoadFeatures, Server};
 
 #[tokio::main]
 async fn main() {
-    let mut args = std::env::args();
-    let name = args.next().unwrap(); // Skip own name.
+    let matches = App::new("railmap")
+        .version(crate_version!())
+        .author(crate_authors!())
+        .about("renders a railway map")
+        .arg(Arg::with_name("config")
+            .short("c")
+            .long("config")
+            .value_name("FILE")
+            .help("the map configuration file")
+            .takes_value(true)
+            .required(true)
+        )
+        .arg(Arg::with_name("region")
+            .short("r")
+            .long("region")
+            .value_name("NAME")
+            .help("select a region to render")
+            .takes_value(true)
+            .multiple(true)
+        )
+        .get_matches();
 
-    let first_dir = match args.next() {
-        Some(path) => PathBuf::from(path),
-        None => {
+    let config = match Config::load(matches.value_of("config").unwrap()) {
+        Ok(config) => config,
+        Err(err) => {
             eprintln!(
-                "Usage: {} (<import-dir> | <path-dir> <rules-dir>)",
-                name
+                "Failed to load map config {}: {}",
+                matches.value_of("config").unwrap(),
+                err
             );
             std::process::exit(1)
         }
     };
 
-    let (path_dir, rules_dir) = match args.next() {
-        Some(dir) => (first_dir, PathBuf::from(dir)),
-        None => (first_dir.join("paths"), first_dir.join("rules"))
-    };
+    let mut features = LoadFeatures::default();
+    match matches.values_of("region") {
+        Some(values) => {
+            for value in values {
+                match config.regions.get(value) {
+                    Some(region) => {
+                        features.load_region(region);
+                    }
+                    None => {
+                        eprintln!("Unknown region '{}'.", value);
+                        std::process::exit(1);
+                    }
+                }
+            }
+        }
+        None => {
+            for region in config.regions.values() {
+                features.load_region(region)
+            }
+        }
+    }
 
-    let server = match Server::new(path_dir, rules_dir) {
-        Ok(server) => server,
+    let features = match features.finalize() {
+        Ok(features) => features,
         Err(err) => {
             eprintln!("{}", err);
-            std::process::exit(1)
+            std::process::exit(1);
         }
     };
+
+    let server = Server::new(features);
     eprintln!("Server ready.");
     server.run(
         SocketAddr::from(([0, 0, 0, 0], 8080))

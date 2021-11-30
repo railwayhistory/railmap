@@ -1,13 +1,11 @@
 use std::convert::Infallible;
 use std::net::SocketAddr;
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 use hyper::{Body, Request, Response};
 use hyper::body::Bytes;
 use hyper::service::{make_service_fn, service_fn};
 use lru::LruCache;
 use crate::features::FeatureSet;
-use crate::import;
 use crate::tile::{Tile, TileId};
 
 #[derive(Clone)]
@@ -19,15 +17,12 @@ pub struct Server {
 
 impl Server {
     pub fn new(
-        path_dir: impl AsRef<Path>,
-        rules_dir: impl AsRef<Path>,
-    ) -> Result<Server, import::ImportError> {
-        import::load(path_dir.as_ref(), rules_dir.as_ref()).map(|features| {
-            Server {
-                features: Arc::new(features),
-                cache: Arc::new(Mutex::new(LruCache::new(10_000))),
-            }
-        })
+        features: FeatureSet,
+    ) -> Self {
+        Server {
+            features: Arc::new(features),
+            cache: Arc::new(Mutex::new(LruCache::new(10_000))),
+        }
     }
 
     pub async fn run(&self, addr: SocketAddr) {

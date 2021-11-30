@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 cairo-rs = { version = "0.8.1", features = ["png", "svg", "v1_16"] }
+clap = "2.34.0"
 hyper =   "0.13"
 ignore = "0.4.14"
 kurbo = "0.5.11"
@@ -16,7 +17,9 @@ nom = "7"
 nom_locate = "4.0.0"
 osmxml = { git = "https://github.com/partim/osmxml.git" }
 rstar = "0.7.1"
+serde = { version = "1", features = ["derive"] }
 tokio = { version = "0.2", features = ["macros", "rt-threaded"] }
+toml = "0.5.8"
 
 [features]
 proof = []

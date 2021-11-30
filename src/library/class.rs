@@ -27,6 +27,25 @@ impl Class {
     }
 }
 
+//--- Layers
+
+impl Class {
+    /// Returns the layer offset for this class.
+    ///
+    /// Add this to your layer to correctly order features of the same type
+    /// with different classes.
+    ///
+    /// Class layer offsets are in the range of -0.005 to 0.
+    pub fn layer_offset(self) -> f64 {
+        let base = if self.pax { 0. }
+        else if self.tram { -0.001 }
+        else { -0.002 };
+        base + self.status.layer_offset() + self.electrification.layer_offset()
+    }
+}
+
+//--- Colors
+
 #[cfg(not(feature = "proof"))]
 impl Class {
     pub fn standard_color(self) -> Color {
@@ -236,6 +255,15 @@ impl Status {
         }
     }
 
+    pub fn layer_offset(self) -> f64 {
+        match self {
+            Status::Open => 0.,
+            Status::Closed => -0.0001,
+            Status::Removed => -0.0002,
+            Status::Gone => -0.0003,
+        }
+    }
+
     fn standard_color(self) -> Color {
         match self {
             Status::Open => BLACK,
@@ -325,6 +353,19 @@ impl Electrification {
         match Self::from_symbols(symbols) {
             Electrification::None => None,
             other => Some(other)
+        }
+    }
+
+    pub fn layer_offset(self) -> f64 {
+        match self {
+            Electrification::OleAcHigh => -0.00001,
+            Electrification::OleAcLow =>  -0.00002,
+            Electrification::OleDcHigh => -0.00003,
+            Electrification::OleDcLow => -0.00004,
+            Electrification::RailHigh => -0.00005,
+            Electrification::RailLow => -0.00006,
+            Electrification::None => -0.00007,
+            _ => -0.00008,
         }
     }
 
