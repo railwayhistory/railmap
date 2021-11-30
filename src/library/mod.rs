@@ -1,4 +1,5 @@
 mod border;
+mod class;
 mod colors;
 mod fonts;
 mod functions;

@@ -18,7 +18,8 @@ use crate::features::path::Position;
 use crate::import::ast;
 use crate::import::Failed;
 use crate::import::eval::{Error, SymbolSet};
-use super::colors::{Palette, Style};
+use super::class::Class;
+use super::colors::Style;
 use super::units;
 
 
@@ -89,8 +90,8 @@ pub struct StandardMarker {
     /// Extra rotation in addition to whatever the position dictates.
     rotation: f64,
 
-    /// The palette to use for rendering the symbol.
-    palette: &'static Palette,
+    /// The feature class.
+    class: Class,
 
     /// The index of the marker to use.
     marker: usize
@@ -100,7 +101,7 @@ pub struct StandardMarker {
 impl StandardMarker {
     pub fn create(
         pos: ast::Pos,
-        style: &'static Style,
+        _style: &'static Style,
         symbols: SymbolSet,
         err: &mut Error
     ) -> Result<Self, Failed> {
@@ -112,7 +113,7 @@ impl StandardMarker {
             if symbols.contains(marker.0) {
                 return Ok(StandardMarker {
                     rotation,
-                    palette: style.palette(&symbols),
+                    class: Class::from_symbols(&symbols),
                     marker: index
                 })
             }
@@ -127,7 +128,7 @@ impl RenderMarker for StandardMarker {
         let (point, angle) = position.resolve(canvas);
         canvas.translate(point.x, point.y);
         canvas.rotate(angle + self.rotation);
-        self.palette.stroke.apply(canvas);
+        self.class.marker_color().apply(canvas);
         MARKERS[self.marker].1(canvas, Units::new(canvas));
         canvas.identity_matrix();
     }
@@ -317,13 +318,19 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
     }),
 
     ("de.bft.abzw", &|canvas, u| {
+        /*
         canvas.move_to(-0.3 * u.sw, 0.);
         canvas.line_to(-0.3 * u.sw, 0.5 * u.sh);
         canvas.line_to(0.3 * u.sw, 0.5 * u.sh);
         canvas.line_to(0.3 * u.sw, 0.);
         canvas.close_path();
         canvas.fill();
+        */
         canvas.set_line_width(u.sp);
+        canvas.move_to(-0.15 * u.sw, 0.);
+        canvas.line_to(-0.15 * u.sw, 0.5 * u.sh);
+        canvas.move_to(0.15 * u.sw, 0.);
+        canvas.line_to(0.15 * u.sw, 0.5 * u.sh);
         canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
         canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
         canvas.move_to(-0.5 * u.sw, u.sh);
@@ -440,6 +447,17 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.);
         canvas.set_line_width(u.sp);
         canvas.stroke();
+    }),
+
+    ("de.hpext.casing", &|canvas, u| {
+        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
+        canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, u.dt);
+        canvas.move_to(0.5 * u.sw - 0.5 * u.sp, u.dt);
+        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.);
+        canvas.set_operator(cairo::Operator::Clear);
+        canvas.set_line_width(3.0 * u.sp);
+        canvas.stroke();
+        canvas.set_operator(cairo::Operator::Over);
     }),
 
     ("de.hst", &|canvas, u| {
@@ -731,6 +749,28 @@ const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
         canvas.set_operator(cairo::Operator::Clear);
         canvas.stroke();
         canvas.set_operator(cairo::Operator::Over);
+    }),
+
+    ("tunnel.l", &|canvas, u| {
+        canvas.move_to(0., 0.);
+        canvas.move_to(0., 0.);
+        canvas.line_to(1.0 * u.dt, 0.0);
+        canvas.line_to(1.75 * u.dt, -0.75 * u.dt);
+        canvas.set_line_width(u.bp);
+        canvas.stroke();
+    }),
+    ("tunnel.dt", &|canvas, u| {
+        canvas.set_line_width(u.bp);
+        canvas.move_to(0., 0.);
+        canvas.line_to(0., u.dt);
+        canvas.stroke();
+    }),
+    ("tunnel.r", &|canvas, u| {
+        canvas.move_to(0., 0.);
+        canvas.line_to(-1.0 * u.dt, 0.0);
+        canvas.line_to(-1.75 * u.dt, -0.75 * u.dt);
+        canvas.set_line_width(u.bp);
+        canvas.stroke();
     }),
 ];
 

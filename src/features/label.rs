@@ -568,7 +568,7 @@ impl Font {
         self.color.apply(canvas);
     }
 
-    fn update(&self, other: &FontBuilder) -> Self {
+    pub fn update(&self, other: &FontBuilder) -> Self {
         let mut res = self.clone();
         if let Some(face) = other.face {
             res.face = face
@@ -765,6 +765,10 @@ impl PropertiesBuilder {
 
     pub fn font_mut(&mut self) -> &mut FontBuilder {
         &mut self.font
+    }
+
+    pub fn into_properties(self) -> Properties {
+        Properties::default().updated(&self)
     }
 }
 

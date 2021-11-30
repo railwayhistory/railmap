@@ -1,7 +1,6 @@
 //! Color constants.
 
 use crate::features::color::Color;
-use crate::import::eval::SymbolSet;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Style {
@@ -37,6 +36,7 @@ impl Style {
         }
     }
 
+    /*
     /// Returns the correct palette for a symbol set.
     pub fn palette(&self, symbols: &SymbolSet) -> &Palette {
         self.opt_palette(symbols).unwrap_or(&self.open)
@@ -59,6 +59,7 @@ impl Style {
             None
         }
     }
+    */
 }
 
 

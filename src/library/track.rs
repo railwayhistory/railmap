@@ -63,7 +63,8 @@ use crate::canvas::Canvas;
 use crate::import::eval::SymbolSet;
 use crate::features::contour::RenderContour;
 use crate::features::path::Path;
-use super::colors::{Palette, Style};
+use super::class::Class;
+use super::colors::{Style};
 
 
 //------------ Units ---------------------------------------------------------
@@ -100,7 +101,7 @@ impl Units {
                 0.8 * canvas.canvas_bp()
             },
             other_width:    0.5 * canvas.canvas_bp(),
-            guide_width:    0.2 * canvas.canvas_bp(),
+            guide_width:    0.3 * canvas.canvas_bp(),
             seg:            5.0 * super::units::DT * canvas.canvas_bp(),
             dt:             super::units::DT * canvas.canvas_bp(),
             mark: if canvas.detail() < 4 {
@@ -125,8 +126,8 @@ pub struct TrackContour {
     /// Is this double tracks?
     double: bool,
 
-    /// The palette to use for rendering
-    palette: &'static Palette,
+    /// The feature class.
+    class: Class,
 
     /// The style to use for markings.
     style: &'static Style,
@@ -139,6 +140,9 @@ pub struct TrackContour {
 
     /// Is this a project?
     project: bool,
+
+    /// Should this track be combined with the underlying track?
+    combined: bool,
 
     /// The status of catenary electrification.
     cat: Status,
@@ -158,16 +162,17 @@ pub struct TrackContour {
 
 impl TrackContour {
     pub fn new(
-        style: &'static Style, casing: bool, symbols: SymbolSet
+        style: &'static Style, casing: bool, symbols: &SymbolSet
     ) -> Self {
         TrackContour {
             casing,
             double: symbols.contains("double"),
-            palette: style.palette(&symbols),
+            class: Class::from_symbols(&symbols),
             style,
             category: Category::from_symbols(&symbols),
-            station: symbols.contains("station"),
+            station: symbols.contains("station") || symbols.contains("guide"),
             project: symbols.contains("project"),
+            combined: symbols.contains("combined"),
             cat: if symbols.contains("cat") { Status::Active }
                  else if symbols.contains("excat") { Status:: Ex }
                  else { Status::Never },
@@ -191,7 +196,10 @@ impl RenderContour for TrackContour {
         if self.casing {
             self.render_casing(canvas, units, path);
         }
-        else if canvas.detail() <= 1 {
+        else if canvas.detail() == 0 {
+            self.render_detail_0(canvas, units, path);
+        }
+        else if canvas.detail() == 1 {
             self.render_detail_1(canvas, units, path);
         }
         else if canvas.detail() == 2 {
@@ -223,12 +231,22 @@ impl TrackContour {
             self.render_glow(canvas, 2.5 * units.other_width, path);
         }
         if self.double {
-            canvas.set_line_width(units.line_width);
+            canvas.set_line_width(units.line_width * 1.2);
         }
         else {
-            canvas.set_line_width(units.other_width);
+            canvas.set_line_width(units.line_width * 0.7);
         }
-        self.palette.pale_stroke.apply(canvas);
+        self.class.standard_color().apply(canvas);
+        path.apply(canvas);
+        canvas.stroke();
+    }
+
+    fn render_detail_0(&self, canvas: &Canvas, units: Units, path: &Path) {
+        if self.style.name == "red" {
+            self.render_glow(canvas, 2.5 * units.other_width, path);
+        }
+        canvas.set_line_width(units.line_width * 0.7);
+        self.class.standard_color().apply(canvas);
         path.apply(canvas);
         canvas.stroke();
     }
@@ -248,13 +266,19 @@ impl TrackContour {
         else {
             canvas.set_line_width(units.other_width);
         }
-        if self.project {
+        if self.combined {
+            canvas.set_dash(
+                &[0.5 * units.seg, 0.5 * units.seg],
+                0.25 * units.seg
+            );
+        }
+        else if self.project {
             canvas.set_dash(
                 &[0.7 * units.seg, 0.3 * units.seg],
                 0.15 * units.seg
             );
         }
-        self.palette.pale_stroke.apply(canvas);
+        self.class.standard_color().apply(canvas);
         path.apply(canvas);
         canvas.stroke();
         canvas.set_dash(&[], 0.);
@@ -302,8 +326,19 @@ impl TrackContour {
         if self.category.has_base() {
             self.apply_base_properties(canvas, units);
             path.apply(canvas);
-            canvas.stroke();
+            if self.combined {
+                canvas.set_dash(
+                    &[0.5 * units.seg, 0.5 * units.seg],
+                    0.25 * units.seg
+                );
+                canvas.stroke();
+                canvas.set_dash(&[], 0.);
+            }
+            else {
+                canvas.stroke();
+            }
         }
+
 
         // Project.
         if !self.station && self.project {
@@ -377,7 +412,13 @@ impl TrackContour {
         // Base tracks
         if self.category.has_base() {
             self.apply_base_properties(canvas, units);
-            if self.project {
+            if self.combined {
+                canvas.set_dash(
+                    &[0.5 * units.seg, 0.5 * units.seg],
+                    0.25 * units.seg
+                );
+            }
+            else if self.project {
                 canvas.set_dash(
                     &[0.7 * units.seg, 0.3 * units.seg],
                     0.7 * units.seg
@@ -392,7 +433,7 @@ impl TrackContour {
     fn render_glow(&self, canvas: &Canvas, width: f64, path: &Path) {
         canvas.set_line_cap(cairo::LineCap::Round);
         canvas.set_line_width(3.8 * width);
-        self.palette.stroke.with_alpha(0.2).apply(canvas);
+        self.class.standard_color().apply(canvas);
         path.apply(canvas);
         canvas.stroke();
         canvas.set_line_cap(cairo::LineCap::Butt);
@@ -454,7 +495,7 @@ impl TrackContour {
             );
         }
         */
-        self.palette.stroke.apply(canvas);
+        self.class.standard_color().apply(canvas);
     }
 
     /// Configures the canvas for drawing 
@@ -500,7 +541,7 @@ impl TrackContour {
             }
             _ => unreachable!()
         }
-        self.palette.stroke.apply(canvas);
+        self.class.standard_color().apply(canvas);
     }
 
     /// Configures the canvas for drawing the electrification markings.
@@ -520,14 +561,14 @@ impl TrackContour {
                     &[0.3 * seg, 0.7 * seg],
                     start
                 );
-                self.palette.stroke.apply(canvas);
+                self.class.standard_color().apply(canvas);
             }
             (Never, Active) | (Ex, Active) => {
                 canvas.set_dash(
                     &[0.05 * seg, 0.05 * seg, 0.2 * seg, 0.7 * seg],
                     start
                 );
-                self.palette.stroke.apply(canvas);
+                self.class.standard_color().apply(canvas);
             }
             (Active, Active) => {
                 canvas.set_dash(
@@ -535,21 +576,21 @@ impl TrackContour {
                       0.05 * seg, 0.05 * seg,  0.7 * seg],
                     start
                 );
-                self.palette.stroke.apply(canvas);
+                self.class.standard_color().apply(canvas);
             }
             (Ex, Never) => {
                 canvas.set_dash(
                     &[0.3 * seg, 0.7 * seg],
                     start
                 );
-                self.style.removed.stroke.apply(canvas);
+                self.class.removed_color().apply(canvas);
             }
             (Never, Ex) => {
                 canvas.set_dash(
                     &[0.05 * seg, 0.05 * seg, 0.2 * seg, 0.7 * seg],
                     start
                 );
-                self.style.removed.stroke.apply(canvas);
+                self.class.removed_color().apply(canvas);
             }
             (Ex, Ex) => {
                 canvas.set_dash(
@@ -557,7 +598,7 @@ impl TrackContour {
                       0.05 * seg, 0.05 * seg,  0.7 * seg],
                     start
                 );
-                self.style.removed.stroke.apply(canvas);
+                self.class.removed_color().apply(canvas);
             }
             (Never, Never) => unreachable!()
         }
@@ -614,6 +655,44 @@ impl TrackContour {
     }
 }
 
+
+//------------ TrackShade ---------------------------------------------------
+
+/// The rendering rule for track shading.
+pub struct TrackShading {
+    /// The feature class.
+    class: Class,
+
+    /// Is this double tracks?
+    double: bool,
+}
+
+impl TrackShading {
+    pub fn new(
+        symbols: &SymbolSet
+    ) -> Self {
+        TrackShading {
+            class: Class::from_symbols(&symbols),
+            double: symbols.contains("double"),
+        }
+    }
+}
+
+impl RenderContour for TrackShading {
+    fn render(&self, canvas: &Canvas, path: &Path) {
+        let units = Units::new(canvas);
+        if self.double {
+            canvas.set_line_width(2.6 * units.dt);
+        }
+        else {
+            canvas.set_line_width(1.6 * units.dt);
+        }
+        self.class.shade_color().lighten(0.2).apply(canvas);
+        path.apply(canvas);
+        canvas.stroke();
+    }
+}
+        
 
 //------------ Category -----------------------------------------------------
 
