@@ -244,7 +244,7 @@ impl Status {
         else if symbols.contains("removed") {
             Some(Status::Removed)
         }
-        else if symbols.contains("gone") {
+        else if symbols.contains("gone") || symbols.contains("former") {
             Some(Status::Gone)
         }
         else if symbols.contains("open") {
@@ -371,26 +371,26 @@ impl Electrification {
 
     fn pax_color(self) -> Color {
         match self {
-            Electrification::None => YELLOW_HIGH,
-            Electrification::OleAcHigh => PURPLE_HIGH,
-            Electrification::OleAcLow => PINK_HIGH,
-            Electrification::OleDcHigh => RED_HIGH,
-            Electrification::OleDcLow => ORANGE_HIGH,
-            Electrification::RailHigh => CYAN_HIGH,
-            Electrification::RailLow => GREEN_HIGH,
+            Electrification::None => DP,
+            Electrification::OleAcHigh => AHP,
+            Electrification::OleAcLow => ALP,
+            Electrification::OleDcHigh => DHP,
+            Electrification::OleDcLow => DLP,
+            Electrification::RailHigh => RHP,
+            Electrification::RailLow => RLP,
             _ => TOXIC_HIGH, 
         }
     }
 
     fn non_pax_color(self) -> Color {
         match self {
-            Electrification::None => BLACK,
-            Electrification::OleAcHigh => PURPLE_LOW,
-            Electrification::OleAcLow => PINK_LOW,
-            Electrification::OleDcHigh => RED_LOW,
-            Electrification::OleDcLow => ORANGE_LOW,
-            Electrification::RailHigh => CYAN_LOW,
-            Electrification::RailLow => GREEN_LOW,
+            Electrification::None => DG,
+            Electrification::OleAcHigh => AHG,
+            Electrification::OleAcLow => ALG,
+            Electrification::OleDcHigh => DHG,
+            Electrification::OleDcLow => DLG,
+            Electrification::RailHigh => RHG,
+            Electrification::RailLow => RLG,
             _ => TOXIC_LOW,
         }
     }
@@ -432,8 +432,24 @@ impl Electrification {
 // Currently, we use eight distinct colors, each in a ‘high’ and ‘low’
 // variant. Plus three greys.
 
-const RED_HIGH: Color = Color::rgb(0.926, 0.156, 0.156);
-const RED_LOW:  Color = Color::rgb(0.645, 0.055, 0.055);
+const AHP: Color = Color::rgb(0.588, 0.075, 0.851); // purple
+const AHG: Color = Color::rgb(0.525, 0.279, 0.647);
+const ALP: Color = Color::rgb(0.855, 0.071, 0.071); // red
+const ALG: Color = Color::rgb(0.659, 0.259, 0.259);
+const DHP: Color = Color::rgb(0.145, 0.600, 0.055); // green
+const DHG: Color = Color::rgb(0.392, 0.569, 0.357);
+const DLP: Color = Color::rgb(0.510, 0.600, 0.051); // olive
+const DLG: Color = Color::rgb(0.553, 0.600, 0.349);
+const RHP: Color = Color::rgb(0.059, 0.729, 0.663);
+const RHG: Color = Color::rgb(0.235, 0.545, 0.514);
+const RLP: Color = RHP;
+const RLG: Color = RHG;
+const DP: Color = Color::rgb(0.643, 0.443, 0.027);
+const DG: Color = Color::rgb(0.608, 0.514, 0.329);
+
+/*
+const RED_HIGH: Color = Color::rgb(0.855, 0.071, 0.071);
+const RED_LOW:  Color = Color::rgb(0.659, 0.259, 0.259);
 const ORANGE_HIGH: Color = Color::rgb(0.926, 0.668, 0.156);
 const ORANGE_LOW: Color = Color::rgb(0.644, 0.445, 0.055);
 const YELLOW_HIGH: Color = Color::rgb(0.647, 0.447, 0.055);
@@ -450,6 +466,7 @@ const PURPLE_HIGH: Color = Color::rgb(0.668, 0.156, 0.926);
 const PURPLE_LOW: Color = Color::rgb(0.445, 0.055, 0.645);
 const PINK_HIGH: Color = Color::rgb(0.926, 0.156, 0.668);
 const PINK_LOW: Color = Color::rgb(0.645, 0.055, 0.445);
+*/
 
 const TOXIC_HIGH: Color = Color::rgb(0.824, 0.824, 0.0);
 const TOXIC_LOW: Color = Color::rgb(0.824, 0.824, 0.0);

@@ -48,6 +48,7 @@ impl Color {
 }
 
 impl Color {
+    pub const WHITE: Color = Color::rgb(1., 1., 1.);
     pub const BLACK: Color = Color::rgb(0., 0., 0.);
     pub const RED: Color = Color::rgb(1., 0., 0.);
     pub const TRANSPARENT: Color = Color::rgba(0., 0., 0., 0.);

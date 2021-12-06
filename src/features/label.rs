@@ -377,7 +377,10 @@ struct Span {
 }
 
 impl Span {
-    fn render_background(&self, point: Point, extent: Rect, canvas: &Canvas) {
+    fn render_background(
+        &self, _point: Point, _extent: Rect, _canvas: &Canvas
+    ) {
+        /*
         if matches!(self.properties.background, Background::Transparent) {
             return
         }
@@ -403,9 +406,23 @@ impl Span {
                 canvas.fill();
             }
         }
+        */
     }
 
     fn render(&self, point: Point, canvas: &Canvas) {
+        let cap = canvas.get_line_cap();
+        let join = canvas.get_line_join();
+        self.properties.font.apply(canvas);
+        Color::WHITE.apply(canvas);
+        canvas.set_line_width(self.properties.font.size);
+        canvas.set_line_cap(cairo::LineCap::Butt);
+        canvas.set_line_join(cairo::LineJoin::Bevel);
+        canvas.move_to(point.x, point.y);
+        canvas.text_path(&self.content);
+        canvas.stroke();
+        canvas.set_line_join(join);
+        canvas.set_line_cap(cap);
+
         self.properties.font.apply(canvas);
         canvas.move_to(point.x, point.y);
         canvas.show_text(&self.content);
@@ -582,9 +599,11 @@ impl Font {
         res
     }
 
+    /*
     fn clearance(&self, canvas: &Canvas) -> Point {
         Point::new(canvas.canvas_bp(), canvas.canvas_bp())
     }
+    */
 }
 
 

@@ -139,20 +139,22 @@ impl ImportPath {
         osm: &Osm,
     ) -> Result<(String, Self), PathError> {
         let mut err = PathError::new();
-        if relation.tags().get("type") != Some("path") {
-            err.add(Error::NonPathRelation { rel: relation.id() });
-        }
-        
         let key = match relation.tags_mut().remove("key") {
             Some(key) => key,
             None => {
                 err.add(Error::MissingKey { rel: relation.id() });
-                String::new()
+                format!("{}", relation.id())
             }
         };
+        if relation.tags().get("type") != Some("path") {
+            err.add(Error::NonPathRelation { rel: key.clone() });
+        }
         let (nodes, node_names) = Self::load_nodes(
-            &mut relation, osm, &mut err
+            &mut relation, &key, osm, &mut err,
         );
+        if nodes.is_empty() {
+            err.add(Error::EmptyPath { rel: key.clone() });
+        }
         err.check()?;
 
         Ok((
@@ -167,6 +169,7 @@ impl ImportPath {
 
     fn load_nodes(
         relation: &mut Relation,
+        key: &String,
         osm: &Osm,
         err: &mut PathError,
     ) -> (Vec<Node>, HashMap<String, u32>) {
@@ -178,7 +181,7 @@ impl ImportPath {
         for member in relation.members() {
             if member.mtype() != MemberType::Way {
                 err.add(Error::NonWayMember {
-                    rel: relation.id(), target: member.id()
+                    rel: key.clone(), target: member.id()
                 });
                 continue;
             }
@@ -187,7 +190,7 @@ impl ImportPath {
                 "" => false,
                 some => {
                     err.add(Error::UnknownRole {
-                        rel: relation.id(), target: member.id(),
+                        rel: key.clone(), target: member.id(),
                         role: some.into()
                     });
                     continue;
@@ -197,7 +200,7 @@ impl ImportPath {
                 Some(way) => way,
                 None => {
                     err.add(Error::MissingWay {
-                        rel: relation.id(), way: member.id()
+                        rel: key.clone(), way: member.id()
                     });
                     continue
                 }
@@ -208,6 +211,7 @@ impl ImportPath {
                 Some("straight") => INFINITY,
                 Some(value) => {
                     err.add(Error::IllegalWayType {
+                        rel: key.clone(),
                         way: way.id(), value: value.into()
                     });
                     1.
@@ -215,7 +219,9 @@ impl ImportPath {
             };
 
             if way.nodes().is_empty() {
-                err.add(Error::EmptyWay { way: way.id() });
+                err.add(Error::EmptyWay {
+                    rel: key.clone(), way: way.id()
+                });
                 continue;
             }
             let mut way_nodes = WayIter::new(way, reverse);
@@ -223,8 +229,7 @@ impl ImportPath {
                 let id = way_nodes.next().unwrap();
                 if last != id {
                     err.add(Error::NonContiguous {
-                        rel: relation.id(),
-                        way: way.id()
+                        rel: key.clone(), way: way.id()
                     });
                     // That’s the end of this relation, really.
                     return (nodes, node_names)
@@ -241,7 +246,7 @@ impl ImportPath {
                         name.clone(), nodes.len() as u32
                     ).is_some() {
                         err.add(Error::DuplicateName {
-                            rel: relation.id(), name
+                            rel: key.clone(), name
                         });
                     }
                 }
@@ -448,24 +453,23 @@ impl From<io::Error> for PathError {
     }
 }
 
-
-
 //------------ Error ---------------------------------------------------------
 
 #[derive(Debug)]
 pub enum Error {
-    NonPathRelation { rel: i64 },
-    UnknownRole { rel: i64, target: i64, role: String },
+    NonPathRelation { rel: String },
+    UnknownRole { rel: String, target: i64, role: String },
     MissingKey { rel: i64 },
-    NonWayMember { rel: i64, target: i64 },
-    MissingWay { rel: i64, way: i64 },
-    IllegalWayType { way: i64, value: String },
-    EmptyWay { way: i64 },
-    NonContiguous { rel: i64, way: i64 },
+    NonWayMember { rel: String, target: i64 },
+    MissingWay { rel: String, way: i64 },
+    IllegalWayType { rel: String, way: i64, value: String },
+    EmptyWay { rel: String, way: i64 },
+    NonContiguous { rel: String, way: i64 },
     MissingNode { node: i64 },
     InvalidPre { node: i64 },
     InvalidPost { node: i64 },
-    DuplicateName { rel: i64, name: String },
+    DuplicateName { rel: String, name: String },
+    EmptyPath { rel: String },
     Io(io::Error),
 }
 

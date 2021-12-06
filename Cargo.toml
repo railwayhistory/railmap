@@ -22,6 +22,7 @@ tokio = { version = "0.2", features = ["macros", "rt-threaded"] }
 toml = "0.5.8"
 
 [features]
+default = [ "proof" ]
 proof = []
 
 [[bin]]
