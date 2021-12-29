@@ -4,7 +4,7 @@ use crate::canvas::FontFace;
 use crate::features::label::FontBuilder;
 use crate::import::eval::SymbolSet;
 use super::colors::Style;
-use super::class::OptClass;
+use super::class::{Class, OptClass};
 
 
 // Font sizes
@@ -25,6 +25,38 @@ pub fn font_from_symbols(
     FontBuilder::new(
         FontFace::from_symbols(symbols),
         OptClass::from_symbols(symbols).label_color(),
+        if symbols.contains("xsmall") {
+            Some(SIZE_XS)
+        }
+        else if symbols.contains("small") {
+            Some(SIZE_S)
+        }
+        else if symbols.contains("medium") {
+            Some(SIZE_M)
+        }
+        else if symbols.contains("large") {
+            Some(SIZE_L)
+        }
+        else if symbols.contains("xlarge") {
+            Some(SIZE_XL)
+        }
+        else if symbols.contains("badgesize") {
+            Some(SIZE_LINE_BADGE)
+        }
+        else {
+            None
+        }
+    )
+}
+
+
+pub fn base_font_from_symbols(
+    symbols: &SymbolSet,
+    _style: &'static Style,
+) -> FontBuilder {
+    FontBuilder::new(
+        FontFace::from_symbols(symbols),
+        Some(Class::from_symbols(symbols).label_color()),
         if symbols.contains("xsmall") {
             Some(SIZE_XS)
         }

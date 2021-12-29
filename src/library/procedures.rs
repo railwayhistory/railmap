@@ -213,7 +213,7 @@ const PROCEDURES: &[(
                 position, false,
                 label::Properties::new(
                     label::Font::default().update(
-                        &fonts::font_from_symbols(
+                        &fonts::base_font_from_symbols(
                             &class,
                             Style::from_name(scope.params().style()),
                         )

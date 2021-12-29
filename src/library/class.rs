@@ -329,6 +329,9 @@ impl Electrification {
             else if symbols.contains("dc75") {
                 Electrification::OleDcLow
             }
+            else if symbols.contains("dc6") {
+                Electrification::OleDcLow
+            }
             else {
                 Electrification::OleUnknown
             }
