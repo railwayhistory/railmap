@@ -75,6 +75,9 @@ pub fn base_font_from_symbols(
         else if symbols.contains("badgesize") {
             Some(SIZE_LINE_BADGE)
         }
+        else if symbols.contains("linenum") {
+            Some(SIZE_LINE_BADGE)
+        }
         else {
             None
         }

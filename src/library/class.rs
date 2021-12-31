@@ -113,7 +113,18 @@ impl Class {
     }
 
     pub fn label_color(self) -> Color {
-        self.standard_color()
+        if self.tram {
+            self.status.tram_color()
+        }
+        else if let Some(color) = self.status.label_color() {
+            color
+        }
+        else if self.pax {
+            self.electrification.pax_color()
+        }
+        else {
+            self.electrification.non_pax_color()
+        }
     }
 
     pub fn marker_color(self) -> Color {
@@ -270,6 +281,15 @@ impl Status {
             Status::Closed => DARK_GREY,
             Status::Removed => MEDIUM_GREY,
             Status::Gone => LIGHT_GREY
+        }
+    }
+
+    fn label_color(self) -> Option<Color> {
+        match self {
+            Status::Open => None,
+            Status::Closed => Some(DARK_GREY),
+            Status::Removed => Some(DARK_GREY),
+            Status::Gone => Some(MEDIUM_GREY),
         }
     }
 
@@ -477,9 +497,9 @@ const TOXIC_LOW: Color = Color::rgb(0.824, 0.824, 0.0);
 //const WHITE: Color = Color::grey(1.);
 const BLACK: Color = Color::grey(0.109);
 
-const DARK_GREY:   Color = Color::grey(0.450);
-const MEDIUM_GREY: Color = Color::grey(0.550);
-const LIGHT_GREY:  Color = Color::grey(0.750);
+const DARK_GREY:   Color = Color::grey(0.600);
+const MEDIUM_GREY: Color = Color::grey(0.700);
+const LIGHT_GREY:  Color = Color::grey(0.850);
 
 const BLUE_OPEN: Color = Color::rgb(0.109, 0.387, 0.668); // #1C63AB
 const BLUE_CLOSED: Color = Color::rgb(0.367, 0.555, 0.723); // # 5E8EB9
