@@ -1,10 +1,11 @@
 /// The function we support during import.
 
-use crate::features::label;
 use crate::features::Color;
+use crate::features::path::Distance;
 use crate::import::Failed;
 use crate::import::eval;
 use crate::import::eval::{ExprVal, SymbolSet};
+use super::label;
 use super::colors::Style;
 use super::fonts::font_from_symbols;
 
@@ -35,7 +36,10 @@ const FUNCTIONS: &[(
             args.into_sole_positional(err)?
             .into_number(err)?.0.into_f64();
 
-        Ok(label::LayoutBuilder::hbar(width).into())
+        Ok(label::LayoutBuilder::hrule(
+            Distance::new(None, Some(width)),
+            label::PropertiesBuilder::default()
+        ).into())
     }),
 
     // Produces a horizontal box for a label layout.

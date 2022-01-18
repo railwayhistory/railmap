@@ -1,7 +1,6 @@
 //! All our procedures.
 
 use crate::features;
-use crate::features::label;
 use crate::features::contour::RenderContour;
 use crate::features::marker::RenderMarker;
 use crate::import::{ast, eval};
@@ -10,6 +9,7 @@ use super::fonts;
 use super::border::BorderContour;
 use super::class::Class;
 use super::colors::Style;
+use super::label;
 use super::markers::StandardMarker;
 use super::track::{TrackContour, TrackShading};
 

@@ -1,10 +1,10 @@
 //! Font-related processing.
 
 use crate::canvas::FontFace;
-use crate::features::label::FontBuilder;
 use crate::import::eval::SymbolSet;
 use super::colors::Style;
 use super::class::{Class, OptClass};
+use super::label::FontBuilder;
 
 
 // Font sizes
