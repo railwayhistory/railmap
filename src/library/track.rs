@@ -64,56 +64,7 @@ use crate::import::eval::SymbolSet;
 use crate::features::contour::RenderContour;
 use crate::features::path::Path;
 use super::class::Class;
-use super::colors::{Style};
-
-
-//------------ Units ---------------------------------------------------------
-
-#[derive(Clone, Copy, Debug)]
-struct Units {
-    /// The width of a line tracks.
-    line_width: f64,
-
-    /// The width of a station, private, or tram track.
-    other_width: f64,
-
-    guide_width: f64,
-
-    /// The length of a segment of markings.
-    seg: f64,
-
-    /// The distance between two parallel tracks.
-    dt: f64,
-
-    /// The height of category markings.
-    mark: f64,
-
-    /// The height of tight single-track markings.
-    tight_mark: f64,
-}
-
-impl Units {
-    fn new(canvas: &Canvas) -> Self {
-        Units {
-            line_width: if canvas.detail() <= 2 {
-                1.0 * canvas.canvas_bp()
-            } else {
-                0.8 * canvas.canvas_bp()
-            },
-            other_width:    0.5 * canvas.canvas_bp(),
-            guide_width:    0.3 * canvas.canvas_bp(),
-            seg:            5.0 * super::units::DT * canvas.canvas_bp(),
-            dt:             super::units::DT * canvas.canvas_bp(),
-            mark: if canvas.detail() < 4 {
-                0.6 * super::units::DT * canvas.canvas_bp()
-            }
-            else {
-                0.8 * super::units::DT * canvas.canvas_bp()
-            },
-            tight_mark:     0.4 * super::units::DT * canvas.canvas_bp(),
-        }
-    }
-}
+use super::style::Dimensions;
 
 
 //------------ TrackContour --------------------------------------------------
@@ -128,9 +79,6 @@ pub struct TrackContour {
 
     /// The feature class.
     class: Class,
-
-    /// The style to use for markings.
-    style: &'static Style,
 
     /// The category of the track.
     category: Category,
@@ -162,13 +110,12 @@ pub struct TrackContour {
 
 impl TrackContour {
     pub fn new(
-        style: &'static Style, casing: bool, symbols: &SymbolSet
+        casing: bool, symbols: &SymbolSet
     ) -> Self {
         TrackContour {
             casing,
             double: symbols.contains("double"),
             class: Class::from_symbols(&symbols),
-            style,
             category: Category::from_symbols(&symbols),
             station: symbols.contains("station") || symbols.contains("guide"),
             project: symbols.contains("project"),
@@ -196,7 +143,7 @@ impl TrackContour {
 
 impl RenderContour for TrackContour {
     fn render(&self, canvas: &Canvas, path: &Path) {
-        let units = Units::new(canvas);
+        let units = canvas.style().dimensions();
         if self.casing {
             self.render_casing(canvas, units, path);
         }
@@ -216,7 +163,7 @@ impl RenderContour for TrackContour {
 }
 
 impl TrackContour {
-    fn render_casing(&self, canvas: &Canvas, units: Units, path: &Path) {
+    fn render_casing(&self, canvas: &Canvas, units: Dimensions, path: &Path) {
         //canvas.set_operator(cairo::Operator::Clear);
         canvas.set_source_rgba(1., 1., 1., 0.7);
         if self.double {
@@ -230,10 +177,7 @@ impl TrackContour {
         //canvas.set_operator(cairo::Operator::Over);
     }
 
-    fn render_detail_1(&self, canvas: &Canvas, units: Units, path: &Path) {
-        if self.style.name == "red" {
-            self.render_glow(canvas, 2.5 * units.other_width, path);
-        }
+    fn render_detail_1(&self, canvas: &Canvas, units: Dimensions, path: &Path) {
         if self.double {
             canvas.set_line_width(units.line_width * 1.2);
         }
@@ -245,20 +189,14 @@ impl TrackContour {
         canvas.stroke();
     }
 
-    fn render_detail_0(&self, canvas: &Canvas, units: Units, path: &Path) {
-        if self.style.name == "red" {
-            self.render_glow(canvas, 2.5 * units.other_width, path);
-        }
+    fn render_detail_0(&self, canvas: &Canvas, units: Dimensions, path: &Path) {
         canvas.set_line_width(units.line_width * 0.7);
         self.class.standard_color().apply(canvas);
         path.apply(canvas);
         canvas.stroke();
     }
 
-    fn render_detail_2(&self, canvas: &Canvas, units: Units, path: &Path) {
-        if self.style.name == "red" {
-            self.render_glow(canvas, 2.5 * units.other_width, path);
-        }
+    fn render_detail_2(&self, canvas: &Canvas, units: Dimensions, path: &Path) {
         if self.category.is_main_line() {
             if self.double {
                 canvas.set_line_width(2.0 * units.line_width);
@@ -288,7 +226,7 @@ impl TrackContour {
         canvas.set_dash(&[], 0.);
     }
 
-    fn render_detail_full(&self, canvas: &Canvas, units: Units, path: &Path) {
+    fn render_detail_full(&self, canvas: &Canvas, units: Dimensions, path: &Path) {
         if self.double {
             self.render_double(canvas, units, path);
         }
@@ -297,7 +235,7 @@ impl TrackContour {
         }
     }
 
-    fn render_single(&self, canvas: &Canvas, units: Units, path: &Path) {
+    fn render_single(&self, canvas: &Canvas, units: Dimensions, path: &Path) {
         // Category and electrification markings
         // 
         // These go first so they get overpainted with the line.
@@ -382,7 +320,7 @@ impl TrackContour {
         */
      }
 
-    fn render_double(&self, canvas: &Canvas, units: Units, path: &Path) {
+    fn render_double(&self, canvas: &Canvas, units: Dimensions, path: &Path) {
         // Category and electrification markings
         // 
         // These go first so they get overpainted with the line.
@@ -454,7 +392,7 @@ impl TrackContour {
 /// removed on an active line and the project marking needs to use the clear
 /// operator.
 ///
-/// Each pattern repeats after `Units::seg` which we shall refer to as a
+/// Each pattern repeats after `Dimensions::seg` which we shall refer to as a
 /// *seg* from now on. The various markings need to be arranged evenly within
 /// a *seg* which means the dash pattern of each marking depends on the
 /// presence of the other markings.
@@ -487,7 +425,7 @@ impl TrackContour {
 /// 0.5 *seg* into each *seg.* These values may have to be shifted a bit to
 /// make it all look good.
 impl TrackContour {
-    fn apply_base_properties(&self, canvas: &Canvas, units: Units) {
+    fn apply_base_properties(&self, canvas: &Canvas, units: Dimensions) {
         canvas.set_dash(&[], 0.);
         canvas.set_line_width(self.line_width(units));
         /*
@@ -508,7 +446,7 @@ impl TrackContour {
     ///
     /// Returns whether category markings need to be draw at all.
     fn apply_category_properties(
-        &self, canvas: &Canvas, units: Units
+        &self, canvas: &Canvas, units: Dimensions
     ) {
         let strokes = self.category_strokes(canvas);
         let seg = units.seg;
@@ -549,7 +487,7 @@ impl TrackContour {
     }
 
     /// Configures the canvas for drawing the electrification markings.
-    fn apply_electric_properties(&self, canvas: &Canvas, units: Units) {
+    fn apply_electric_properties(&self, canvas: &Canvas, units: Dimensions) {
         use Status::*;
 
         let seg = units.seg;
@@ -609,7 +547,7 @@ impl TrackContour {
     }
 
 
-    fn line_width(&self, units: Units) -> f64 {
+    fn line_width(&self, units: Dimensions) -> f64 {
         if self.category.is_main_line() { units.line_width }
         else if self.category.is_guide() { units.guide_width }
         else { units.other_width }
@@ -649,7 +587,7 @@ impl TrackContour {
         }
     }
 
-    fn mark(&self, units: Units) -> f64 {
+    fn mark(&self, units: Dimensions) -> f64 {
         if self.tight {
             units.tight_mark
         }
@@ -684,7 +622,7 @@ impl TrackShading {
 
 impl RenderContour for TrackShading {
     fn render(&self, canvas: &Canvas, path: &Path) {
-        let units = Units::new(canvas);
+        let units = canvas.style().dimensions();
         if self.double {
             canvas.set_line_width(2.6 * units.dt);
         }
@@ -696,7 +634,7 @@ impl RenderContour for TrackShading {
         canvas.stroke();
     }
 }
-        
+
 
 //------------ Category -----------------------------------------------------
 

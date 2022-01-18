@@ -7,6 +7,7 @@ use kurbo::{
 };
 use crate::import::eval::SymbolSet;
 use crate::features::path::{CANVAS_ACCURACY, SegTime};
+use crate::library::Style;
 
 
 //------------ Configurable Constants ----------------------------------------
@@ -63,8 +64,8 @@ pub struct Canvas {
     /// The size of a bp in canvas coordinates.
     canvas_bp: f64,
 
-    /// Detail level.
-    detail: u8,
+    /// The map style.
+    style: Style,
 
     /// The font table.
     fonts: FontTable,
@@ -85,17 +86,18 @@ impl Canvas {
         canvas_bp: f64,
         nw: Point,
         scale: f64,
-        detail: u8,
+        mut style: Style,
     ) -> Self {
         // The size in storage coordinates.
         let feature_size = Point::new(size.x / scale, size.y / scale);
 
         // The bounds correction in storage coordinates.
         let correct = Point::new(
-            feature_size.x * BOUNDS_CORRECTION * detail as f64,
-            feature_size.y * BOUNDS_CORRECTION * detail as f64,
+            feature_size.x * BOUNDS_CORRECTION * style.detail() as f64,
+            feature_size.y * BOUNDS_CORRECTION * style.detail() as f64,
         );
 
+        let canvas_bp = canvas_bp * style.mag();
         let context = cairo::Context::new(surface);
         context.move_to(0.,0.);
         context.line_to(size.x, 0.);
@@ -104,6 +106,7 @@ impl Canvas {
         context.close_path();
         context.clip();
 
+        style.scale(canvas_bp);
         Canvas {
             context,
             feature_bounds: Rect::new(
@@ -118,7 +121,7 @@ impl Canvas {
             ),
             equator_scale: scale,
             canvas_bp,
-            detail,
+            style,
             fonts: FontTable::new(),
         }
     }
@@ -177,9 +180,14 @@ impl Canvas {
         self.canvas_bp
     }
 
+    /// Returns the style.
+    pub fn style(&self) -> &Style {
+        &self.style
+    }
+
     /// Returns the detail level.
     pub fn detail(&self) -> u8 {
-        self.detail
+        self.style.detail()
     }
 
     pub fn apply_font(&self, face: FontFace, size: f64) {

@@ -20,67 +20,7 @@ use crate::import::Failed;
 use crate::import::eval::{Error, SymbolSet};
 use super::class::Class;
 use super::colors::Style;
-use super::units;
-
-
-//------------ Units ---------------------------------------------------------
-
-#[derive(Clone, Copy, Debug)]
-struct Units {
-    /// The distance between two parallel tracks.
-    dt: f64,
-
-    /// The width of a station symbol.
-    sw: f64,
-
-    /// The height of a station symbol.
-    sh: f64,
-
-    /// The width of a reduced size station symbol.
-    ksw: f64,
-
-    /// The height of a reduced size station symbol.
-    ksh: f64,
-
-    /// The radius of curves on station symbols.
-    ds: f64,
-
-    /// The line width of station symbols.
-    sp: f64,
-
-    /// The line width of border symbols.
-    bp: f64,
-}
-
-impl Units {
-    fn new(canvas: &Canvas) -> Self {
-        if canvas.detail() > 3 {
-            Units {
-                dt:  units::DT * canvas.canvas_bp(),
-                sw:  units::SW * canvas.canvas_bp(),
-                sh:  units::SH * canvas.canvas_bp(),
-                ksw: 0.8 * units::SW * canvas.canvas_bp(),
-                ksh: 0.8 * units::SH * canvas.canvas_bp(),
-                ds:  units::SH * canvas.canvas_bp() * 0.05,
-                sp:  0.8 * canvas.canvas_bp(),
-                bp:  0.6 * canvas.canvas_bp(),
-            }
-        }
-        else {
-            let base = units::SSW * canvas.canvas_bp();
-            Units {
-                dt: units::DT * canvas.canvas_bp(),
-                sw: base,
-                sh: 0.96 * base,
-                ksw: base,
-                ksh: 0.96 * base,
-                ds: 0.05 * base,
-                sp: 0.4 * canvas.canvas_bp(),
-                bp: 0.4 * canvas.canvas_bp(),
-            }
-        }
-    }
-}
+use super::style::Dimensions;
 
 
 //------------ StandardMarker ------------------------------------------------
@@ -129,7 +69,7 @@ impl RenderMarker for StandardMarker {
         canvas.translate(point.x, point.y);
         canvas.rotate(angle + self.rotation);
         self.class.marker_color().apply(canvas);
-        MARKERS[self.marker].1(canvas, Units::new(canvas));
+        MARKERS[self.marker].1(canvas, canvas.style().dimensions());
         canvas.identity_matrix();
     }
 }
@@ -137,7 +77,7 @@ impl RenderMarker for StandardMarker {
 
 //------------ Markers ------------------------------------------------------
 
-const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Units))] = &[
+const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Dimensions))] = &[
     ("de.abzw", &|canvas, u| {
         canvas.set_line_width(u.sp);
         canvas.move_to(0., 0.);

@@ -2,6 +2,7 @@
 use std::fmt;
 use std::sync::Arc;
 use kurbo::Rect;
+use smallvec::SmallVec;
 use crate::canvas::Canvas;
 use super::color::Color;
 use super::path::Path;
@@ -15,14 +16,17 @@ pub struct Contour {
     /// The path that is being rendered by the contour.
     path: Path,
 
-    /// The renderer for this contour.
+    /// The renderers for this contour.
     ///
-    render: ContourRule,
+    render: SmallVec<[ContourRule; 3]>,
 }
 
 impl Contour {
-    pub fn new(path: Path, render: ContourRule) -> Self {
-        Contour { path, render }
+    pub fn new(
+        path: Path,
+        render: impl Into<SmallVec<[ContourRule; 3]>>
+    ) -> Self {
+        Contour { path, render: render.into() }
     }
 
     pub fn storage_bounds(&self) -> Rect {
@@ -30,7 +34,9 @@ impl Contour {
     }
 
     pub fn render(&self, canvas: &Canvas) {
-        self.render.0.render(canvas, &self.path)
+        for item in &self.render {
+            item.0.render(canvas, &self.path)
+        }
     }
 }
 

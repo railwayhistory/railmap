@@ -7,12 +7,11 @@ use crate::features::{
     Color,
     FeatureSet,
 };
-use crate::features::label::LayoutBuilder;
 use crate::features::path::{Distance, Line, Path, Position, Subpath};
 use crate::import::Failed;
 use crate::import::path::{ImportPath, PathSet};
 use crate::library::units;
-use crate::library::{Function, Procedure};
+use crate::library::{Function, LayoutBuilder, Procedure};
 use super::ast;
 
 

@@ -1,5 +1,6 @@
 //! All our procedures.
 
+use smallvec::smallvec;
 use crate::features;
 use crate::features::contour::RenderContour;
 use crate::features::marker::RenderMarker;
@@ -44,7 +45,8 @@ const PROCEDURES: &[(
         let path = args.next().unwrap().into_path(err)?.0;
         features.insert(
             features::Contour::new(
-                path, features::contour::fill(class.standard_color())
+                path,
+                smallvec![features::contour::fill(class.standard_color())],
             ),
             scope.params().detail(pos, err)?,
             scope.params().layer() - 0.1 + class.layer_offset(),
@@ -102,7 +104,7 @@ const PROCEDURES: &[(
         ).into_rule();
         let path = args.next().unwrap().into_path(err)?.0;
         features.insert(
-            features::Contour::new(path, rule),
+            features::Contour::new(path, smallvec![rule]),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -126,13 +128,12 @@ const PROCEDURES: &[(
             }
             Err(Err(_)) => return Err(Failed)
         };
-        let style = Style::from_name(scope.params().style());
         let rule = TrackContour::new(
-            style, true, &args.next().unwrap().into_symbol_set(err)?.0
+            true, &args.next().unwrap().into_symbol_set(err)?.0
         ).into_rule();
         let path = args.next().unwrap().into_path(err)?.0;
         features.insert(
-            features::Contour::new(path, rule),
+            features::Contour::new(path, smallvec![rule]),
             scope.params().detail(pos, err)?,
             scope.params().layer() - 0.3,
         );
@@ -158,15 +159,12 @@ const PROCEDURES: &[(
             }
             Err(Err(_)) => return Err(Failed)
         };
-        let style = Style::from_name(scope.params().style());
         let mut classes = args.next().unwrap().into_symbol_set(err)?.0;
         classes.insert("guide".into());
-        let rule = TrackContour::new(
-            style, false, &classes,
-        ).into_rule();
+        let rule = TrackContour::new(false, &classes).into_rule();
         let path = args.next().unwrap().into_path(err)?.0;
         features.insert(
-            features::Contour::new(path, rule),
+            features::Contour::new(path, smallvec![rule]),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -359,7 +357,8 @@ const PROCEDURES: &[(
         let path = args.next().unwrap().into_path(err)?.0;
         features.insert(
             features::Contour::new(
-                path, features::contour::fill(class.standard_color())
+                path,
+                smallvec![features::contour::fill(class.standard_color())],
             ),
             scope.params().detail(pos, err)?,
             scope.params().layer() - 0.1 + class.layer_offset(),
@@ -570,7 +569,7 @@ const PROCEDURES: &[(
         let path = args.next().unwrap().into_path(err)?.0;
         features.insert(
             features::Contour::new(
-                path, features::contour::simple(color, width)
+                path, smallvec![features::contour::simple(color, width)]
             ),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
@@ -595,21 +594,20 @@ const PROCEDURES: &[(
             }
             Err(Err(_)) => return Err(Failed)
         };
-        let style = Style::from_name(scope.params().style());
         let symbols = args.next().unwrap().into_symbol_set(err)?.0;
         let path = args.next().unwrap().into_path(err)?.0;
 
-        let track_rule = TrackContour::new(style, false, &symbols,);
+        let track_rule = TrackContour::new(false, &symbols,);
         let class = track_rule.class();
         let track_rule = track_rule.into_rule();
         let shade_rule = TrackShading::new(&symbols).into_rule();
         features.insert(
-            features::Contour::new(path.clone(), track_rule),
+            features::Contour::new(path.clone(), smallvec![track_rule]),
             scope.params().detail(pos, err)?,
             scope.params().layer() - 0.1 + class.layer_offset(),
         );
         features.insert(
-            features::Contour::new(path, shade_rule),
+            features::Contour::new(path, smallvec![shade_rule]),
             scope.params().detail(pos, err)?,
             scope.params().layer() - 100. + class.layer_offset(),
         );

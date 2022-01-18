@@ -3,27 +3,12 @@ use std::str::FromStr;
 use kurbo::Point;
 use crate::features::FeatureSet;
 use crate::canvas::Canvas;
+use crate::library::{Style, StyleId};
 
 /// The maximum zoom level we support.
 ///
 /// This **must** be less than 32 or stuff will break.
 const MAX_ZOOM: u8 = 20;
-
-/// The mapping of zoom levels to details.
-const DETAILS: &[u8] = &[
-    0, 0, 0, 0, 0,
-    0, 0, 1, 1, 2,
-    3, 3, 4, 4, 5,
-    5, 5, 5, 5, 5,
-];
-
-/// The mapping of zoom levels to magnification.
-const MAG: &[f64] = &[
-    1., 1., 1., 1., 1., 
-    1., 1., 1., 1.3, 1., 
-    1., 1.3, 1., 1.5, 1.2,
-    1.7, 2., 3., 1., 1.,
-];
 
 
 //------------ Tile ----------------------------------------------------------
@@ -48,16 +33,16 @@ impl Tile {
     }
 
     fn render_surface(
-        &self, surface: &Surface, features: &FeatureSet
+        &self, surface: &Surface, features: &FeatureSet,
     ) {
         let size = surface.size();
         let canvas = Canvas::new(
             surface,
             Point::new(size, size),
-            surface.canvas_bp() * MAG[self.id.zoom as usize],
+            surface.canvas_bp(),
             self.id.nw(),
             size * self.id.n(),
-            DETAILS[self.id.zoom as usize],
+            Style::new(self.id.style, self.id.zoom),
         );
         features.render(&canvas);
     }
@@ -72,6 +57,7 @@ pub struct TileId {
     pub x: u32,
     pub y: u32,
     pub format: TileFormat,
+    pub style: StyleId,
 }
 
 impl TileId {
@@ -80,10 +66,14 @@ impl TileId {
     /// The format of the path is expected to be:
     ///
     /// ```text
-    /// {zoom}/{x}/{y}.{fmt}
+    /// {style}/{zoom}/{x}/{y}.{fmt}
     /// ```
     pub fn from_path(path: &str) -> Result<Self, TileIdError> {
         let mut path = path.split('/');
+
+        let style = StyleId::from_str(
+            path.next().ok_or(TileIdError)?
+        ).map_err(|_| TileIdError)?;
 
         let zoom = u8::from_str(
             path.next().ok_or(TileIdError)?
@@ -115,7 +105,7 @@ impl TileId {
             return Err(TileIdError)
         }
 
-        Ok(TileId { zoom, x, y, format })
+        Ok(TileId { zoom, x, y, format, style })
     }
 
     /// The upper bound for a coordinate in a zoom level.
@@ -145,7 +135,7 @@ impl TileId {
 
     pub fn is_covered(&self, features: &FeatureSet) -> bool {
         features.is_covered(
-            DETAILS[self.zoom as usize],
+            self.style.detail(self.zoom),
             Canvas::calc_feature_bounds(
                 Point::new(1., 1.), self.nw(), self.n()
             )
@@ -262,5 +252,4 @@ impl ops::Deref for Surface {
 //------------ TileIdError ---------------------------------------------------
 
 pub struct TileIdError;
-
 

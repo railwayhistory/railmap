@@ -12,7 +12,8 @@ use crate::import::eval::SymbolSet;
 pub struct Class {
     status: Status,
     electrification: Electrification,
-    pax: bool,
+    speed: Speed,
+    pax: Pax,
     tram: bool,
 }
 
@@ -21,9 +22,30 @@ impl Class {
         Class {
             status: Status::from_symbols(symbols),
             electrification: Electrification::from_symbols(symbols),
-            pax: symbols.contains("pax"),
+            speed: Speed::from_symbols(symbols),
+            pax: Pax::from_symbols(symbols),
             tram: symbols.contains("tram"),
         }
+    }
+
+    pub fn status(self) -> Status {
+        self.status
+    }
+
+    pub fn electrification(self) -> Electrification {
+        self.electrification
+    }
+
+    pub fn speed(self) -> Speed {
+        self.speed
+    }
+
+    pub fn pax(self) -> Pax {
+        self.pax
+    }
+
+    pub fn tram(self) -> bool {
+        self.tram
     }
 }
 
@@ -37,12 +59,13 @@ impl Class {
     ///
     /// Class layer offsets are in the range of -0.005 to 0.
     pub fn layer_offset(self) -> f64 {
-        let base = if self.pax { 0. }
+        let base = if self.pax.is_full() { 0. }
         else if self.tram { -0.001 }
         else { -0.002 };
         base + self.status.layer_offset() + self.electrification.layer_offset()
     }
 }
+
 
 //--- Colors
 
@@ -91,7 +114,7 @@ impl Class {
         else if let Some(color) = self.status.important_color() {
             color
         }
-        else if self.pax {
+        else if self.pax.is_full() {
             self.electrification.pax_color()
         }
         else {
@@ -119,7 +142,7 @@ impl Class {
         else if let Some(color) = self.status.label_color() {
             color
         }
-        else if self.pax {
+        else if self.pax.is_full() {
             self.electrification.pax_color()
         }
         else {
@@ -131,6 +154,7 @@ impl Class {
         self.standard_color()
     }
 }
+
 
 //------------ OptClass ------------------------------------------------------
 
@@ -225,7 +249,7 @@ impl OptClass {
 //------------ Status --------------------------------------------------------
 
 #[derive(Clone, Copy, Debug)]
-enum Status {
+pub enum Status {
     Open,
     Closed,
     Removed,
@@ -316,7 +340,7 @@ impl Status {
 //------------ Electrification -----------------------------------------------
 
 #[derive(Clone, Copy, Debug)]
-enum Electrification {
+pub enum Electrification {
     None,
     OleAcHigh,
     OleAcLow,
@@ -392,6 +416,17 @@ impl Electrification {
         }
     }
 
+    pub fn is_ole(self) -> bool {
+        matches!(self,
+            Electrification::OleAcHigh | Electrification::OleAcLow
+            | Electrification::OleDcHigh | Electrification::OleDcLow
+        )
+    }
+
+    pub fn is_rail(self) -> bool {
+        matches!(self, Electrification::RailHigh | Electrification::RailLow)
+    }
+
     fn pax_color(self) -> Color {
         match self {
             Electrification::None => DP,
@@ -447,6 +482,66 @@ impl Electrification {
         }
     }
 
+}
+
+
+//------------ Pax -----------------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+pub enum Pax {
+    None,
+    Limited,
+    Full,
+}
+
+impl Pax {
+    fn from_symbols(symbols: &SymbolSet) -> Self {
+        if symbols.contains("pax") {
+            Pax::Full
+        }
+        else if symbols.contains("museum") {
+            Pax::Limited
+        }
+        else {
+            Pax::None
+        }
+    }
+
+    pub fn is_full(self) -> bool {
+        matches!(self, Pax::Full)
+    }
+}
+
+
+//------------ Speed ---------------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+pub enum Speed {
+    Normal,
+    V200,
+    V250,
+    V300,
+}
+
+impl Speed {
+    fn from_symbols(symbols: &SymbolSet) -> Self {
+        if symbols.contains("v200") {
+            Speed::V200
+        }
+        else if symbols.contains("v250") {
+            Speed::V250
+        }
+        else if symbols.contains("v300") {
+            Speed::V300
+        }
+        else {
+            Speed::Normal
+        }
+    }
+
+    pub fn is_hsl(self) -> bool {
+        !matches!(self, Speed::Normal)
+    }
 }
 
 

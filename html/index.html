@@ -76,9 +76,16 @@
             })
           }),
           new ol.layer.Tile({
+            source: new ol.source.XYZ({
+              url: "https://hillshading.waymarkedtrails.org/srtm/{z}/{x}/{-y}.png",
+              tilePixelRatio: 2,
+            }),
+            opacity: 0.13,
+          }),
+          new ol.layer.Tile({
             minZoom: 4,
             source: new ol.source.XYZ({
-              url: "/{z}/{x}/{y}.png",
+              url: "/lx/{z}/{x}/{y}.png",
               opaque: false,
               tilePixelRatio: 2,
             })
