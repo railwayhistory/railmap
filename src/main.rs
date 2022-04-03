@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::time::Instant;
 use clap::{Arg, App, crate_version, crate_authors};
 use railmap::{Config, LoadFeatures, Server};
 
@@ -38,9 +39,13 @@ async fn main() {
         }
     };
 
+    let start = Instant::now();
     let mut features = LoadFeatures::default();
     match matches.values_of("region") {
         Some(values) => {
+            let mut values: Vec<_> = values.collect();
+            values.sort();
+            values.dedup();
             for value in values {
                 match config.regions.get(value) {
                     Some(region) => {
@@ -69,7 +74,7 @@ async fn main() {
     };
 
     let server = Server::new(features);
-    eprintln!("Server ready.");
+    eprintln!("Server ready after {:.03}s.", start.elapsed().as_secs_f32());
     server.run(
         SocketAddr::from(([0, 0, 0, 0], 8080))
     ).await;
