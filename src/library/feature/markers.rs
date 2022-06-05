@@ -15,12 +15,10 @@ use std::f64::consts::PI;
 use crate::canvas::Canvas;
 use crate::features::marker::RenderMarker;
 use crate::features::path::Position;
-use crate::import::ast;
+use crate::import::{ast, eval};
 use crate::import::Failed;
-use crate::import::eval::{Error, SymbolSet};
-use super::class::Class;
-use super::colors::Style;
-use super::style::Dimensions;
+use super::super::class::Class;
+use super::super::style::Dimensions;
 
 
 //------------ StandardMarker ------------------------------------------------
@@ -33,32 +31,61 @@ pub struct StandardMarker {
     /// The feature class.
     class: Class,
 
-    /// The index of the marker to use.
-    marker: usize
+    /// The marker to use.
+    marker: &'static (dyn Fn(&Canvas, Dimensions) + Sync),
 }
 
 
 impl StandardMarker {
-    pub fn create(
-        pos: ast::Pos,
-        _style: &'static Style,
-        symbols: SymbolSet,
-        err: &mut Error
+    pub fn from_arg(
+        arg: eval::Expression,
+        err: &mut eval::Error,
     ) -> Result<Self, Failed> {
-        let rotation = if symbols.contains("top") { 1.5 * PI }
-                       else if symbols.contains("left") { PI }
-                       else if symbols.contains("bottom") { 0.5 * PI }
-                       else { 0. };
-        for (index, marker) in MARKERS.iter().enumerate() {
-            if symbols.contains(marker.0) {
-                return Ok(StandardMarker {
-                    rotation,
-                    class: Class::from_symbols(&symbols),
-                    marker: index
-                })
+        let (mut symbols, pos) = arg.into_symbol_set(err)?;
+        let rotation = Self::rotation_from_symbols(&mut symbols, pos, err)?;
+        let class = Class::from_symbols(&mut symbols);
+        let marker = Self::marker_from_symbols(&mut symbols, pos, err)?;
+        symbols.check_exhausted(err)?;
+        Ok(StandardMarker { rotation, class, marker })
+    }
+
+    fn rotation_from_symbols(
+        symbols: &mut eval::SymbolSet,
+        _pos: ast::Pos,
+        _err: &mut eval::Error
+    ) -> Result<f64, Failed> {
+        if symbols.take("top") {
+            Ok(1.5 * PI)
+        }
+        else if symbols.take("left") {
+            Ok(PI)
+        }
+        else if symbols.take("bottom") {
+            Ok(0.5 * PI)
+        }
+        else if symbols.take("right") {
+            Ok(0.)
+        }
+        else {
+            Ok(0.)
+            /*
+            err.add(pos, "missing orientation");
+            Err(Failed)
+                */
+        }
+    }
+
+    fn marker_from_symbols(
+        symbols: &mut eval::SymbolSet,
+        pos: ast::Pos,
+        err: &mut eval::Error
+    ) -> Result<&'static (dyn Fn(&Canvas, Dimensions) + Sync), Failed> {
+        for (name, marker) in MARKERS {
+            if symbols.take(name) {
+                return Ok(marker)
             }
         }
-        err.add(pos, "no reference to a known marker");
+        err.add(pos, "missing marker");
         Err(Failed)
     }
 }
@@ -68,8 +95,8 @@ impl RenderMarker for StandardMarker {
         let (point, angle) = position.resolve(canvas);
         canvas.translate(point.x, point.y);
         canvas.rotate(angle + self.rotation);
-        self.class.marker_color().apply(canvas);
-        MARKERS[self.marker].1(canvas, canvas.style().dimensions());
+        canvas.style().primary_marker_color(&self.class).apply(canvas);
+        (self.marker)(canvas, canvas.style().dimensions());
         canvas.identity_matrix();
     }
 }
@@ -77,7 +104,7 @@ impl RenderMarker for StandardMarker {
 
 //------------ Markers ------------------------------------------------------
 
-const MARKERS: &[(&'static str, &'static dyn Fn(&Canvas, Dimensions))] = &[
+static MARKERS: &[(&'static str, &'static (dyn Fn(&Canvas, Dimensions) + Sync))] = &[
     ("de.abzw", &|canvas, u| {
         canvas.set_line_width(u.sp);
         canvas.move_to(0., 0.);

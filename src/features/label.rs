@@ -460,17 +460,17 @@ pub enum Align {
 }
 
 impl Align {
-    pub fn h_from_symbols(symbols: &SymbolSet) -> Option<Align> {
-        if symbols.contains("left") {
+    pub fn h_from_symbols(symbols: &mut SymbolSet) -> Option<Align> {
+        if symbols.take("left") {
             Some(Align::Start)
         }
-        else if symbols.contains("center") {
+        else if symbols.take("center") {
             Some(Align::Center)
         }
-        else if symbols.contains("sep") {
+        else if symbols.take("sep") {
             Some(Align::Ref)
         }
-        else if symbols.contains("right") {
+        else if symbols.take("right") {
             Some(Align::End)
         }
         else {
@@ -478,17 +478,17 @@ impl Align {
         }
     }
 
-    pub fn v_from_symbols(symbols: &SymbolSet) -> Option<Align> {
-        if symbols.contains("top") {
+    pub fn v_from_symbols(symbols: &mut SymbolSet) -> Option<Align> {
+        if symbols.take("top") {
             Some(Align::Start)
         }
-        else if symbols.contains("middle") {
+        else if symbols.take("middle") {
             Some(Align::Center)
         }
-        else if symbols.contains("base") {
+        else if symbols.take("base") {
             Some(Align::Ref)
         }
-        else if symbols.contains("bottom") {
+        else if symbols.take("bottom") {
             Some(Align::End)
         }
         else {

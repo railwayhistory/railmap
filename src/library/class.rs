@@ -1,293 +1,310 @@
 //! Classes of features.
 //!
-//! These help determine how to draw something. They apply to all types of
-//! features.
+//! In order to be able to draw features differently for different styles, we
+//! need to describe them in an abstract fashion. This is what classes do.
+//!
+//! There is one big [`Class`] type that aggregates various sub-classes the
+//! describing various more specific things. In the map source, the class of
+//! a feature is typically given through symbol set.
+#![allow(dead_code)]
 
-use crate::features::color::Color;
-use crate::import::eval::SymbolSet;
+use crate::import::eval;
+use crate::import::Failed;
+use crate::import::eval::{Expression, SymbolSet};
+
 
 //------------ Class ---------------------------------------------------------
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Class {
-    status: Status,
-    electrification: Electrification,
-    speed: Speed,
-    pax: Pax,
-    tram: bool,
+    category: Option<Category>,
+    status: Option<Status>,
+    surface: Option<Surface>,
+    cat: Option<ElectricCat>,
+    rail: Option<ElectricRail>,
+    speed: Option<Speed>,
+    pax: Option<Pax>,
 }
 
 impl Class {
-    pub fn from_symbols(symbols: &SymbolSet) -> Self {
+    pub fn from_arg(
+        arg: Expression,
+        err: &mut eval::Error,
+    ) -> Result<Self, Failed> {
+        let mut symbols = arg.into_symbol_set(err)?.0;
+        let class = Self::from_symbols(&mut symbols);
+        symbols.check_exhausted(err)?;
+        Ok(class)
+    }
+
+    pub fn from_symbols(symbols: &mut SymbolSet) -> Self {
         Class {
+            category: Category::from_symbols(symbols),
             status: Status::from_symbols(symbols),
-            electrification: Electrification::from_symbols(symbols),
+            surface: Surface::from_symbols(symbols),
+            cat: ElectricCat::from_symbols(symbols),
+            rail: ElectricRail::from_symbols(symbols),
             speed: Speed::from_symbols(symbols),
             pax: Pax::from_symbols(symbols),
-            tram: symbols.contains("tram"),
         }
     }
 
-    pub fn status(self) -> Status {
-        self.status
+    pub fn update(&self, class: &Class) -> Class {
+        Class {
+            category: {
+                if let Some(category) = class.category {
+                    Some(category)
+                }
+                else {
+                    self.category
+                }
+            },
+            status: {
+                if let Some(status) = class.status {
+                    Some(status)
+                }
+                else {
+                    self.status
+                }
+            },
+            surface: {
+                if let Some(surface) = class.surface {
+                    Some(surface)
+                }
+                else {
+                    self.surface
+                }
+            },
+            cat: {
+                if let Some(cat) = class.cat {
+                    Some(cat)
+                }
+                else {
+                    self.cat
+                }
+            },
+            rail: {
+                if let Some(rail) = class.rail {
+                    Some(rail)
+                }
+                else {
+                    self.rail
+                }
+            },
+            speed: {
+                if let Some(speed) = class.speed {
+                    Some(speed)
+                }
+                else {
+                    self.speed
+                }
+            },
+            pax: {
+                if let Some(pax) = class.pax {
+                    Some(pax)
+                }
+                else {
+                    self.pax
+                }
+            }
+        }
     }
 
-    pub fn electrification(self) -> Electrification {
-        self.electrification
+    pub fn category(&self) -> Category {
+        self.category.unwrap_or_default()
     }
 
-    pub fn speed(self) -> Speed {
-        self.speed
+    pub fn status(&self) -> Status {
+        self.status.unwrap_or_default()
     }
 
-    pub fn pax(self) -> Pax {
-        self.pax
+    pub fn set_status(&mut self, status: Status) {
+        self.status = Some(status);
     }
 
-    pub fn tram(self) -> bool {
-        self.tram
+    pub fn surface(&self) -> Surface {
+        self.surface.unwrap_or_default()
     }
-}
 
-//--- Layers
+    pub fn cat(&self) -> Option<ElectricCat> {
+        self.cat
+    }
 
-impl Class {
+    pub fn has_active_cat(&self) -> bool {
+        if let Some(cat) = self.cat {
+            matches!(cat.status, ElectricStatus::Open)
+        }
+        else {
+            false
+        }
+    }
+
+    pub fn rail(&self) -> Option<ElectricRail> {
+        self.rail
+    }
+
+    pub fn has_active_rail(&self) -> bool {
+        if let Some(rail) = self.rail {
+            matches!(rail.status, ElectricStatus::Open)
+        }
+        else {
+            false
+        }
+    }
+
+    pub fn speed(&self) -> Speed {
+        self.speed.unwrap_or_default()
+    }
+
+    pub fn pax(&self) -> Pax {
+        self.pax.unwrap_or_default()
+    }
+
     /// Returns the layer offset for this class.
     ///
     /// Add this to your layer to correctly order features of the same type
     /// with different classes.
     ///
     /// Class layer offsets are in the range of -0.005 to 0.
-    pub fn layer_offset(self) -> f64 {
-        let base = if self.pax.is_full() { 0. }
-        else if self.tram { -0.001 }
+    pub fn layer_offset(&self) -> f64 {
+        let base = if self.pax().is_full() { 0. }
+        else if self.category().is_tram() { -0.001 }
         else { -0.002 };
-        base + self.status.layer_offset() + self.electrification.layer_offset()
+        let electric = if self.has_active_cat() { -0.00001 }
+                       else if self.has_active_rail() { -0.00005 }
+                       else { 0. };
+        base + self.status().layer_offset() + electric
     }
 }
 
 
-//--- Colors
+//------------ Category ------------------------------------------------------
 
-#[cfg(not(feature = "proof"))]
-impl Class {
-    pub fn standard_color(self) -> Color {
-        self.status.standard_color()
-    }
-
-    pub fn shade_color(self) -> Color {
-        if self.tram {
-            self.status.tram_color()
-        }
-        else if self.pax {
-            self.electrification.pax_shade_color()
-        }
-        else {
-            self.electrification.non_pax_shade_color()
-        }
-    }
-
-    pub fn removed_color(self) -> Color {
-        if self.tram {
-            Status::Removed.tram_color()
-        }
-        else {
-            Status::Removed.important_color().unwrap()
-        }
-    }
-
-    pub fn label_color(self) -> Color {
-        self.standard_color()
-    }
-
-    pub fn marker_color(self) -> Color {
-        self.standard_color()
-    }
-}
-
-#[cfg(feature = "proof")]
-impl Class {
-    pub fn standard_color(self) -> Color {
-        if self.tram {
-            self.status.tram_color()
-        }
-        else if let Some(color) = self.status.important_color() {
-            color
-        }
-        else if self.pax.is_full() {
-            self.electrification.pax_color()
-        }
-        else {
-            self.electrification.non_pax_color()
-        }
-    }
-
-    pub fn shade_color(self) -> Color {
-        Color::TRANSPARENT
-    }
-
-    pub fn removed_color(self) -> Color {
-        if self.tram {
-            Status::Removed.tram_color()
-        }
-        else {
-            Status::Removed.important_color().unwrap()
-        }
-    }
-
-    pub fn label_color(self) -> Color {
-        if self.tram {
-            self.status.tram_color()
-        }
-        else if let Some(color) = self.status.label_color() {
-            color
-        }
-        else if self.pax.is_full() {
-            self.electrification.pax_color()
-        }
-        else {
-            self.electrification.non_pax_color()
-        }
-    }
-
-    pub fn marker_color(self) -> Color {
-        self.standard_color()
-    }
-}
-
-
-//------------ OptClass ------------------------------------------------------
-
+/// The category of railway this feature is for.
 #[derive(Clone, Copy, Debug)]
-pub struct OptClass {
-    status: Option<Status>,
-    electrification: Option<Electrification>,
-    pax: bool,
-    tram: bool,
+pub enum Category {
+    /// First-class public railway.
+    First,
+
+    /// Second-class public railway.
+    Second,
+
+    /// Third-class public railway.
+    Third,
+
+    /// Tram.
+    Tram,
+
+    /// A non-public railway.
+    Private,
+
+    /// Sidings tracks.
+    ///
+    /// For historical reasons, this is the default category.
+    Siding,
 }
 
-impl OptClass {
-    pub fn from_symbols(symbols: &SymbolSet) -> Self {
-        if symbols.contains("tram") {
-            OptClass {
-                status: Some(Status::from_symbols(symbols)),
-                electrification: None,
-                pax: false,
-                tram: true,
-            }
+impl Category {
+    fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
+        if symbols.take("first") {
+            Some(Category::First)
         }
-        else if symbols.contains("pax") {
-            OptClass {
-                status: Some(Status::from_symbols(symbols)),
-                electrification: Some(Electrification::from_symbols(symbols)),
-                pax: true,
-                tram: false,
-            }
+        else if symbols.take("second") {
+            Some(Category::Second)
         }
-        else {
-            OptClass {
-                status: Status::opt_from_symbols(symbols),
-                electrification: Electrification::opt_from_symbols(symbols),
-                pax: false,
-                tram: false,
-            }
+        else if symbols.take("third") {
+            Some(Category::Third)
         }
-    }
-}
-
-#[cfg(not(feature = "proof"))]
-impl OptClass {
-    pub fn label_color(self) -> Option<Color> {
-        if let Some(status) = self.status {
-            Some(status.standard_color())
+        else if symbols.take("tram") {
+            Some(Category::Tram)
+        }
+        else if symbols.take("private") {
+            Some(Category::Private)
         }
         else {
             None
         }
     }
+
+    /// Returns whether the category is a first or second class.
+    pub fn is_main(self) -> bool {
+        match self {
+            Category::First | Category::Second => true,
+            _ => false
+        }
+    }
+
+    /// Returns whether the category is a tram.
+    pub fn is_tram(self) -> bool {
+        matches!(self, Category::Tram)
+    }
 }
 
-#[cfg(feature = "proof")]
-impl OptClass {
-    pub fn label_color(self) -> Option<Color> {
-        if let Some(status) = self.status {
-            if self.tram {
-                Some(status.tram_color())
-            }
-            else if matches!(status, Status::Open) {
-                if let Some(el) = self.electrification {
-                    if self.pax {
-                        Some(el.pax_color())
-                    }
-                    else {
-                        Some(el.non_pax_color())
-                    }
-                }
-                else {
-                    Some(status.standard_color())
-                }
-            }
-            else {
-                Some(status.standard_color())
-            }
-        }
-        else if let Some(el) = self.electrification {
-            if self.pax {
-                Some(el.pax_color())
-            }
-            else {
-                Some(el.non_pax_color())
-            }
-        }
-        else {
-            None
-        }
+impl Default for Category {
+    fn default() -> Self {
+        Category::Siding
     }
 }
 
 
 //------------ Status --------------------------------------------------------
 
+/// The status of the feature.
 #[derive(Clone, Copy, Debug)]
 pub enum Status {
+    /// The feature was planned but abandoned.
+    Explanned,
+
+    /// The feature is planned or under construction.
+    Planned,
+
+    /// The feature is open and in use.
+    ///
+    /// This is the default if the status is not explicitly given.
     Open,
+
+    /// The feature is closed but still present.
     Closed,
+
+    /// The feature has been removed.
     Removed,
+
+    /// The feature has been removed a long time ago.
     Gone
 }
 
 impl Status {
-    fn from_symbols(symbols: &SymbolSet) -> Self {
-        if symbols.contains("closed") {
-            Status::Closed
+    fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
+        if symbols.take("exproject") {
+            Some(Status::Explanned)
         }
-        else if symbols.contains("removed") {
-            Status::Removed
+        else if symbols.take("project") {
+            if symbols.take("removed") {
+                Some(Status::Explanned)
+            }
+            else {
+                Some(Status::Planned)
+            }
         }
-        else if symbols.contains("gone") {
-            Status::Gone
+        else if symbols.take("open") {
+            Some(Status::Open)
         }
-        else {
-            Status::Open
-        }
-    }
-
-    fn opt_from_symbols(symbols: &SymbolSet) -> Option<Self> {
-        if symbols.contains("closed") {
+        else if symbols.take("closed") {
             Some(Status::Closed)
         }
-        else if symbols.contains("removed") {
+        else if symbols.take("removed") {
             Some(Status::Removed)
         }
-        else if symbols.contains("gone") || symbols.contains("former") {
+        else if symbols.take("gone") {
             Some(Status::Gone)
-        }
-        else if symbols.contains("open") {
-            Some(Status::Open)
         }
         else {
             None
         }
+    }
+
+    pub fn is_project(self) -> bool {
+        matches!(self, Status::Explanned | Status::Planned)
     }
 
     pub fn layer_offset(self) -> f64 {
@@ -296,192 +313,279 @@ impl Status {
             Status::Closed => -0.0001,
             Status::Removed => -0.0002,
             Status::Gone => -0.0003,
-        }
-    }
-
-    fn standard_color(self) -> Color {
-        match self {
-            Status::Open => BLACK,
-            Status::Closed => DARK_GREY,
-            Status::Removed => MEDIUM_GREY,
-            Status::Gone => LIGHT_GREY
-        }
-    }
-
-    fn label_color(self) -> Option<Color> {
-        match self {
-            Status::Open => None,
-            Status::Closed => Some(DARK_GREY),
-            Status::Removed => Some(DARK_GREY),
-            Status::Gone => Some(MEDIUM_GREY),
-        }
-    }
-
-    fn important_color(self) -> Option<Color> {
-        match self {
-            Status::Open => None,
-            Status::Closed => Some(DARK_GREY),
-            Status::Removed => Some(MEDIUM_GREY),
-            Status::Gone => Some(LIGHT_GREY)
-        }
-    }
-
-    fn tram_color(self) -> Color {
-        match self {
-            Status::Open => BLUE_OPEN,
-            Status::Closed => BLUE_CLOSED,
-            Status::Removed => BLUE_REMOVED,
-            Status::Gone => BLUE_GONE,
+            _ => -0.0004,
         }
     }
 }
 
+impl Default for Status {
+    fn default() -> Self {
+        Status::Open
+    }
+}
 
-//------------ Electrification -----------------------------------------------
 
+//------------ Surface -------------------------------------------------------
+
+/// The surface type the track is laid on.
 #[derive(Clone, Copy, Debug)]
-pub enum Electrification {
-    None,
-    OleAcHigh,
-    OleAcLow,
-    OleDcHigh,
-    OleDcLow,
-    OleUnknown,
-    RailHigh,
-    RailLow,
-    RailUnknown,
+pub enum Surface {
+    /// The track sits on regular ground.
+    ///
+    /// This is the default.
+    Ground,
+
+    /// The track is on a bridge.
+    Bridge,
+
+    /// The track is in a tunnel.
+    Tunnel,
 }
 
-impl Electrification {
-    fn from_symbols(symbols: &SymbolSet) -> Self {
-        if symbols.contains("cat") {
-            if symbols.contains("ac6k6") { // 6600 V AC 25 Hz
-                Electrification::OleAcLow
-            }
-            else if symbols.contains("ac15") {
-                Electrification::OleAcLow
-            }
-            else if symbols.contains("ac25") {
-                Electrification::OleAcHigh
-            }
-            else if symbols.contains("dc30") {
-                Electrification::OleDcHigh
-            }
-            else if symbols.contains("dc15") {
-                Electrification::OleDcLow
-            }
-            else if symbols.contains("dc75") {
-                Electrification::OleDcLow
-            }
-            else if symbols.contains("dc6") {
-                Electrification::OleDcLow
-            }
-            else {
-                Electrification::OleUnknown
+impl Default for Surface {
+    fn default() -> Self {
+        Surface::Ground
+    }
+}
+
+impl Surface {
+    fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
+        if symbols.take("ground") {
+            Some(Surface::Ground)
+        }
+        else if symbols.take("bridge") {
+            Some(Surface::Bridge)
+        }
+        else if symbols.take("tunnel") {
+            Some(Surface::Tunnel)
+        }
+        else {
+            None
+        }
+    }
+}
+
+
+//------------ ElectricCat ---------------------------------------------------
+
+/// The electrification system for overhead line electrification.
+#[derive(Clone, Copy, Debug)]
+pub struct ElectricCat {
+    /// The status of the system.
+    pub status: ElectricStatus,
+
+    /// The nominal voltage of the system.
+    pub voltage: Option<u16>,
+
+    /// The type (?) of current in use.
+    pub system: Option<ElectricSystem>,
+}
+
+impl ElectricCat {
+    fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
+        let mut res = if symbols.take("cat") {
+            ElectricCat {
+                status: ElectricStatus::Open,
+                voltage: None,
+                system: None,
             }
         }
-        else if symbols.contains("rail") {
-            if symbols.contains("dc12") {
-                Electrification::RailHigh
-            }
-            else if symbols.contains("dc75") {
-                Electrification::RailLow
-            }
-            else {
-                Electrification::RailUnknown
+        else if symbols.take("excat") {
+            ElectricCat {
+                status: ElectricStatus::Removed,
+                voltage: None,
+                system: None,
             }
         }
         else {
-            Electrification::None
+            return None
+        };
+        
+        for &(name, voltage, system) in Self::SYSTEMS {
+            if symbols.take(name) {
+                res.voltage = Some(voltage);
+                res.system = Some(system);
+                break
+            }
         }
+        Some(res)
     }
 
-    fn opt_from_symbols(symbols: &SymbolSet) -> Option<Self> {
-        match Self::from_symbols(symbols) {
-            Electrification::None => None,
-            other => Some(other)
-        }
-    }
+    const SYSTEMS: &'static [(&'static str, u16, ElectricSystem)] = &[
+        ("ac6k6", 6600, Ac),
+        ("ac15", 15000, Ac),
+        ("ac25", 25000, Ac),
+        ("dc30", 3000, Dc),
+        ("dc3", 3000, Dc), // XXX Temporary. Fix in data!
+        ("dc15", 1500, Dc),
+        ("dc75", 750, Dc),
+        ("dc7", 700, Dc),
+        ("dc6", 600, Dc),
+    ];
 
-    pub fn layer_offset(self) -> f64 {
-        match self {
-            Electrification::OleAcHigh => -0.00001,
-            Electrification::OleAcLow =>  -0.00002,
-            Electrification::OleDcHigh => -0.00003,
-            Electrification::OleDcLow => -0.00004,
-            Electrification::RailHigh => -0.00005,
-            Electrification::RailLow => -0.00006,
-            Electrification::None => -0.00007,
-            _ => -0.00008,
-        }
-    }
-
-    pub fn is_ole(self) -> bool {
-        matches!(self,
-            Electrification::OleAcHigh | Electrification::OleAcLow
-            | Electrification::OleDcHigh | Electrification::OleDcLow
-        )
-    }
-
-    pub fn is_rail(self) -> bool {
-        matches!(self, Electrification::RailHigh | Electrification::RailLow)
-    }
-
-    fn pax_color(self) -> Color {
-        match self {
-            Electrification::None => DP,
-            Electrification::OleAcHigh => AHP,
-            Electrification::OleAcLow => ALP,
-            Electrification::OleDcHigh => DHP,
-            Electrification::OleDcLow => DLP,
-            Electrification::RailHigh => RHP,
-            Electrification::RailLow => RLP,
-            _ => TOXIC_HIGH, 
-        }
-    }
-
-    fn non_pax_color(self) -> Color {
-        match self {
-            Electrification::None => DG,
-            Electrification::OleAcHigh => AHG,
-            Electrification::OleAcLow => ALG,
-            Electrification::OleDcHigh => DHG,
-            Electrification::OleDcLow => DLG,
-            Electrification::RailHigh => RHG,
-            Electrification::RailLow => RLG,
-            _ => TOXIC_LOW,
+    pub fn voltage_group(self) -> VoltageGroup {
+        let (voltage, system) = match (self.voltage, self.system) {
+            (Some(voltage), Some(system)) => (voltage, system),
+            _ => return VoltageGroup::Unknown
+        };
+        match (system, voltage) {
+            (Ac, voltage) if voltage >= 20000 => VoltageGroup::High,
+            (Ac, _) => VoltageGroup::Low,
+            (Dc, voltage) if voltage >= 1000 => VoltageGroup::High,
+            (Dc, _) => VoltageGroup::Low,
         }
     }
 }
 
-#[cfg(not(feature = "proof"))]
-impl Electrification {
-    fn pax_shade_color(self) -> Color {
-        match self {
-            Electrification::None => YELLOW_HIGH,
-            Electrification::OleAcHigh => PURPLE_HIGH,
-            Electrification::OleAcLow => PINK_HIGH,
-            Electrification::OleDcHigh => RED_HIGH,
-            Electrification::OleDcLow => ORANGE_HIGH,
-            Electrification::RailHigh => CYAN_HIGH,
-            Electrification::RailLow => GREEN_HIGH,
-            _ => TOXIC_HIGH, 
+
+//------------ ElectricRail ---------------------------------------------------
+
+/// The electrification system for third and fourth rail electrification.
+#[derive(Clone, Copy, Debug)]
+pub struct ElectricRail {
+    /// The status of the system.
+    pub status: ElectricStatus,
+
+    /// The nominal voltage of the system.
+    pub voltage: Option<u16>,
+
+    /// Is the system a fourth rail system using two power rails?
+    pub fourth: bool,
+}
+
+impl ElectricRail {
+    fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
+        let mut res = if symbols.take("rail") {
+            ElectricRail {
+                status: ElectricStatus::Open,
+                voltage: None,
+                fourth: false,
+            }
+        }
+        else if symbols.take("exrail") {
+            ElectricRail {
+                status: ElectricStatus::Removed,
+                voltage: None,
+                fourth: false,
+            }
+        }
+        else if symbols.take("rail4") {
+            ElectricRail {
+                status: ElectricStatus::Open,
+                voltage: None,
+                fourth: true,
+            }
+        }
+        else if symbols.take("exrail4") {
+            ElectricRail {
+                status: ElectricStatus::Removed,
+                voltage: None,
+                fourth: true,
+            }
+        }
+        else {
+            return None
+        };
+        
+        for &(name, voltage) in Self::SYSTEMS {
+            if symbols.take(name) {
+                res.voltage = Some(voltage);
+                break
+            }
+        }
+        Some(res)
+    }
+
+    const SYSTEMS: &'static [(&'static str, u16)] = &[
+        ("rc12", 1200),
+        ("rc75", 750),
+    ];
+
+    pub fn voltage_group(self) -> VoltageGroup {
+        match self.voltage {
+            Some(voltage) => {
+                if voltage >= 1000 {
+                    VoltageGroup::High
+                }
+                else {
+                    VoltageGroup::Low
+                }
+            }
+            None => VoltageGroup::Unknown
+        }
+    }
+}
+
+
+//------------ ElectricStatus ------------------------------------------------
+
+/// The status of the feature.
+#[derive(Clone, Copy, Debug)]
+pub enum ElectricStatus {
+    Open,
+    Removed
+}
+
+
+//------------ ElectricSystem ------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+pub enum ElectricSystem {
+    Ac,
+    Dc,
+}
+
+use ElectricSystem::*;
+
+
+//------------ VoltageGroup --------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+pub enum VoltageGroup {
+    Low,
+    High,
+    Unknown
+}
+
+
+//------------ Speed ---------------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+pub enum Speed {
+    V160,
+    V200,
+    V250,
+    V300,
+}
+
+impl Speed {
+    fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
+        if symbols.take("v160") {
+            Some(Speed::V160)
+        }
+        else if symbols.take("v200") {
+            Some(Speed::V200)
+        }
+        else if symbols.take("v250") {
+            Some(Speed::V250)
+        }
+        else if symbols.take("v300") {
+            Some(Speed::V300)
+        }
+        else {
+            None
         }
     }
 
-    fn non_pax_shade_color(self) -> Color {
-        match self {
-            Electrification::None => Color::rgba(0., 0., 0., 0.),
-            Electrification::OleAcHigh => PURPLE_LOW,
-            Electrification::OleAcLow => PINK_LOW,
-            Electrification::OleDcHigh => RED_LOW,
-            Electrification::OleDcLow => ORANGE_LOW,
-            Electrification::RailHigh => CYAN_LOW,
-            Electrification::RailLow => GREEN_LOW,
-            _ => TOXIC_LOW,
-        }
+    pub fn is_hsl(self) -> bool {
+        !matches!(self, Speed::V160)
     }
+}
 
+impl Default for Speed {
+    fn default() -> Self {
+        Speed::V160
+    }
 }
 
 
@@ -489,21 +593,35 @@ impl Electrification {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Pax {
+    /// There is no passenger service.
     None,
-    Limited,
+
+    /// There is heritage passenger service.
+    Heritage,
+
+    /// Passenger service is either seasonal or not all week.
+    Seasonal,
+
+    /// Scheduled, daily passenger service.
     Full,
 }
 
 impl Pax {
-    fn from_symbols(symbols: &SymbolSet) -> Self {
-        if symbols.contains("pax") {
-            Pax::Full
+    fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
+        if symbols.take("nopax") {
+            Some(Pax::None)
         }
-        else if symbols.contains("museum") {
-            Pax::Limited
+        else if symbols.take("pax") {
+            Some(Pax::Full)
+        }
+        else if symbols.take("heritage") || symbols.take("museum") {
+            Some(Pax::Heritage)
+        }
+        else if symbols.take("seasonal") {
+            Some(Pax::Seasonal)
         }
         else {
-            Pax::None
+            None
         }
     }
 
@@ -512,91 +630,114 @@ impl Pax {
     }
 }
 
-
-//------------ Speed ---------------------------------------------------------
-
-#[derive(Clone, Copy, Debug)]
-pub enum Speed {
-    Normal,
-    V200,
-    V250,
-    V300,
+impl Default for Pax {
+    fn default() -> Self {
+        Pax::None
+    }
 }
 
-impl Speed {
-    fn from_symbols(symbols: &SymbolSet) -> Self {
-        if symbols.contains("v200") {
-            Speed::V200
+
+//------------ Gauge ---------------------------------------------------------
+
+/// The track gauge.
+#[derive(Clone, Copy, Debug)]
+pub struct Gauge {
+    /// The main gauge in mm.
+    ///
+    /// If this `None` when finally evaluating, it is actually 1435.
+    main: Option<u16>,
+
+    /// The secondary gauge in mm if present.
+    ///
+    /// This is only present for three or four rail track.
+    secondary: Option<u16>,
+}
+
+impl Gauge {
+    pub fn from_symbols(symbols: &mut SymbolSet) -> Self {
+        // XXX Temporarily accept deprecated symbols.
+        symbols.take("narrow");
+        symbols.take("narrower");
+
+        let mut res = Gauge { main: None, secondary: None };
+        for &(name, gauge) in Self::MAIN_GAUGES {
+            if symbols.take(name) {
+                res.main = Some(gauge);
+                break;
+            }
         }
-        else if symbols.contains("v250") {
-            Speed::V250
+        if res.main.is_none() {
+            return res
         }
-        else if symbols.contains("v300") {
-            Speed::V300
+        for &(name, gauge) in Self::SECONDARY_GAUGES {
+            if symbols.take(name) {
+                res.secondary = Some(gauge);
+                break;
+            }
+        }
+        res
+    }
+
+    const MAIN_GAUGES: &'static [(&'static str, u16)] = &[
+        ("g600", 600),
+        ("g750", 750),
+        ("g785", 785),
+        ("g900", 900),
+        ("g1000", 1000),
+        ("g1435", 1435),
+        ("g1520", 1520),
+        ("g1524", 1524),
+    ];
+
+    const SECONDARY_GAUGES: &'static [(&'static str, u16)] = &[
+        ("gg750", 750),
+        ("gg1000", 1000),
+        ("gg1435", 1435),
+    ];
+
+    pub fn main(self) -> u16 {
+        self.main.unwrap_or(1435)
+    }
+
+    pub fn main_group(self) -> GaugeGroup {
+        if self.main() == 1435 {
+            GaugeGroup::Standard
+        }
+        else if self.main() < 600 {
+            GaugeGroup::Minimum
+        }
+        else if self.main() < 1000 {
+            GaugeGroup::Narrower 
+        }
+        else if self.main() < 1435 {
+            GaugeGroup::Narrow
         }
         else {
-            Speed::Normal
+            GaugeGroup::Broad
         }
     }
 
-    pub fn is_hsl(self) -> bool {
-        !matches!(self, Speed::Normal)
+    pub fn secondary(self) -> Option<u16> {
+        self.secondary
     }
 }
 
 
-//------------ The Color Palette ---------------------------------------------
-//
-// Currently, we use eight distinct colors, each in a ‘high’ and ‘low’
-// variant. Plus three greys.
+//------------ GaugeGroup ----------------------------------------------------
 
-const AHP: Color = Color::rgb(0.588, 0.075, 0.851); // purple
-const AHG: Color = Color::rgb(0.525, 0.279, 0.647);
-const ALP: Color = Color::rgb(0.855, 0.071, 0.071); // red
-const ALG: Color = Color::rgb(0.659, 0.259, 0.259);
-const DHP: Color = Color::rgb(0.145, 0.600, 0.055); // green
-const DHG: Color = Color::rgb(0.392, 0.569, 0.357);
-const DLP: Color = Color::rgb(0.510, 0.600, 0.051); // olive
-const DLG: Color = Color::rgb(0.553, 0.600, 0.349);
-const RHP: Color = Color::rgb(0.059, 0.729, 0.663);
-const RHG: Color = Color::rgb(0.235, 0.545, 0.514);
-const RLP: Color = RHP;
-const RLG: Color = RHG;
-const DP: Color = Color::rgb(0.643, 0.443, 0.027);
-const DG: Color = Color::rgb(0.608, 0.514, 0.329);
+#[derive(Clone, Copy, Debug)]
+pub enum GaugeGroup {
+    Minimum,
+    Narrower,
+    Narrow,
+    Standard,
+    Broad,
+}
 
-/*
-const RED_HIGH: Color = Color::rgb(0.855, 0.071, 0.071);
-const RED_LOW:  Color = Color::rgb(0.659, 0.259, 0.259);
-const ORANGE_HIGH: Color = Color::rgb(0.926, 0.668, 0.156);
-const ORANGE_LOW: Color = Color::rgb(0.644, 0.445, 0.055);
-const YELLOW_HIGH: Color = Color::rgb(0.647, 0.447, 0.055);
-//const YELLOW_LOW: Color = Color::rgb(0.424, 0.294, 0.035);
-//const GREEN_HIGH: Color = Color::rgb(0.063, 0.737, 0.063);
-const GREEN_HIGH: Color = Color::rgb(0.055, 0.645, 0.055);
-const GREEN_LOW: Color = Color::rgb(0.035, 0.424, 0.035);
-//const CYAN_HIGH: Color = Color::rgb(0.071, 0.835, 0.706);
-const CYAN_HIGH: Color = Color::rgb(0.055, 0.644, 0.547);
-const CYAN_LOW: Color = Color::rgb(0.035, 0.424, 0.361);
-//const BLUE_HIGH: Color = Color::rgb(0.156, 0.156, 0.926);
-//const BLUE_LOW: Color = Color::rgb(0.055, 0.055, 0.645);
-const PURPLE_HIGH: Color = Color::rgb(0.668, 0.156, 0.926);
-const PURPLE_LOW: Color = Color::rgb(0.445, 0.055, 0.645);
-const PINK_HIGH: Color = Color::rgb(0.926, 0.156, 0.668);
-const PINK_LOW: Color = Color::rgb(0.645, 0.055, 0.445);
-*/
+impl GaugeGroup {
+    /// Returns whether the group is standard.
+    pub fn is_standard(self) -> bool {
+        matches!(self, GaugeGroup::Standard)
+    }
+}
 
-const TOXIC_HIGH: Color = Color::rgb(0.824, 0.824, 0.0);
-const TOXIC_LOW: Color = Color::rgb(0.824, 0.824, 0.0);
-
-//const WHITE: Color = Color::grey(1.);
-const BLACK: Color = Color::grey(0.109);
-
-const DARK_GREY:   Color = Color::grey(0.600);
-const MEDIUM_GREY: Color = Color::grey(0.700);
-const LIGHT_GREY:  Color = Color::grey(0.850);
-
-const BLUE_OPEN: Color = Color::rgb(0.109, 0.387, 0.668); // #1C63AB
-const BLUE_CLOSED: Color = Color::rgb(0.367, 0.555, 0.723); // # 5E8EB9
-const BLUE_REMOVED: Color = Color::rgb(0.559, 0.686, 0.816); // #8FB0D1
-const BLUE_GONE: Color = Color::rgb(0.742, 0.820, 0.890); // #BED2E4

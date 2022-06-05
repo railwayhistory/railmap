@@ -1,7 +1,7 @@
-use std::ops;
+use std::{iter, ops};
 use std::cmp::Ordering;
 use std::convert::TryInto;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::str::FromStr;
 use crate::features::{
     Color,
@@ -13,6 +13,7 @@ use crate::import::path::{ImportPath, PathSet};
 use crate::library::units;
 use crate::library::{Function, LayoutBuilder, Procedure};
 use super::ast;
+use super::ast::ShortString;
 
 
 //------------ Scope ---------------------------------------------------------
@@ -20,7 +21,7 @@ use super::ast;
 #[derive(Clone, Debug)]
 pub struct Scope<'a> {
     paths: &'a PathSet,
-    variables: HashMap<String, ExprVal>,
+    variables: HashMap<ShortString, ExprVal>,
     params: RenderParams,
 }
 
@@ -37,7 +38,7 @@ impl<'a> Scope<'a> {
         &self.paths
     }
 
-    pub fn set_var(&mut self, ident: String, value: ExprVal) {
+    pub fn set_var(&mut self, ident: ShortString, value: ExprVal) {
         self.variables.insert(ident.clone(), value);
     }
 
@@ -61,7 +62,7 @@ impl<'a> Scope<'a> {
 pub struct RenderParams {
     detail: Option<(u8, u8)>,
     layer: f64,
-    style: Option<String>,
+    style: Option<ShortString>,
 }
 
 impl RenderParams {
@@ -168,7 +169,7 @@ impl RenderParams {
     }
 
     pub fn style(&self) -> Option<&str> {
-        self.style.as_ref().map(String::as_str)
+        self.style.as_ref().map(ShortString::as_str)
     }
 }
 
@@ -178,7 +179,7 @@ impl RenderParams {
 /// An expression that has been evaluated for the current scope.
 ///
 /// The variants are the concrete types that we have.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Expression {
     pub value: ExprVal,
     pub pos: ast::Pos
@@ -285,7 +286,7 @@ impl Expression {
 
     pub fn into_symbol(
         self, err: &mut Error
-    ) -> Result<(String, ast::Pos), Failed> {
+    ) -> Result<(ShortString, ast::Pos), Failed> {
         match self.value {
             ExprVal::SymbolSet(set) => {
                 if set.len() != 1 {
@@ -336,6 +337,7 @@ impl Expression {
 /// This has a shorthand name because we are going to type it a lot.
 #[derive(Clone, Debug)]
 pub enum ExprVal {
+    Null,
     Color(Color),
     Distance(Distance),
     ImportPath(usize),
@@ -348,6 +350,12 @@ pub enum ExprVal {
     SymbolSet(SymbolSet),
     Text(String),
     Vector((Distance, Distance)),
+}
+
+impl Default for ExprVal {
+    fn default() -> Self {
+        ExprVal::Null
+    }
 }
 
 impl From<LayoutBuilder> for ExprVal {
@@ -479,9 +487,63 @@ impl Partial {
 //------------ SymbolSet -----------------------------------------------------
 
 /// A set of symbols.
-//
-//  XXX This should probably be moved.
-pub type SymbolSet = HashSet<String>;
+#[derive(Clone, Debug, Default)]
+pub struct SymbolSet {
+    set: HashMap<ShortString, Option<ast::Pos>>,
+}
+
+impl SymbolSet {
+    pub fn insert(&mut self, symbol: impl Into<ShortString>) -> bool {
+        // XXX This inserts the symbol as used.
+        self.set.insert(symbol.into(), None).is_none()
+    }
+
+    pub fn contains(&self, symbol: impl AsRef<str>) -> bool {
+        self.set.contains_key(symbol.as_ref())
+    }
+
+    pub fn take(&mut self, symbol: impl AsRef<str>) -> bool {
+        match self.set.get_mut(symbol.as_ref()) {
+            Some(item) => {
+                *item = None;
+                true
+            }
+            None => false
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.set.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.set.is_empty()
+    }
+
+    pub fn check_exhausted(&self, err: &mut Error) -> Result<(), Failed> {
+        for (key, &value) in &self.set {
+            if let Some(pos) = value {
+                err.add(pos, format!("unexpected symbol ':{}'", key));
+                return Err(Failed)
+            }
+        }
+        Ok(())
+    }
+
+    pub fn into_iter(self) -> impl Iterator<Item = ShortString> {
+        self.set.into_iter().map(|item| item.0)
+    }
+}
+
+impl iter::FromIterator<ast::Symbol> for SymbolSet {
+    fn from_iter<T: IntoIterator<Item = ast::Symbol>>(iter: T) -> Self {
+        SymbolSet {
+            set: HashMap::from_iter(iter.into_iter().map(|item| {
+                (item.ident.ident, Some(item.pos))
+            }))
+        }
+    }
+}
 
 
 //------------ ArgumentList --------------------------------------------------
@@ -522,7 +584,7 @@ impl ArgumentList {
         &self.positional
     }
 
-    pub fn into_positionals(
+    pub fn into_var_positionals(
         self,
         err: &mut Error,
         test: impl FnOnce(&Self, &mut Error) -> Result<bool, Failed>
@@ -540,6 +602,35 @@ impl ArgumentList {
         }
     }
 
+    pub fn into_positionals<const N: usize>(
+        self, err: &mut Error
+    ) -> Result<[Expression; N], Failed>
+    where [Expression; N]: Default {
+        if !self.keyword.is_empty() {
+            err.add(self.pos, "expected positional arguments only");
+            return Err(Failed)
+        }
+        if self.positional.len() != N {
+            err.add(
+                self.pos(),
+                format!("expected exactly {} positional arguments", N)
+            );
+            return Err(Failed)
+        }
+
+        // XXX This could be more efficient unsing MaybeUninit but
+        //     mem::transmute doesn’t seem to like const generics just yet.
+        //     Or I am doing something wrong.
+
+        let mut res: [Expression; N] = Default::default();
+
+        for (pos, src) in self.positional.into_iter().enumerate() {
+            res[pos] = src;
+        }
+
+        Ok(res)
+    }
+
     /// Returns exactly n positional arguments.
     ///
     /// Fails if there are keyword arguments or more than n positional
@@ -548,7 +639,7 @@ impl ArgumentList {
     pub fn into_n_positionals(
         self, n: usize, err: &mut Error
     ) -> Result<Vec<Expression>, Result<ArgumentList, Failed>> {
-        self.into_positionals(err, |args, err| {
+        self.into_var_positionals(err, |args, err| {
             match n.cmp(&args.positional().len()) {
                 Ordering::Greater => Ok(false),
                 Ordering::Equal => Ok(true),
@@ -1302,7 +1393,7 @@ impl ast::UnitNumber {
 }
 
 impl ast::Identifier {
-    fn eval(self) -> String {
+    fn eval(self) -> ShortString {
         self.ident
     }
 }

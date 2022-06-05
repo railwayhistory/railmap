@@ -1,7 +1,8 @@
 //! Rendering of borders.
 
 use crate::canvas::Canvas;
-use crate::import::eval::SymbolSet;
+use crate::import::Failed;
+use crate::import::{ast, eval};
 use crate::features::color::Color;
 use crate::features::contour::RenderContour;
 use crate::features::path::Path;
@@ -64,11 +65,15 @@ pub struct BorderContour {
 }
 
 impl BorderContour {
-    pub fn new(symbols: SymbolSet) -> Self {
-        BorderContour {
-            category: Category::from_symbols(&symbols),
-            former: symbols.contains("former"),
-        }
+    pub fn from_arg(
+        arg: eval::Expression,
+        err: &mut eval::Error,
+    ) -> Result<Self, Failed> {
+        let (mut symbols, pos) = arg.into_symbol_set(err)?;
+        let category = Category::from_symbols(&mut symbols, pos, err)?;
+        let former = symbols.take("former");
+        symbols.check_exhausted(err)?;
+        Ok(BorderContour { category, former })
     }
 }
 
@@ -130,10 +135,21 @@ enum Category {
 }
 
 impl Category {
-    fn from_symbols(symbols: &SymbolSet) -> Self {
-        if symbols.contains("national") { Category::National }
-        else if symbols.contains("state") { Category::State }
-        else { Category::National }
+    fn from_symbols(
+        symbols: &mut eval::SymbolSet,
+        pos: ast::Pos,
+        err: &mut eval::Error
+    ) -> Result<Self, Failed> {
+        if symbols.take("national") {
+            Ok(Category::National)
+        }
+        else if symbols.take("state") {
+            Ok(Category::State)
+        }
+        else {
+            err.add(pos, "missing border category");
+            Err(Failed)
+        }
     }
 
     fn apply_casing_width_high(self, canvas: &Canvas) {

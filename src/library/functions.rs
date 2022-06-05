@@ -4,10 +4,8 @@ use crate::features::Color;
 use crate::features::path::Distance;
 use crate::import::Failed;
 use crate::import::eval;
-use crate::import::eval::{ExprVal, SymbolSet};
-use super::label;
-use super::colors::Style;
-use super::fonts::font_from_symbols;
+use crate::import::eval::ExprVal;
+use super::feature::label;
 
 
 /// All known functions.
@@ -49,8 +47,8 @@ const FUNCTIONS: &[(
     //     alignment, layout *[, layout]
     // )
     // ```
-    ("hbox", &|args, scope, err| {
-        let args = args.into_positionals(err, |args, _| {
+    ("hbox", &|args, _scope, err| {
+        let args = args.into_var_positionals(err, |args, _| {
             if args.positional().len() < 2 {
                 Ok(false)
             }
@@ -60,29 +58,25 @@ const FUNCTIONS: &[(
         })?;
         let mut args = args.into_iter();
 
-        let (align, pos) = args.next().unwrap().into_symbol_set(err)?;
+        let (mut align, pos) = args.next().unwrap().into_symbol_set(err)?;
         let halign = label::Align::h_from_symbols(
-            &align
+            &mut align
         ).unwrap_or(label::Align::Start);
-        let valign = match label::Align::v_from_symbols(&align) {
+        let valign = match label::Align::v_from_symbols(&mut align) {
             Some(align) => align,
             None => {
                 err.add(pos, "vertical alignment required");
                 return Err(Err(Failed))
             }
         };
+        let properties = label::PropertiesBuilder::from_symbols(&mut align);
+        align.check_exhausted(err)?;
         let mut lines = label::StackBuilder::new();
         for expr in args {
             lines.push(expr.into_layout(err)?.0);
         }
         Ok(label::LayoutBuilder::hbox(
-            halign,
-            valign,
-            properties_from_symbols(
-                &align,
-                Style::from_name(scope.params().style()),
-            ),
-            lines,
+            halign, valign, properties, lines,
         ).into())
     }),
 
@@ -170,17 +164,11 @@ const FUNCTIONS: &[(
     // ```text
     // span(font: symbol-set, text)
     // ```
-    ("span", &|args, scope, err| {
-        let mut args = args.into_n_positionals(2, err)?.into_iter();
-        let font = args.next().unwrap().into_symbol_set(err);
-        let text = args.next().unwrap().into_text(err)?.0;
-        Ok(label::LayoutBuilder::span(
-            text,
-            properties_from_symbols(
-                &font?.0,
-                Style::from_name(scope.params().style()),
-            ),
-        ).into())
+    ("span", &|args, _scope, err| {
+        let [properties, text] = args.into_positionals(err)?;
+        let properties = label::PropertiesBuilder::from_arg(properties, err)?;
+        let text = text.into_text(err)?.0;
+        Ok(label::LayoutBuilder::span(text, properties).into())
     }),
 
     // Produces a vertical box for a label layout.
@@ -190,8 +178,8 @@ const FUNCTIONS: &[(
     //     alignment, layout *[, layout]
     // )
     // ```
-    ("vbox", &|args, scope, err| {
-        let args = args.into_positionals(err, |args, _| {
+    ("vbox", &|args, _scope, err| {
+        let args = args.into_var_positionals(err, |args, _| {
             if args.positional().len() < 2 {
                 Ok(false)
             }
@@ -201,8 +189,8 @@ const FUNCTIONS: &[(
         })?;
         let mut args = args.into_iter();
 
-        let (align, pos) = args.next().unwrap().into_symbol_set(err)?;
-        let halign = match label::Align::h_from_symbols(&align) {
+        let (mut align, pos) = args.next().unwrap().into_symbol_set(err)?;
+        let halign = match label::Align::h_from_symbols(&mut align) {
             Some(align) => align,
             None => {
                 err.add(pos, "horizonal alignment required");
@@ -210,41 +198,20 @@ const FUNCTIONS: &[(
             }
         };
         let valign = label::Align::v_from_symbols(
-            &align
+            &mut align
         ).unwrap_or(label::Align::Start);
-
+        let properties = label::PropertiesBuilder::from_symbols(&mut align);
+        align.check_exhausted(err)?;
         let mut lines = label::StackBuilder::new();
         for expr in args {
             lines.push(expr.into_layout(err)?.0);
         }
         Ok(label::LayoutBuilder::vbox(
-            halign,
-            valign,
-            properties_from_symbols(
-                &align,
-                Style::from_name(scope.params().style()),
-            ),
+            halign, valign, properties,
             lines,
         ).into())
     }),
 ];
-
-
-//------------ Helpers -------------------------------------------------------
-
-fn properties_from_symbols(
-    symbols: &SymbolSet, style: &'static Style
-) -> label::PropertiesBuilder {
-    let mut res = label::PropertiesBuilder::from(
-        font_from_symbols(symbols, style)
-    );
-    if symbols.contains("frosted") {
-        res.set_background(
-            label::Background::Fill(Color::rgba(1., 1., 1., 0.5))
-        );
-    }
-    res
-}
 
 
 //------------ Function ------------------------------------------------------

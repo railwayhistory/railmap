@@ -4,7 +4,7 @@
 //! tree is then implemented on the structures defined here in the *eval*
 //! module.
 
-use std::{borrow, fmt, hash, str};
+use std::{borrow, cmp, fmt, hash, ops, str};
 use std::convert::TryFrom;
 use nom::IResult;
 use nom::branch::alt;
@@ -17,6 +17,7 @@ use nom::error::{Error as NomError, ErrorKind};
 use nom::multi::{fold_many0, fold_many1, many0, many1, separated_list0};
 use nom::number::complete::recognize_float;
 use nom::sequence::{preceded, terminated, tuple};
+use smallvec::SmallVec;
 
 type Span<'a> = nom_locate::LocatedSpan<&'a str>;
 
@@ -835,7 +836,7 @@ impl Atom {
 #[derive(Clone, Debug)]
 pub struct Number {
     /// The string representation of the number.
-    pub value: String,
+    pub value: ShortString,
 
     /// The position the number started at.
     pub pos: Pos,
@@ -877,8 +878,8 @@ impl Symbol {
     }
 }
 
-impl From<Symbol> for String {
-    fn from(sym: Symbol) -> String {
+impl From<Symbol> for ShortString {
+    fn from(sym: Symbol) -> ShortString {
         sym.ident.ident
     }
 }
@@ -1102,7 +1103,7 @@ impl UnitNumber {
 #[derive(Clone, Debug)]
 pub struct Identifier {
     /// The actual identifier.
-    pub ident: String,
+    pub ident: ShortString,
 
     /// The start of the identifier in the source.
     pub pos: Pos,
@@ -1243,6 +1244,99 @@ impl Connector {
 }
 
 
+//------------ ShortString ---------------------------------------------------
+
+#[derive(Clone)]
+pub struct ShortString {
+    bytes: SmallVec<[u8; 24]>,
+}
+
+impl ShortString {
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    pub fn as_str(&self) -> &str {
+        unsafe { str::from_utf8_unchecked(&self.bytes) }
+    }
+}
+
+impl<'a> From<&'a str> for ShortString {
+    fn from(src: &'a str) -> ShortString {
+        ShortString { bytes: SmallVec::from_slice(src.as_bytes()) }
+    }
+}
+
+impl ops::Deref for ShortString {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl AsRef<str> for ShortString {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl AsRef<[u8]> for ShortString {
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+
+impl borrow::Borrow<str> for ShortString {
+    fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl borrow::Borrow<[u8]> for ShortString {
+    fn borrow(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+
+impl<T: AsRef<str>> PartialEq<T> for ShortString {
+    fn eq(&self, other: &T) -> bool {
+        self.as_str().eq(other.as_ref())
+    }
+}
+
+impl Eq for ShortString { }
+
+impl<T: AsRef<str>> PartialOrd<T> for ShortString {
+    fn partial_cmp(&self, other: &T) -> Option<cmp::Ordering> {
+        self.as_str().partial_cmp(other.as_ref())
+    }
+}
+
+impl Ord for ShortString {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.as_str().cmp(other.as_str())
+    }
+}
+
+impl hash::Hash for ShortString {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.as_str().hash(state)
+    }
+}
+
+impl fmt::Display for ShortString {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl fmt::Debug for ShortString {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self.as_str(), f)
+    }
+}
+
 
 //============ Separators ====================================================
 //
@@ -1297,7 +1391,7 @@ fn comment(input: Span) -> IResult<Span, ()> {
 //------------ Pos -----------------------------------------------------------
 
 /// The position of an item within input.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Pos {
     pub offset: usize,
     pub line: u32,

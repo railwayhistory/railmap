@@ -5,7 +5,10 @@ use std::ops::MulAssign;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use crate::features::color::Color;
-use crate::library::class::{Class, Electrification, Pax, Status};
+use crate::library::class::{
+    Category, Class, ElectricStatus, ElectricSystem, Pax, Status,
+    VoltageGroup
+};
 use super::units;
 
 //------------ StyleId -------------------------------------------------------
@@ -98,11 +101,15 @@ impl Style {
         self.dimensions
     }
 
-    fn palette(self) -> Palette {
+    fn palette(&self) -> Palette {
         match self.id {
             StyleId::Overview(pal) => pal,
             StyleId::Detail(pal) => pal
         }
+    }
+
+    pub fn include_line_labels(&self) -> bool {
+        true
     }
 }
 
@@ -111,27 +118,32 @@ impl Style {
 //
 impl Style {
     /// Returns the color for a piece of track.
-    pub fn track_color(self, class: Class) -> Color {
+    pub fn track_color(&self, class: &Class) -> Color {
         self.palette().track_color(class)
     }
 
+    /// Returns the color for cat markings if they should be drawn.
+    pub fn cat_color(&self, class: &Class) -> Option<Color> {
+        self.palette().cat_color(class)
+    }
+
+    /// Returns the color for third rail markings if they should be drawn.
+    pub fn rail_color(&self, class: &Class) -> Option<Color> {
+        self.palette().rail_color(class)
+    }
+
     /// Returns the color for track glow.
-    pub fn glow_color(self, class: Class) -> Color {
+    pub fn glow_color(&self, class: &Class) -> Color {
         self.palette().glow_color(class)
     }
 
     /// Returns the color for a station label.
-    pub fn station_label_color(self, class: Class) -> Color {
-        self.palette().station_label_color(class)
-    }
-
-    /// Returns the color for a line label.
-    pub fn line_label_color(self, class: Class) -> Color {
-        self.palette().line_label_color(class)
+    pub fn label_color(&self, class: &Class) -> Color {
+        self.palette().label_color(class)
     }
 
     /// Returns the primary color for a marker.
-    pub fn primary_marker_color(self, class: Class) -> Color {
+    pub fn primary_marker_color(&self, class: &Class) -> Color {
         self.palette().primary_marker_color(class)
     }
 }
@@ -230,7 +242,7 @@ impl Dimensions {
         seg: 5.0 * units::DT,
         dt: units::DT,
         mark: 0.6 *  units::DT,
-        tight_mark: 0.4 * units::DT,
+        tight_mark: 0.55 * units::DT,
         sw: units::SSW,
         sh: 0.96 * units::SSW,
         ksw: units::SSW,
@@ -251,11 +263,20 @@ impl Dimensions {
         sh: units::SH,
         ksw: 0.8 * units::SW,
         ksh: 0.8 * units::SH,
-        ds: units::SH,
+        ds: 0.05 * units::SH,
         sp: 0.8,
         bp: 0.6,
         .. Self::D3
     };
+
+    pub fn mark(&self, tight: bool) -> f64 {
+        if tight {
+            self.tight_mark
+        }
+        else {
+            self.mark
+        }
+    }
 }
 
 impl MulAssign<f64> for  Dimensions {
@@ -297,27 +318,32 @@ pub enum Palette {
 
 impl Palette {
     /// Returns the color for a piece of track.
-    pub fn track_color(self, class: Class) -> Color {
+    pub fn track_color(self, class: &Class) -> Color {
         COLORS.track.color(self, class)
     }
 
+    /// Returns the color for cat markings if they should be drawn.
+    pub fn cat_color(self, class: &Class) -> Option<Color> {
+        COLORS.track.cat_color(self, class)
+    }
+
+    /// Returns the color for third rail markings if they should be drawn.
+    pub fn rail_color(self, class: &Class) -> Option<Color> {
+        COLORS.track.rail_color(self, class)
+    }
+
     /// Returns the color for track glow.
-    pub fn glow_color(self, class: Class) -> Color {
+    pub fn glow_color(self, class: &Class) -> Color {
         COLORS.glow.color(self, class)
     }
 
     /// Returns the color for a station label.
-    pub fn station_label_color(self, class: Class) -> Color {
-        COLORS.station_label.color(self, class)
-    }
-
-    /// Returns the color for a line label.
-    pub fn line_label_color(self, class: Class) -> Color {
-        COLORS.line_label.color(self, class)
+    pub fn label_color(self, class: &Class) -> Color {
+        COLORS.label.color(self, class)
     }
 
     /// Returns the primary color for a marker.
-    pub fn primary_marker_color(self, class: Class) -> Color {
+    pub fn primary_marker_color(self, class: &Class) -> Color {
         COLORS.marker.color(self, class)
     }
 }
@@ -362,7 +388,7 @@ pub struct ColorSet {
 }
 
 impl ColorSet {
-    fn color(&self, palette: Palette, class: Class) -> Color {
+    fn color(&self, palette: Palette, class: &Class) -> Color {
         match palette {
             Palette::Pax => self.pax_color(class),
             Palette::El => self.el_color(class),
@@ -370,61 +396,162 @@ impl ColorSet {
         }
     }
 
-    fn el_color(&self, class: Class) -> Color {
-        use Electrification::*;
-
-        if let Some(color) = self.common_color(class) {
-            return color
-        }
-        match (class.electrification(), class.pax().is_full()) {
-            (None, true) => self.el_none_pax,
-            (None, false) => self.el_none,
-            (OleAcHigh, true) => self.el_ole_ac_high_pax,
-            (OleAcHigh, false) => self.el_ole_ac_high,
-            (OleAcLow, true) => self.el_ole_ac_low_pax,
-            (OleAcLow, false) => self.el_ole_ac_low,
-            (OleDcHigh, true) => self.el_ole_dc_high_pax,
-            (OleDcHigh, false) => self.el_ole_dc_high,
-            (OleDcLow, true) => self.el_ole_dc_low_pax,
-            (OleDcLow, false) => self.el_ole_dc_low,
-            (RailHigh, true) => self.el_rail_high_pax,
-            (RailHigh, false) => self.el_rail_high,
-            (RailLow, true) => self.el_rail_low_pax,
-            (RailLow, false) => self.el_rail_low,
-            (RailUnknown | OleUnknown, _) => self.toxic,
+    fn cat_color(&self, palette: Palette, class: &Class) -> Option<Color> {
+        match palette {
+            Palette::Pax => self.pax_cat_color(class),
+            Palette::El => self.el_cat_color(class),
+            Palette::Proof => self.proof_cat_color(class),
         }
     }
 
-    fn pax_color(&self, class: Class) -> Color {
+    fn rail_color(&self, palette: Palette, class: &Class) -> Option<Color> {
+        match palette {
+            Palette::Pax => self.pax_rail_color(class),
+            Palette::El => self.el_rail_color(class),
+            Palette::Proof => self.proof_rail_color(class),
+        }
+    }
+
+    fn el_color(&self, class: &Class) -> Color {
+        use VoltageGroup::*;
+        use ElectricSystem::*;
+
+        if let Some(color) = self.common_color(class) {
+            color
+        }
+        else if let Some(cat) = class.cat() {
+            match (cat.system, cat.voltage_group(), class.pax().is_full()) {
+                (Some(Ac), High, true) => self.el_ole_ac_high_pax,
+                (Some(Ac), High, false) => self.el_ole_ac_high,
+                (Some(Ac), Low, true) => self.el_ole_ac_low_pax,
+                (Some(Ac), Low, false) => self.el_ole_ac_low,
+                (Some(Dc), High, true) => self.el_ole_dc_high_pax,
+                (Some(Dc), High, false) => self.el_ole_dc_high,
+                (Some(Dc), Low, true) => self.el_ole_dc_low_pax,
+                (Some(Dc), Low, false) => self.el_ole_dc_low,
+                _ => self.toxic,
+            }
+        }
+        else if let Some(rail) = class.rail() {
+            match (rail.voltage_group(), class.pax().is_full()) {
+                (High, true) => self.el_rail_high_pax,
+                (High, false) => self.el_rail_high,
+                (Low, true) => self.el_rail_low_pax,
+                (Low, false) => self.el_rail_low,
+                _ => self.toxic,
+            }
+        }
+        else {
+            if class.pax().is_full() {
+                self.el_none_pax
+            }
+            else {
+                self.el_none
+            }
+        }
+    }
+
+    fn pax_color(&self, class: &Class) -> Color {
         if let Some(color) = self.common_color(class) {
             return color
         }
         match class.pax() {
             Pax::None => self.pax_none,
-            Pax::Limited => self.pax_ltd,
             Pax::Full => {
                 if class.speed().is_hsl() {
                     self.pax_full_hsl
                 }
-                else if class.electrification().is_ole() {
+                else if class.has_active_cat() {
                     self.pax_full_ole
                 }
-                else if class.electrification().is_rail() {
+                else if class.has_active_rail() {
                     self.pax_full_rail
                 }
                 else {
                     self.pax_full
                 }
             }
+            _ => self.pax_ltd,
         }
 
     }
 
-    fn proof_color(&self, class: Class) -> Color {
+    fn proof_color(&self, class: &Class) -> Color {
         self.el_color(class)
     }
 
-    fn common_color(&self, class: Class) -> Option<Color> {
+    fn el_cat_color(&self, class: &Class) -> Option<Color> {
+        use VoltageGroup::*;
+        use ElectricSystem::*;
+
+        class.cat().map(|cat| {
+            match cat.status {
+                ElectricStatus::Open => {
+                    match (
+                        cat.system, cat.voltage_group(), class.pax().is_full()
+                    ) {
+                        (Some(Ac), High, true) => self.el_ole_ac_high_pax,
+                        (Some(Ac), High, false) => self.el_ole_ac_high,
+                        (Some(Ac), Low, true) => self.el_ole_ac_low_pax,
+                        (Some(Ac), Low, false) => self.el_ole_ac_low,
+                        (Some(Dc), High, true) => self.el_ole_dc_high_pax,
+                        (Some(Dc), High, false) => self.el_ole_dc_high,
+                        (Some(Dc), Low, true) => self.el_ole_dc_low_pax,
+                        (Some(Dc), Low, false) => self.el_ole_dc_low,
+                        _ => self.toxic,
+                    }
+                }
+                ElectricStatus::Removed => self.removed,
+            }
+        })
+    }
+
+    fn pax_cat_color(&self, class: &Class) -> Option<Color> {
+        class.cat().map(|cat| {
+            match cat.status {
+                ElectricStatus::Open => self.pax_color(class),
+                ElectricStatus::Removed => self.removed,
+            }
+        })
+    }
+
+    fn proof_cat_color(&self, class: &Class) -> Option<Color> {
+        self.el_cat_color(class)
+    }
+
+    fn el_rail_color(&self, class: &Class) -> Option<Color> {
+        use VoltageGroup::*;
+
+        class.rail().map(|rail| {
+            match rail.status {
+                ElectricStatus::Open => {
+                    match (rail.voltage_group(), class.pax().is_full()) {
+                        (High, true) => self.el_rail_high_pax,
+                        (High, false) => self.el_rail_high,
+                        (Low, true) => self.el_rail_low_pax,
+                        (Low, false) => self.el_rail_low,
+                        _ => self.toxic,
+                    }
+                }
+                ElectricStatus::Removed => self.removed,
+            }
+        })
+    }
+
+    fn pax_rail_color(&self, class: &Class) -> Option<Color> {
+        class.rail().map(|rail| {
+            match rail.status {
+                ElectricStatus::Open => self.pax_color(class),
+                ElectricStatus::Removed => self.removed,
+            }
+        })
+    }
+
+    fn proof_rail_color(&self, class: &Class) -> Option<Color> {
+        self.el_rail_color(class)
+    }
+
+    fn common_color(&self, class: &Class) -> Option<Color> {
         if let Some(color) = self.tram_color(class) {
             return Some(color)
         }
@@ -434,24 +561,24 @@ impl ColorSet {
         None
     }
 
-    fn tram_color(&self, class: Class) -> Option<Color> {
-        if !class.tram() {
+    fn tram_color(&self, class: &Class) -> Option<Color> {
+        if !matches!(class.category(), Category::Tram) {
             return None
         }
 
         match class.status() {
-            Status::Open => Some(self.tram),
+            Status::Open | Status::Planned => Some(self.tram),
             Status::Closed => Some(self.tram_closed),
-            Status::Removed => Some(self.tram_removed),
+            Status::Removed | Status::Explanned => Some(self.tram_removed),
             Status::Gone => Some(self.tram_gone),
         }
     }
 
     fn ex_color(&self, status: Status) -> Option<Color> {
         match status {
-            Status::Open => None,
+            Status::Open | Status::Planned => None,
             Status::Closed => Some(self.closed),
-            Status::Removed => Some(self.removed),
+            Status::Removed | Status::Explanned => Some(self.removed),
             Status::Gone => Some(self.gone),
         }
     }
@@ -464,8 +591,7 @@ impl ColorSet {
 struct ColorSetSet {
     track: ColorSet,
     glow: ColorSet,
-    station_label: ColorSet,
-    line_label: ColorSet,
+    label: ColorSet,
     marker: ColorSet,
 }
 
@@ -510,8 +636,7 @@ lazy_static! {
         ColorSetSet {
             track: base.clone(),
             glow: base.clone(),
-            station_label: base.clone(),
-            line_label: base.clone(),
+            label: base.clone(),
             marker: base,
         }
     };
@@ -521,3 +646,4 @@ lazy_static! {
 //------------ InvalidStyle --------------------------------------------------
 
 pub struct InvalidStyle;
+

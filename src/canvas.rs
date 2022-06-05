@@ -1,11 +1,12 @@
 /// What we are drawing on.
 use std::ops;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::convert::TryInto;
 use kurbo::{
     BezPath, PathEl, ParamCurve, ParamCurveArclen, PathSeg, Point, Rect,
     TranslateScale, Vec2
 };
-use crate::import::eval::SymbolSet;
 use crate::features::path::{CANVAS_ACCURACY, SegTime};
 use crate::library::Style;
 
@@ -24,10 +25,10 @@ const BOUNDS_CORRECTION: f64 = 0.3;
 /// The virtual surface to draw the map on.
 ///
 /// The type not only provides means for actual drawing, it also provides
-/// access to it dimensions, resolution, and map projection.
+/// access to its dimensions, resolution, and map projection.
 ///
-/// Drawing is currently done directly via deref-ing to a cairo context for
-/// now. This, however, may change later, so this should probably be done at
+/// Drawing is currently done directly via deref-ing to a cairo context.
+/// This, however, may change later, so this should probably be done at
 /// as few places as possible.
 ///
 /// The canvas keeps its bounding box in storage coordinates for selecting
@@ -68,7 +69,7 @@ pub struct Canvas {
     style: Style,
 
     /// The font table.
-    fonts: FontTable,
+    fonts: RefCell<FontTable>,
 }
 
 impl Canvas {
@@ -122,7 +123,7 @@ impl Canvas {
             equator_scale: scale,
             canvas_bp,
             style,
-            fonts: FontTable::new(),
+            fonts: RefCell::new(FontTable::new()),
         }
     }
 
@@ -191,7 +192,7 @@ impl Canvas {
     }
 
     pub fn apply_font(&self, face: FontFace, size: f64) {
-        self.set_font_face(&self.fonts.font_faces[face.0]);
+        self.context.set_font_face(self.fonts.borrow_mut().get(face));
         self.set_font_size(size * self.canvas_bp());
     }
 
@@ -422,61 +423,100 @@ impl<'a> Path<'a> {
 }
 
 
+//------------ FontFamily ----------------------------------------------------
+
+/// The font family of a font face.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum FontFamily {
+    FiraSans,
+}
+
+impl FontFamily {
+    pub fn normal(self, slant: FontSlant, weight: FontWeight) -> FontFace {
+        FontFace::new(self, FontStretch::default(), slant, weight)
+    }
+}
+
+impl Default for FontFamily {
+    fn default() -> Self {
+        FontFamily::FiraSans
+    }
+}
+
+
+//------------ FontStretch ---------------------------------------------------
+
+/// The stretch of the font
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum FontStretch {
+    Regular,
+    Condensed,
+}
+
+impl Default for FontStretch {
+    fn default() -> Self {
+        FontStretch::Regular
+    }
+}
+
+
+//------------ FontSlant -----------------------------------------------------
+
+/// The slant of the font.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum FontSlant {
+    Upright,
+    Italic,
+}
+
+impl Default for FontSlant {
+    fn default() -> Self {
+        FontSlant::Upright
+    }
+}
+
+
+//------------ FontWeight ----------------------------------------------------
+
+/// The weight of the font face.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum FontWeight {
+    Light,
+    Book,
+    Bold,
+}
+
+impl Default for FontWeight {
+    fn default() -> Self {
+        FontWeight::Book
+    }
+}
+
+
 //------------ FontFace ------------------------------------------------------
 
 /// A font face.
-///
-/// We use a fixed set of base font faces that are created only once and held
-/// by the canvas in a table. The `FontFace` type is a simple index into this
-/// table.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct FontFace(usize);
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct FontFace {
+    pub family: FontFamily,
+    pub stretch: FontStretch,
+    pub slant: FontSlant,
+    pub weight: FontWeight,
+}
 
 impl FontFace {
-    /// Returns the font face described by the symbol set.
-    pub fn from_symbols(symbols: &SymbolSet) -> Option<Self> {
-        let weight = if symbols.contains("bold") {
-            Some(1)
-        }
-        else if symbols.contains("light") {
-            Some(2)
-        }
-        else if symbols.contains("normal") {
-            Some(0)
-        }
-        else {
-            None
-        };
-
-        let slant = if
-            symbols.contains("italic")
-            || symbols.contains("designation")
-        {
-            Some(3)
-        }
-        else {
-            None
-        };
-
-        let width = if symbols.contains("condensed") {
-            Some(6)
-        }
-        else {
-            None
-        };
-
-        if weight.is_none() && slant.is_none() && width.is_none() {
-            None
-        }
-        else {
-            Some(FontFace(
-                weight.unwrap_or(0) + slant.unwrap_or(0) + width.unwrap_or(0)
-            ))
-        }
+    pub fn new(
+        family: FontFamily, stretch: FontStretch,
+        slant: FontSlant, weight: FontWeight,
+    ) -> Self {
+        FontFace { family, stretch, slant, weight }
     }
 
-    pub fn bold() -> Option<Self> {
-        Some(FontFace(1))
+    pub fn bold() -> Self {
+        FontFace::new(
+            FontFamily::FiraSans, FontStretch::default(),
+            FontSlant::default(), FontWeight::Bold,
+        )
     }
 }
 
@@ -484,20 +524,25 @@ impl FontFace {
 //------------ FontTable -----------------------------------------------------
 
 /// Global information shared by all canvases.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct FontTable {
-    /// The table of font faces.
-    ///
-    /// The order is: normal, bold, light, normal italic, bold italic,
-    /// light italic. Then same again in compressed.
-    font_faces: [cairo::FontFace; 12],
+    font_faces: HashMap<FontFace, cairo::FontFace>,
 }
 
 impl FontTable {
     pub fn new() -> Self {
-        use cairo::FontFace;
+        Default::default()
+    }
+
+    pub fn get(&mut self, face: FontFace) -> &cairo::FontFace {
+        self.font_faces.entry(face).or_insert_with(|| {
+            Self::create_font(face)
+        })
+    }
+
+    fn create_font(face: FontFace) -> cairo::FontFace {
         use cairo::FontSlant::{Italic, Normal};
-        use cairo::FontWeight::{Bold, Normal as Regular};
+        use cairo::FontWeight::{Bold, Normal as Book};
 
         const FONT_NORMAL: &str = "Fira Sans Book";
         const FONT_BOLD: &str = "Fira Sans";
@@ -506,23 +551,56 @@ impl FontTable {
         const FONT_BOLD_COND: &str = "Fira Sans Condensed";
         const FONT_LIGHT_COND: &str = "Fira Sans Condensed Light";
 
-        FontTable {
-            font_faces: [
-                FontFace::toy_create(FONT_NORMAL, Normal, Regular),
-                FontFace::toy_create(FONT_BOLD, Normal, Bold),
-                FontFace::toy_create(FONT_LIGHT, Normal, Regular),
-                FontFace::toy_create(FONT_NORMAL, Italic, Regular),
-                FontFace::toy_create(FONT_BOLD, Italic, Bold),
-                FontFace::toy_create(FONT_LIGHT, Italic, Regular),
-                FontFace::toy_create(FONT_NORMAL_COND, Normal, Regular),
-                FontFace::toy_create(FONT_BOLD_COND, Normal, Bold),
-                FontFace::toy_create(FONT_LIGHT_COND, Normal, Regular),
-                FontFace::toy_create(FONT_NORMAL_COND, Italic, Regular),
-                FontFace::toy_create(FONT_BOLD_COND, Italic, Bold),
-                FontFace::toy_create(FONT_LIGHT_COND, Italic, Regular),
-            ],
-        }
+        let (family, slant, weight) = match (face.family, face.stretch) {
+            (FontFamily::FiraSans, FontStretch::Regular) => {
+                match (face.slant, face.weight) {
+                    (FontSlant::Upright, FontWeight::Book) => {
+                        (FONT_NORMAL, Normal, Book)
+                    }
+                    (FontSlant::Upright, FontWeight::Bold) => {
+                        (FONT_BOLD, Normal, Bold)
+                    }
+                    (FontSlant::Upright, FontWeight::Light) => {
+                        (FONT_LIGHT, Normal, Book)
+                    }
+                    (FontSlant::Italic, FontWeight::Book) => {
+                        (FONT_NORMAL, Italic, Book)
+                    }
+                    (FontSlant::Italic, FontWeight::Bold) => {
+                        (FONT_BOLD, Italic, Bold)
+                    }
+                    (FontSlant::Italic, FontWeight::Light) => {
+                        (FONT_LIGHT, Italic, Book)
+                    }
+                }
+            }
+            (FontFamily::FiraSans, FontStretch::Condensed) => {
+                match (face.slant, face.weight) {
+                    (FontSlant::Upright, FontWeight::Book) => {
+                        (FONT_NORMAL_COND, Normal, Book)
+                    }
+                    (FontSlant::Upright, FontWeight::Bold) => {
+                        (FONT_BOLD_COND, Normal, Bold)
+                    }
+                    (FontSlant::Upright, FontWeight::Light) => {
+                        (FONT_LIGHT_COND, Normal, Book)
+                    }
+                    (FontSlant::Italic, FontWeight::Book) => {
+                        (FONT_NORMAL_COND, Italic, Book)
+                    }
+                    (FontSlant::Italic, FontWeight::Bold) => {
+                        (FONT_BOLD_COND, Italic, Bold)
+                    }
+                    (FontSlant::Italic, FontWeight::Light) => {
+                        (FONT_LIGHT_COND, Italic, Book)
+                    }
+                }
+            }
+        };
+
+        cairo::FontFace::toy_create(family, slant, weight)
     }
+
 }
 
 

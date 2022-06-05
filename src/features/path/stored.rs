@@ -353,7 +353,7 @@ impl Element {
 ///
 /// In feature definitions, locations on paths are defined relative to named
 /// points on the path. They are described as a distance from well-defined
-/// points which is combined from a world distance and a map distance. Thus
+/// points which is combined from a world distance and a map distance. This
 /// way we can create schematic representations that are pleasing at a range
 /// of scales.
 #[derive(Clone, Copy, Debug, Default)]

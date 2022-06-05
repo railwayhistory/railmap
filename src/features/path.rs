@@ -84,7 +84,6 @@ impl Path {
         segments.for_each(|seg| seg.offset(offset).apply_tail(canvas));
     }
 
-
     pub fn storage_bounds(&self) -> Rect {
         let mut parts = self.parts.iter();
         let mut res = parts.next().unwrap().2.storage_bounds();
@@ -791,21 +790,3 @@ fn rot90(vec: Vec2) -> Vec2 {
     Vec2::new(vec.y, -vec.x)
 }
 
-
-//============ Tests =========================================================
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_line_intersect() {
-        assert_eq!(
-            line_intersect(
-                Point::new(32.,30.), Vec2::new(6., -6.),
-                Point::new(30.,26.), Vec2::new(15., 3.)
-            ),
-            Point::new(35.,27.)
-        );
-    }
-}
