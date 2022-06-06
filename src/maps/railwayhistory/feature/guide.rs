@@ -61,11 +61,11 @@ impl GuideContour {
                 1.8 * style.dimensions().guide_width
             );
             canvas.set_source_rgba(1., 1., 1., 0.7);
-            canvas.stroke_preserve();
+            canvas.stroke_preserve().unwrap();
         }
         canvas.set_line_width(style.dimensions().guide_width);
         color.apply(canvas);
-        canvas.stroke();
+        canvas.stroke().unwrap();
     }
 }
 

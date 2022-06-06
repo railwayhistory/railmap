@@ -489,8 +489,8 @@ impl TextSpan {
 
         // We take the width from the text extents and the height from the
         // font extents. This assumes that the text is one line exactly.
-        let text = canvas.text_extents(&self.text);
-        let font = canvas.font_extents();
+        let text = canvas.text_extents(&self.text).unwrap();
+        let font = canvas.font_extents().unwrap();
  
         // The font height may be bigger than ascent plus descent so we correct
         // the descent for this.
@@ -511,8 +511,8 @@ impl TextSpan {
     ) {
         match depth {
             1 =>  {
-                let cap = canvas.get_line_cap();
-                let join = canvas.get_line_join();
+                let cap = canvas.line_cap();
+                let join = canvas.line_join();
                 self.properties.apply_font(canvas);
                 Color::WHITE.apply(canvas);
                 canvas.set_line_width(self.properties.size.size());
@@ -520,7 +520,7 @@ impl TextSpan {
                 canvas.set_line_join(cairo::LineJoin::Bevel);
                 canvas.move_to(point.x, point.y);
                 canvas.text_path(&self.text);
-                canvas.stroke();
+                canvas.stroke().unwrap();
                 canvas.set_line_join(join);
                 canvas.set_line_cap(cap);
             }
@@ -528,7 +528,7 @@ impl TextSpan {
                 self.properties.apply_font(canvas);
                 self.properties.apply_color(style, canvas);
                 canvas.move_to(point.x, point.y);
-                canvas.show_text(&self.text);
+                canvas.show_text(&self.text).unwrap();
             }
             _ => { }
         }
@@ -567,7 +567,7 @@ impl HruleSpan {
             canvas.move_to(point.x + outer.x0, point.y);
             canvas.line_to(point.x + outer.x1, point.y);
             style.label_color(&self.class).apply(canvas);
-            canvas.stroke()
+            canvas.stroke().unwrap();
         }
     }
 }

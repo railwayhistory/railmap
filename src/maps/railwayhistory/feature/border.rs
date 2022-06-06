@@ -105,7 +105,7 @@ impl BorderContour {
             LOW_BORDER_COLOR.apply(canvas);
         }
         self.trace.apply(canvas);
-        canvas.stroke();
+        canvas.stroke().unwrap();
     }
 
     fn render_high(&self, canvas: &Canvas) {
@@ -117,7 +117,7 @@ impl BorderContour {
             CASING_COLOR.apply(canvas);
         }
         self.trace.apply(canvas);
-        canvas.stroke_preserve();
+        canvas.stroke_preserve().unwrap();
         canvas.set_line_width(BORDER_WIDTH * canvas.canvas_bp());
         if self.former {
             FORMER_BORDER_COLOR.apply(canvas);
@@ -126,7 +126,7 @@ impl BorderContour {
             BORDER_COLOR.apply(canvas);
         }
         self.category.apply_dash_high(canvas);
-        canvas.stroke();
+        canvas.stroke().unwrap();
         canvas.set_dash(&[], 0.);
     }
 }

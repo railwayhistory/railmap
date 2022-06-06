@@ -7,20 +7,20 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cairo-rs = { version = "0.8.1", features = ["png", "svg", "v1_16"] }
+cairo-rs = { version = "0.15.11", features = ["png", "svg", "v1_16"] }
 clap = "2.34.0"
-hyper =   "0.13"
+hyper = { version = "0.14.19", features = ["server", "http1", "http2", "tcp"] }
 ignore = "0.4.14"
-kurbo = "0.5.11"
+kurbo = "0.8.3"
 lazy_static = "1.4"
-lru = "0.4.3"
+lru = "0.7.6"
 nom = "7"
 nom_locate = "4.0.0"
 osmxml = { git = "https://github.com/partim/osmxml.git" }
-rstar = "0.7.1"
+rstar = "0.9.3"
 serde = { version = "1", features = ["derive"] }
 smallvec = { version = "1.8", features = [ "const_generics" ] }
-tokio = { version = "0.2", features = ["macros", "rt-threaded"] }
+tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread"] }
 toml = "0.5.8"
 
 [[bin]]

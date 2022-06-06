@@ -118,7 +118,7 @@ impl TrackContour {
         canvas.set_line_width(style.dimensions().line_width * 0.7);
         style.track_color(&self.class.class).apply(canvas);
         self.trace.apply(canvas);
-        canvas.stroke();
+        canvas.stroke().unwrap();
     }
 
     fn render_detail_1(&self, style: &Style, canvas: &Canvas) {
@@ -134,7 +134,7 @@ impl TrackContour {
         }
         style.track_color(&self.class.class).apply(canvas);
         self.trace.apply(canvas);
-        canvas.stroke();
+        canvas.stroke().unwrap();
     }
 
     fn render_detail_2(&self, style: &Style, canvas: &Canvas) {
@@ -164,7 +164,7 @@ impl TrackContour {
         }
         style.track_color(&self.class.class).apply(canvas);
         self.trace.apply(canvas);
-        canvas.stroke();
+        canvas.stroke().unwrap();
         canvas.set_dash(&[], 0.);
     }
 
@@ -239,7 +239,7 @@ impl TrackContour {
                     &[0.3 * seg, 0.7 * seg],
                     0.45 * seg
                 );
-                canvas.stroke();
+                canvas.stroke().unwrap();
             }
             else {
                 // There also is rail. Which means we have to draw 0.3seg in
@@ -248,7 +248,7 @@ impl TrackContour {
                     &[0.3 * seg, 1.7 * seg],
                     0.45 * seg
                 );
-                canvas.stroke_preserve();
+                canvas.stroke_preserve().unwrap();
             }
         }
 
@@ -271,7 +271,7 @@ impl TrackContour {
                     1.45 * seg
                 );
             }
-            canvas.stroke();
+            canvas.stroke().unwrap();
         }
 
     }
@@ -359,7 +359,7 @@ impl TrackContour {
                 }
             }
             canvas.set_line_width(width);
-            canvas.stroke();
+            canvas.stroke().unwrap();
         }
 
         if gauge > 0 {
@@ -410,7 +410,7 @@ impl TrackContour {
 
             canvas.set_line_cap(cairo::LineCap::Round);
             canvas.set_line_width(width);
-            canvas.stroke();
+            canvas.stroke().unwrap();
             canvas.set_line_cap(cairo::LineCap::Butt);
         }
     }
@@ -452,7 +452,7 @@ impl TrackContour {
         else {
             self.trace.apply(canvas);
         }
-        canvas.stroke();
+        canvas.stroke().unwrap();
     }
 }
 
@@ -478,7 +478,7 @@ impl TrackCasing {
         canvas.set_source_rgba(1., 1., 1., 0.7);
         canvas.set_line_width(self.line_width(style));
         self.trace.apply(canvas);
-        canvas.stroke();
+        canvas.stroke().unwrap();
     }
 
     fn line_width(&self, style: &Style) -> f64 {

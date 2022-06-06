@@ -97,7 +97,7 @@ impl Canvas {
         );
 
         let canvas_bp = canvas_bp * style.mag();
-        let context = cairo::Context::new(surface);
+        let context = cairo::Context::new(surface).unwrap();
         context.move_to(0.,0.);
         context.line_to(size.x, 0.);
         context.line_to(size.x, size.y);
@@ -190,7 +190,7 @@ impl Canvas {
         self.arc(
             point.x, point.y, self.canvas_bp(), 0., 2. * std::f64::consts::PI
         );
-        self.stroke();
+        self.stroke().unwrap();
     }
 }
 
@@ -585,7 +585,7 @@ impl FontTable {
             }
         };
 
-        cairo::FontFace::toy_create(family, slant, weight)
+        cairo::FontFace::toy_create(family, slant, weight).unwrap()
     }
 
 }

@@ -27,7 +27,7 @@ impl AreaContour {
         canvas.set_line_width(style.dimensions().guide_width);
         style.track_color(&self.class).apply(canvas);
         self.trace.apply(canvas);
-        canvas.fill();
+        canvas.fill().unwrap();
     }
 }
 
