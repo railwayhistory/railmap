@@ -1,45 +1,39 @@
-/// Features are things that should be shown on the map.
-///
+//! Features are things that should be shown on the map.
 
-pub use self::color::Color;
-pub use self::contour::{Contour, ContourRule};
-pub use self::label::{Label, Layout};
-pub use self::path::{Distance, Location, Path, Position};
-pub use self::marker::{Marker, MarkerRule};
-
-pub mod color;
-pub mod contour;
-pub mod label;
-pub mod path;
-pub mod marker;
-
-
-use std::ops;
 use kurbo::Rect;
 use rstar::{AABB, Envelope, RTree, RTreeObject};
-use crate::canvas::Canvas;
+use crate::theme::{Style, Theme};
+use super::canvas::Canvas;
 
 
 //------------ FeatureSet ----------------------------------------------------
 
-#[derive(Default)]
-pub struct FeatureSet {
-    features: RTree<StoredFeature>,
+pub struct FeatureSet<T: Theme> {
+    features: RTree<StoredFeature<T>>,
     bounds: Option<AABB<[f64; 3]>>
 }
 
-impl FeatureSet {
+impl<T: Theme> Default for FeatureSet<T> {
+    fn default() -> Self {
+        FeatureSet {
+            features: RTree::default(),
+            bounds: None
+        }
+    }
+}
+
+impl<T: Theme> FeatureSet<T> {
     pub fn new() -> Self {
         Default::default()
     }
 
     pub fn insert(
         &mut self,
-        feature: impl Into<Feature>,
+        feature: T::Feature,
         detail: (u8, u8),
         layer: f64
     ) {
-        let feature = StoredFeature::new(feature.into(), detail, layer);
+        let feature = StoredFeature::new(feature, detail, layer);
         if let Some(bounds) = self.bounds.as_mut() {
             bounds.merge(&feature.bounds)
         }
@@ -49,9 +43,9 @@ impl FeatureSet {
         self.features.insert(feature);
     }
 
-    pub fn render(&self, canvas: &Canvas) {
-        for feature in self.locate(canvas.detail(), canvas.feature_bounds()) {
-            feature.render(canvas)
+    pub fn render(&self, style: &T::Style, canvas: &Canvas) {
+        for feature in self.locate(style.detail(), canvas.feature_bounds()) {
+            feature.feature.render(style, canvas)
         }
     }
 
@@ -72,7 +66,7 @@ impl FeatureSet {
 
     pub fn locate<'a>(
         &'a self, detail: u8, bounds: Rect,
-    ) -> impl Iterator<Item = &'a StoredFeature> {
+    ) -> impl Iterator<Item = &'a StoredFeature<T>> {
         let detail = f64::from(detail);
         let mut res: Vec<_> = self.features.locate_in_envelope_intersecting(
             &AABB::from_corners(
@@ -90,14 +84,14 @@ impl FeatureSet {
 
 //------------ StoredFeature -------------------------------------------------
 
-pub struct StoredFeature {
-    feature: Feature,
+pub struct StoredFeature<T: Theme> {
+    feature: T::Feature,
     layer: f64,
     bounds: AABB<[f64; 3]>
 }
 
-impl StoredFeature {
-    pub fn new(feature: Feature, detail: (u8, u8), layer: f64) -> Self {
+impl<T: Theme> StoredFeature<T> {
+    pub fn new(feature: T::Feature, detail: (u8, u8), layer: f64) -> Self {
         let bounds = feature.storage_bounds();
         let detail = (f64::from(detail.0), f64::from(detail.1));
         StoredFeature {
@@ -111,7 +105,7 @@ impl StoredFeature {
     }
 }
 
-impl RTreeObject for StoredFeature {
+impl<T: Theme> RTreeObject for StoredFeature<T> {
     type Envelope = AABB<[f64; 3]>;
 
     fn envelope(&self) -> Self::Envelope {
@@ -119,59 +113,11 @@ impl RTreeObject for StoredFeature {
     }
 }
 
-impl ops::Deref for StoredFeature {
-    type Target = Feature;
-
-    fn deref(&self) -> &Self::Target {
-        &self.feature
-    }
-}
-
 
 //------------ Feature -------------------------------------------------------
 
-pub enum Feature {
-    Contour(Contour),
-    Label(Label),
-    Marker(Marker),
-}
-
-impl Feature {
-    pub fn storage_bounds(&self) -> Rect {
-        match *self {
-            Feature::Contour(ref contour) => contour.storage_bounds(),
-            Feature::Label(ref label) => label.storage_bounds(),
-            Feature::Marker(ref marker) => marker.storage_bounds(),
-        }
-    }
-
-    pub fn render(&self, canvas: &Canvas) {
-        match *self {
-            Feature::Contour(ref contour) => contour.render(canvas),
-            Feature::Label(ref label) => label.render(canvas),
-            Feature::Marker(ref marker) => marker.render(canvas),
-        }
-    }
-}
-
-
-//--- From
-
-impl From<Contour> for Feature {
-    fn from(contour: Contour) -> Feature {
-        Feature::Contour(contour)
-    }
-}
-
-impl From<Label> for Feature {
-    fn from(label: Label) -> Feature {
-        Feature::Label(label)
-    }
-}
-
-impl From<Marker> for Feature {
-    fn from(marker: Marker) -> Feature {
-        Feature::Marker(marker)
-    }
+pub trait Feature<T: Theme> {
+    fn storage_bounds(&self) -> Rect;
+    fn render(&self, style: &T::Style, canvas: &Canvas);
 }
 

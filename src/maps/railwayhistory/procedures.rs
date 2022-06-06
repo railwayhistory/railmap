@@ -1,38 +1,39 @@
 //! All our procedures.
 
-use crate::features;
-use crate::features::contour::RenderContour;
-use crate::features::marker::RenderMarker;
-use crate::features::path::Position;
 use crate::import::{ast, eval};
 use crate::import::Failed;
+use crate::render::feature::FeatureSet;
+use crate::render::label::Align;
+use crate::render::path::Position;
 use super::class::Class;
+use super::feature::Feature;
 use super::feature::area::AreaContour;
 use super::feature::border::BorderContour;
 use super::feature::markers::StandardMarker;
 use super::feature::track::{TrackCasing, TrackClass, TrackContour};
 use super::feature::guide::GuideContour;
 use super::feature::label;
+use super::theme::Railwayhistory;
 
 
 const PROCEDURES: &[(
     &str,
     &dyn Fn(
         ast::Pos,
-        eval::ArgumentList,
-        &eval::Scope,
-        &mut features::FeatureSet,
+        eval::ArgumentList<Railwayhistory>,
+        &eval::Scope<Railwayhistory>,
+        &mut FeatureSet<Railwayhistory>,
         &mut eval::Error
     ) -> Result<(), Failed>
 )] = &[
     // Draws an area.
     //
     ("area", &|pos, args, scope, features, err| {
-        let [class, path] = args.into_positionals(err)?;
+        let [class, trace] = args.into_positionals(err)?;
         let class = Class::from_arg(class, err)?;
-        let path = path.into_path(err)?.0;
+        let trace = trace.into_path(err)?.0;
         features.insert(
-            features::Contour::new(path, AreaContour::new(class).into_rule()),
+            Feature::Area(AreaContour::new(class, trace)),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -49,7 +50,7 @@ const PROCEDURES: &[(
             args, err, Default::default()
         )?;
         features.insert(
-            layout.into_label(position, true, properties.into()),
+            layout.into_feature(position, true, properties.into()),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -62,11 +63,10 @@ const PROCEDURES: &[(
     // border(class: symbol-set, path: path)
     // ```
     ("border", &|pos, args, scope, features, err| {
-        let [class, path] = args.into_positionals(err)?;
-        let rule = BorderContour::from_arg(class, err)?.into_rule();
-        let path = path.into_path(err)?.0;
+        let [class, trace] = args.into_positionals(err)?;
+        let trace = trace.into_path(err)?.0;
         features.insert(
-            features::Contour::new(path, rule),
+            Feature::Border(BorderContour::from_arg(class, trace, err)?),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -79,13 +79,12 @@ const PROCEDURES: &[(
     // casing(class: symbol-set, path: path)
     // ```
     ("casing", &|pos, args, scope, features, err| {
-        let [class, path] = args.into_positionals(err)?;
+        let [class, trace] = args.into_positionals(err)?;
         let class = TrackClass::from_arg(class, err)?;
         let layer_offset = class.class().layer_offset();
-        let path = path.into_path(err)?.0;
-        let track_rule = TrackCasing::new(class).into_rule();
+        let trace = trace.into_path(err)?.0;
         features.insert(
-            features::Contour::new(path.clone(), track_rule),
+            Feature::Casing(TrackCasing::new(class, trace)),
             scope.params().detail(pos, err)?,
             scope.params().layer() - 0.1 + layer_offset,
         );
@@ -98,11 +97,10 @@ const PROCEDURES: &[(
     // guide(class: symbol-set, path: path)
     // ```
     ("guide", &|pos, args, scope, features, err| {
-        let [class, path] = args.into_positionals(err)?;
-        let path = path.into_path(err)?.0;
-        let rule = GuideContour::from_arg(class, err)?.into_rule();
+        let [class, trace] = args.into_positionals(err)?;
+        let trace = trace.into_path(err)?.0;
         features.insert(
-            features::Contour::new(path, rule),
+            Feature::Guide(GuideContour::from_arg(class, trace, err)?),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -116,10 +114,11 @@ const PROCEDURES: &[(
     // ```
     ("marker", &|pos, args, scope, features, err| {
         let [class, position] = args.into_positionals(err)?;
-        let rule = StandardMarker::from_arg(class, err);
         let position = position.into_position(err)?.0;
         features.insert(
-            features::Marker::new(position, rule?.into_rule()),
+            Feature::Marker(
+                StandardMarker::from_arg(class, position, err)?
+            ),
             scope.params().detail(pos, err)?,
             scope.params().layer() - 0.2,
         );
@@ -136,7 +135,7 @@ const PROCEDURES: &[(
             args, err, Default::default(),
         )?;
         features.insert(
-            layout.into_label( position, false, properties.into()),
+            layout.into_feature(position, false, properties.into()),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -153,11 +152,11 @@ const PROCEDURES: &[(
             args, err, label::Properties::with_size(label::FontSize::Badge)
         )?;
         let layout = label::LayoutBuilder::hbox(
-            label::Align::Center, label::Align::Center, Default::default(),
+            Align::Center, Align::Center, Default::default(),
             vec![layout]
         );
         features.insert(
-            layout.into_label(position, true, properties),
+            layout.into_feature(position, true, properties),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -167,11 +166,11 @@ const PROCEDURES: &[(
     // Draws a platform.
     //
     ("platform", &|pos, args, scope, features, err| {
-        let [class, path] = args.into_positionals(err)?;
+        let [class, trace] = args.into_positionals(err)?;
         let class = Class::from_arg(class, err)?;
-        let path = path.into_path(err)?.0;
+        let trace = trace.into_path(err)?.0;
         features.insert(
-            features::Contour::new(path, AreaContour::new(class).into_rule()),
+            Feature::Area(AreaContour::new(class, trace)),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -189,33 +188,33 @@ const PROCEDURES: &[(
         let mut class = class.into_symbol_set(err)?.0;
         let properties = label::PropertiesBuilder::from_symbols(&mut class);
         let (halign, valign) = if class.take("top") {
-            (label::Align::Center, label::Align::End)
+            (Align::Center, Align::End)
         }
         else if class.take("left") {
-            (label::Align::End, label::Align::Ref)
+            (Align::End, Align::Ref)
         }
         else if class.take("bottom") {
-            (label::Align::Center, label::Align::Start)
+            (Align::Center, Align::Start)
         }
         else if class.take("right") {
-            (label::Align::Start, label::Align::Ref)
+            (Align::Start, Align::Ref)
         }
         else {
             // XXX DROP THIS AND MAKE IT AN ERROR.
-            (label::Align::Start, label::Align::Ref)
+            (Align::Start, Align::Ref)
         };
 
         let position = position.into_position(err);
-        let text = layout.into_layout(err);
+        let text = label::LayoutBuilder::from_expr(layout, err);
 
         class.check_exhausted(err)?;
         let position = position?.0;
-        let text = text?.0;
+        let text = text?;
 
         features.insert(
             label::LayoutBuilder::hbox(
                 halign, valign, properties, vec![text]
-            ).into_label(
+            ).into_feature(
                 position, false,
                 label::Properties::with_size(label::FontSize::Small),
             ),
@@ -237,13 +236,13 @@ const PROCEDURES: &[(
 
         let symbols = class.into_symbol_set(err);
         let position = position.into_position(err);
-        let name = name.into_layout(err);
-        let km = km.into_layout(err);
+        let name = label::LayoutBuilder::from_expr(name, err);
+        let km = label::LayoutBuilder::from_expr(km, err);
 
         let (mut symbols, pos) = symbols?;
         let position = position?.0;
-        let mut name = name?.0;
-        let mut km = km?.0;
+        let mut name = name?;
+        let mut km = km?;
 
         name.rebase_properties(
             &label::PropertiesBuilder::with_size(label::FontSize::Medium)
@@ -257,26 +256,27 @@ const PROCEDURES: &[(
         );
 
         let halign = if symbols.take("left_align") {
-            label::Align::Start
+            Align::Start
         }
         else if symbols.take("right_align") {
-            label::Align::End
+            Align::End
         }
         else {
-            label::Align::Center
+            Align::Center
         };
 
         let layout = if symbols.take("top") {
             label::LayoutBuilder::vbox(
-                halign, label::Align::End, Default::default(), vec![name, km]
+                halign, Align::End, Default::default(),
+                vec![name, km]
             )
         }
         else if symbols.take("left") {
             label::LayoutBuilder::hbox(
-                label::Align::End, label::Align::Ref, Default::default(),
+                Align::End, Align::Ref, Default::default(),
                 vec![
                     label::LayoutBuilder::vbox(
-                        halign, label::Align::Ref, Default::default(),
+                        halign, Align::Ref, Default::default(),
                         vec![name, km]
                     )
                 ]
@@ -284,15 +284,16 @@ const PROCEDURES: &[(
         }
         else if symbols.take("bottom") {
             label::LayoutBuilder::vbox(
-                halign, label::Align::Start, Default::default(), vec![name, km]
+                halign, Align::Start, Default::default(),
+                vec![name, km]
             )
         }
         else if symbols.take("right") {
             label::LayoutBuilder::hbox(
-                label::Align::Start, label::Align::Ref, Default::default(),
+                Align::Start, Align::Ref, Default::default(),
                 vec![
                     label::LayoutBuilder::vbox(
-                        halign, label::Align::Ref, Default::default(),
+                        halign, Align::Ref, Default::default(),
                         vec![name, km]
                     )
                 ]
@@ -305,7 +306,7 @@ const PROCEDURES: &[(
         symbols.check_exhausted(err)?;
 
         features.insert(
-            layout.into_label(position, false, properties),
+            layout.into_feature(position, false, properties),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
         );
@@ -318,13 +319,12 @@ const PROCEDURES: &[(
     // track(class: symbol-set, path: path)
     // ```
     ("track", &|pos, args, scope, features, err| {
-        let [class, path] = args.into_positionals(err)?;
+        let [class, trace] = args.into_positionals(err)?;
         let class = TrackClass::from_arg(class, err)?;
         let layer_offset = class.class().layer_offset();
-        let path = path.into_path(err)?.0;
-        let track_rule = TrackContour::new(class).into_rule();
+        let trace = trace.into_path(err)?.0;
         features.insert(
-            features::Contour::new(path, track_rule),
+            Feature::Track(TrackContour::new(class, trace)),
             scope.params().detail(pos, err)?,
             scope.params().layer() - 0.1 + layer_offset,
         );
@@ -352,11 +352,11 @@ impl Procedure {
     }
 
     pub fn eval(
-        self,
+        &self,
         pos: ast::Pos,
-        args: eval::ArgumentList,
-        scope: &eval::Scope,
-        features: &mut features::FeatureSet,
+        args: eval::ArgumentList<Railwayhistory>,
+        scope: &eval::Scope<Railwayhistory>,
+        features: &mut FeatureSet<Railwayhistory>,
         err: &mut eval::Error,
     ) -> Result<(), Failed> {
         (*PROCEDURES[self.0].1)(pos, args, scope, features, err)
@@ -374,7 +374,7 @@ impl Procedure {
 /// ([class: symbol-set,] position: position, layout: Layout)
 /// ```
 fn label_args(
-    args: eval::ArgumentList,
+    args: eval::ArgumentList<Railwayhistory>,
     err: &mut eval::Error,
     mut base_properties: label::Properties
 ) -> Result<(label::Properties, Position, label::LayoutBuilder), Failed> {
@@ -406,8 +406,7 @@ fn label_args(
         base_properties
     };
     let position = args.next().unwrap().into_position(err)?.0;
-    let layout = args.next().unwrap().into_layout(err)?.0;
+    let layout = label::LayoutBuilder::from_expr(args.next().unwrap(), err)?;
     Ok((properties, position, layout))
 }
-
 

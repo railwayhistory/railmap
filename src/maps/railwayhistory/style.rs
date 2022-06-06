@@ -4,12 +4,25 @@ use std::str::FromStr;
 use std::ops::MulAssign;
 use lazy_static::lazy_static;
 use serde::Deserialize;
-use crate::features::color::Color;
-use crate::library::class::{
+use crate::render::color::Color;
+use crate::theme;
+use super::class::{
     Category, Class, ElectricStatus, ElectricSystem, Pax, Status,
     VoltageGroup
 };
 use super::units;
+
+
+//------------ Configurable Constants ----------------------------------------
+
+/// Size correction for feature bounds.
+///
+/// This value will be multiplied with detail level, then length and height of
+/// the bounding box and then added on each side.
+///
+/// Increase if features are missing.
+const BOUNDS_CORRECTION: f64 = 0.3;
+
 
 //------------ StyleId -------------------------------------------------------
 
@@ -65,6 +78,26 @@ pub struct Style {
     dimensions: Dimensions,
 }
 
+impl theme::Style for Style {
+    type StyleId = StyleId;
+
+    fn bounds_correction(&self) -> f64 {
+        BOUNDS_CORRECTION * (self.detail as f64)
+    }
+
+    fn mag(&self) -> f64 {
+        self.mag
+    }
+
+    fn detail(&self) -> u8 {
+        self.detail
+    }
+
+    fn scale(&mut self, canvas_bp: f64) {
+        self.dimensions *= canvas_bp;
+    }
+}
+
 impl Style {
     pub fn new(id: StyleId, zoom: u8) -> Self {
         let detail = id.detail(zoom);
@@ -83,18 +116,6 @@ impl Style {
             mag: id.mag(zoom),
             dimensions,
         }
-    }
-
-    pub fn scale(&mut self, canvas_bp: f64) {
-        self.dimensions *= canvas_bp;
-    }
-
-    pub fn detail(&self) -> u8 {
-        self.detail
-    }
-
-    pub fn mag(&self) -> f64 {
-        self.mag
     }
 
     pub fn dimensions(&self) -> Dimensions {

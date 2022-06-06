@@ -1,11 +1,14 @@
 //! Rendering of borders.
 
-use crate::canvas::Canvas;
+use kurbo::Rect;
 use crate::import::Failed;
 use crate::import::{ast, eval};
-use crate::features::color::Color;
-use crate::features::contour::RenderContour;
-use crate::features::path::Path;
+use crate::render::canvas::Canvas;
+use crate::render::color::Color;
+use crate::render::path::Trace;
+use crate::theme::Style as _;
+use super::super::style::Style;
+use super::super::theme::Railwayhistory;
 
 //------------ Configuration -------------------------------------------------
 
@@ -62,34 +65,38 @@ pub struct BorderContour {
 
     /// Whether this is a former border.
     former: bool,
+
+    /// The trace of the border.
+    trace: Trace,
 }
 
 impl BorderContour {
     pub fn from_arg(
-        arg: eval::Expression,
+        arg: eval::Expression<Railwayhistory>,
+        trace: Trace,
         err: &mut eval::Error,
     ) -> Result<Self, Failed> {
         let (mut symbols, pos) = arg.into_symbol_set(err)?;
         let category = Category::from_symbols(&mut symbols, pos, err)?;
         let former = symbols.take("former");
         symbols.check_exhausted(err)?;
-        Ok(BorderContour { category, former })
+        Ok(BorderContour { category, former, trace })
     }
-}
 
-impl RenderContour for BorderContour {
-    fn render(&self, canvas: &Canvas, path: &Path) {
-        if canvas.detail() <= 2 {
-            self.render_low(canvas, path)
+    pub fn storage_bounds(&self) -> Rect {
+        self.trace.storage_bounds()
+    }
+
+    pub fn render(&self, style: &Style, canvas: &Canvas) {
+        if style.detail() <= 2 {
+            self.render_low(canvas)
         }
         else {
-            self.render_high(canvas, path)
+            self.render_high(canvas)
         }
     }
-}
 
-impl BorderContour {
-    fn render_low(&self, canvas: &Canvas, path: &Path) {
+    fn render_low(&self, canvas: &Canvas) {
         canvas.set_line_width(LOW_BORDER_WIDTH * canvas.canvas_bp());
         if self.former {
             LOW_FORMER_BORDER_COLOR.apply(canvas);
@@ -97,11 +104,11 @@ impl BorderContour {
         else {
             LOW_BORDER_COLOR.apply(canvas);
         }
-        path.apply(canvas);
+        self.trace.apply(canvas);
         canvas.stroke();
     }
 
-    fn render_high(&self, canvas: &Canvas, path: &Path) {
+    fn render_high(&self, canvas: &Canvas) {
         self.category.apply_casing_width_high(canvas);
         if self.former {
             FORMER_CASING_COLOR.apply(canvas);
@@ -109,7 +116,7 @@ impl BorderContour {
         else {
             CASING_COLOR.apply(canvas);
         }
-        path.apply(canvas);
+        self.trace.apply(canvas);
         canvas.stroke_preserve();
         canvas.set_line_width(BORDER_WIDTH * canvas.canvas_bp());
         if self.former {

@@ -3,13 +3,16 @@
 //! Track is a contour feature with complex rendering rules depending on the
 //! class, style, and detail level.
 
-use crate::canvas::Canvas;
-use crate::features::contour::RenderContour;
-use crate::features::path::Path;
+use kurbo::Rect;
 use crate::import::eval;
 use crate::import::Failed;
 use crate::import::eval::{Expression, SymbolSet};
+use crate::render::canvas::Canvas;
+use crate::render::path::Trace;
+use crate::theme::Style as _;
 use super::super::class::{Category, Class, Gauge, GaugeGroup};
+use super::super::style::Style;
+use super::super::theme::Railwayhistory;
 
 
 //------------ TrackClass ----------------------------------------------------
@@ -41,7 +44,7 @@ pub struct TrackClass {
 
 impl TrackClass {
     pub fn from_arg(
-        arg: Expression,
+        arg: Expression<Railwayhistory>,
         err: &mut eval::Error,
     ) -> Result<Self, Failed> {
         let mut symbols = arg.into_symbol_set(err)?.0;
@@ -88,53 +91,54 @@ impl TrackClass {
 
 /// The contour of the actual track.
 pub struct TrackContour {
-    class: TrackClass
+    class: TrackClass,
+    trace: Trace,
 }
 
 impl TrackContour {
-    pub fn new(class: TrackClass) -> Self {
-        TrackContour { class }
+    pub fn new(class: TrackClass, trace: Trace) -> Self {
+        TrackContour { class, trace }
     }
-}
 
-impl RenderContour for TrackContour {
-    fn render(&self, canvas: &Canvas, path: &Path) {
-        match canvas.style().detail() {
-            0 => self.render_detail_0(canvas, path),
-            1 => self.render_detail_1(canvas, path),
-            2 => self.render_detail_2(canvas, path),
-            3 => self.render_detail_3(canvas, path),
-            _ => self.render_detail_full(canvas, path),
+    pub fn storage_bounds(&self) -> Rect {
+        self.trace.storage_bounds()
+    }
+
+    pub fn render(&self, style: &Style, canvas: &Canvas) {
+        match style.detail() {
+            0 => self.render_detail_0(style, canvas),
+            1 => self.render_detail_1(style, canvas),
+            2 => self.render_detail_2(style, canvas),
+            3 => self.render_detail_3(style, canvas),
+            _ => self.render_detail_full(style, canvas),
         }
     }
-}
 
-impl TrackContour {
-    fn render_detail_0(&self, canvas: &Canvas, path: &Path) {
-        canvas.set_line_width(canvas.style().dimensions().line_width * 0.7);
-        canvas.style().track_color(&self.class.class).apply(canvas);
-        path.apply(canvas);
+    fn render_detail_0(&self, style: &Style, canvas: &Canvas) {
+        canvas.set_line_width(style.dimensions().line_width * 0.7);
+        style.track_color(&self.class.class).apply(canvas);
+        self.trace.apply(canvas);
         canvas.stroke();
     }
 
-    fn render_detail_1(&self, canvas: &Canvas, path: &Path) {
+    fn render_detail_1(&self, style: &Style, canvas: &Canvas) {
         if self.class.double {
             canvas.set_line_width(
-                canvas.style().dimensions().line_width * 1.2
+                style.dimensions().line_width * 1.2
             );
         }
         else {
             canvas.set_line_width(
-                canvas.style().dimensions().line_width * 0.7
+                style.dimensions().line_width * 0.7
             );
         }
-        canvas.style().track_color(&self.class.class).apply(canvas);
-        path.apply(canvas);
+        style.track_color(&self.class.class).apply(canvas);
+        self.trace.apply(canvas);
         canvas.stroke();
     }
 
-    fn render_detail_2(&self, canvas: &Canvas, path: &Path) {
-        let units = canvas.style().dimensions();
+    fn render_detail_2(&self, style: &Style, canvas: &Canvas) {
+        let units = style.dimensions();
         if self.class.class.category().is_main() {
             if self.class.double {
                 canvas.set_line_width(2.0 * units.line_width);
@@ -158,71 +162,71 @@ impl TrackContour {
                 0.15 * units.seg
             );
         }
-        canvas.style().track_color(&self.class.class).apply(canvas);
-        path.apply(canvas);
+        style.track_color(&self.class.class).apply(canvas);
+        self.trace.apply(canvas);
         canvas.stroke();
         canvas.set_dash(&[], 0.);
     }
 
-    fn render_detail_3(&self, canvas: &Canvas, path: &Path) {
-        self.render_detail_full(canvas, path)
+    fn render_detail_3(&self, style: &Style, canvas: &Canvas) {
+        self.render_detail_full(style, canvas)
     }
 
-    fn render_detail_full(&self, canvas: &Canvas, path: &Path) {
+    fn render_detail_full(&self, style: &Style, canvas: &Canvas) {
         if self.class.double {
-            self.render_full_double(canvas, path);
+            self.render_full_double(style, canvas);
         }
         else {
-            self.render_full_single(canvas, path);
+            self.render_full_single(style, canvas);
         }
     }
 
-    fn render_full_single(&self, canvas: &Canvas, path: &Path) {
-        self.render_full_electric(true, canvas, path);
+    fn render_full_single(&self, style: &Style, canvas: &Canvas) {
+        self.render_full_electric(true, style, canvas);
         if self.class.has_property() {
-            self.render_full_property(true, canvas, path);
+            self.render_full_property(true, style, canvas);
         }
-        self.render_full_base(None, canvas, path);
+        self.render_full_base(None, style, canvas);
     }
 
-    fn render_full_double(&self, canvas: &Canvas, path: &Path) {
-        self.render_full_electric(false, canvas, path);
+    fn render_full_double(&self, style: &Style, canvas: &Canvas) {
+        self.render_full_electric(false, style, canvas);
         if self.class.has_property() {
-            self.render_full_property(false, canvas, path);
+            self.render_full_property(false, style, canvas);
         }
-        let offset = canvas.style().dimensions().dt * 0.5;
-        self.render_full_base(Some(offset), canvas, path);
-        self.render_full_base(Some(-offset), canvas, path);
+        let offset = style.dimensions().dt * 0.5;
+        self.render_full_base(Some(offset), style, canvas);
+        self.render_full_base(Some(-offset), style, canvas);
     }
 
     fn render_full_electric(
-        &self, single: bool, canvas: &Canvas, path: &Path,
+        &self, single: bool, style: &Style, canvas: &Canvas
     ) {
         if self.class.station {
             return
         }
-        let cat_color = canvas.style().cat_color(&self.class.class);
-        let rail_color = canvas.style().rail_color(&self.class.class);
+        let cat_color = style.cat_color(&self.class.class);
+        let rail_color = style.rail_color(&self.class.class);
         if cat_color.is_none() && rail_color.is_none() {
             return;
         }
-        let seg = canvas.style().dimensions().seg;
+        let seg = style.dimensions().seg;
 
         if single {
-            path.apply_offset(
+            self.trace.apply_offset(
                 self.class.maybe_flip(
-                    0.5 * canvas.style().dimensions().mark(self.class.tight)
+                    0.5 * style.dimensions().mark(self.class.tight)
                 ),
                 canvas
             );
             canvas.set_line_width(
-                canvas.style().dimensions().mark(self.class.tight)
+                style.dimensions().mark(self.class.tight)
             );
         }
         else {
-            path.apply(canvas);
+            self.trace.apply(canvas);
             canvas.set_line_width(
-                canvas.style().dimensions().dt
+                style.dimensions().dt
             );
         }
 
@@ -273,7 +277,7 @@ impl TrackContour {
     }
 
     fn render_full_property(
-        &self, single: bool, canvas: &Canvas, path: &Path,
+        &self, single: bool, style: &Style, canvas: &Canvas
     ) {
         if self.class.station {
             return
@@ -290,23 +294,23 @@ impl TrackContour {
             GaugeGroup::Standard => 0,
             GaugeGroup::Broad => 3,
         };
-        let seg = canvas.style().dimensions().seg;
+        let seg = style.dimensions().seg;
 
-        canvas.style().track_color(&self.class.class).apply(canvas);
+        style.track_color(&self.class.class).apply(canvas);
 
         if category > 0 {
-            let width = canvas.style().dimensions().mark(self.class.tight);
+            let width = style.dimensions().mark(self.class.tight);
             let offset = self.class.maybe_flip(if single {
                 -0.5 * width
             }
             else {
-                -0.5 * width - 0.5 * canvas.style().dimensions().dt
+                -0.5 * width - 0.5 * style.dimensions().dt
             });
-            path.apply_offset(offset, canvas);
+            self.trace.apply_offset(offset, canvas);
             let stroke = if self.class.class.category().is_main() {
-                canvas.style().dimensions().line_width
+                style.dimensions().line_width
             } else {
-                canvas.style().dimensions().other_width
+                style.dimensions().other_width
             };
 
             if gauge == 0 {
@@ -359,14 +363,14 @@ impl TrackContour {
         }
 
         if gauge > 0 {
-            let mark = canvas.style().dimensions().mark(self.class.tight);
+            let mark = style.dimensions().mark(self.class.tight);
             let width = 0.5 * mark;
             let mut offset = mark - 0.5 * width;
             if !single {
-                offset += 0.5 * canvas.style().dimensions().dt;
+                offset += 0.5 * style.dimensions().dt;
             }
             let offset = self.class.maybe_flip(offset);
-            path.apply_offset(offset, canvas);
+            self.trace.apply_offset(offset, canvas);
             let epsilon = 0.1 * width;
             let apart = 2. * width;
 
@@ -414,39 +418,39 @@ impl TrackContour {
     fn render_full_base(
         &self,
         offset: Option<f64>,
-        canvas: &Canvas, path: &Path
+        style: &Style, canvas: &Canvas
     ) {
         if let Some(offset) = offset {
-            path.apply_offset(offset, canvas);
+            self.trace.apply_offset(offset, canvas);
         }
         else {
-            path.apply(canvas);
+            self.trace.apply(canvas);
         }
         canvas.set_line_width(
             if self.class.class.category().is_main() {
-                canvas.style().dimensions().line_width
+                style.dimensions().line_width
             }
             else {
-                canvas.style().dimensions().other_width
+                style.dimensions().other_width
             }
         );
-        canvas.style().track_color(&self.class.class).apply(canvas);
+        style.track_color(&self.class.class).apply(canvas);
         if self.class.combined {
-            let seg = canvas.style().dimensions().seg;
+            let seg = style.dimensions().seg;
             canvas.set_dash(&[0.5 * seg, 0.5 * seg], 0.25 * seg);
         }
         else if self.class.class.status().is_project() {
-            let seg = canvas.style().dimensions().seg;
+            let seg = style.dimensions().seg;
             canvas.set_dash(&[0.7 * seg, 0.3 * seg], 0.7 * seg);
         }
         else {
             canvas.set_dash(&[], 0.);
         }
         if let Some(offset) = offset {
-            path.apply_offset(offset, canvas);
+            self.trace.apply_offset(offset, canvas);
         }
         else {
-            path.apply(canvas);
+            self.trace.apply(canvas);
         }
         canvas.stroke();
     }
@@ -458,30 +462,31 @@ impl TrackContour {
 /// The markings attached to a track.
 pub struct TrackCasing {
     class: TrackClass,
+    trace: Trace,
 }
 
 impl TrackCasing {
-    pub fn new(class: TrackClass) -> Self {
-        TrackCasing { class }
+    pub fn new(class: TrackClass, trace: Trace) -> Self {
+        TrackCasing { class, trace }
     }
-}
 
-impl RenderContour for TrackCasing {
-    fn render(&self, canvas: &Canvas, path: &Path) {
+    pub fn storage_bounds(&self) -> Rect {
+        self.trace.storage_bounds()
+    }
+
+    pub fn render(&self, style: &Style, canvas: &Canvas) {
         canvas.set_source_rgba(1., 1., 1., 0.7);
-        canvas.set_line_width(self.line_width(canvas));
-        path.apply(canvas);
+        canvas.set_line_width(self.line_width(style));
+        self.trace.apply(canvas);
         canvas.stroke();
     }
-}
 
-impl TrackCasing {
-    fn line_width(&self, canvas: &Canvas) -> f64 {
+    fn line_width(&self, style: &Style) -> f64 {
         if self.class.double {
-            2.2 * canvas.style().dimensions().dt
+            2.2 * style.dimensions().dt
         }
         else {
-            1.2 * canvas.style().dimensions().dt
+            1.2 * style.dimensions().dt
         }
     }
 }

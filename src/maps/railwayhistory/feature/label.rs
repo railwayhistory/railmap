@@ -1,17 +1,18 @@
 //! Making and rendering label features.
 
 use kurbo::{Point, Rect};
-use crate::canvas::{
+use crate::render::canvas::{
     Canvas, FontFamily, FontFace, FontSlant, FontStretch, FontWeight,
 };
-use crate::features::color::Color;
-use crate::features::label::{Label, Layout, RenderSpan};
-use crate::features::path::{Distance, Position};
+use crate::render::color::Color;
+use crate::render::label::{Align, Label, Layout};
+use crate::render::path::{Distance, Position};
 use crate::import::eval;
 use crate::import::Failed;
 use super::super::class::{Class, Status};
-
-pub use crate::features::label::Align;
+use super::super::style::Style;
+use super::super::theme::Railwayhistory;
+use super::Feature;
 
 
 //------------ LayoutBuilder -------------------------------------------------
@@ -52,20 +53,20 @@ impl LayoutBuilder {
 
     pub fn vbox(
         halign: Align, valign: Align, properties: PropertiesBuilder,
-        lines: StackBuilder
+        lines: impl Into<StackBuilder>
     ) -> Self {
         LayoutBuilder::new(
-            ContentBuilder::Vbox { halign, valign, lines },
+            ContentBuilder::Vbox { halign, valign, lines: lines.into() },
             properties
         )
     }
 
     pub fn hbox(
         halign: Align, valign: Align, properties: PropertiesBuilder,
-        spans: StackBuilder
+        spans: impl Into<StackBuilder>
     ) -> Self {
         LayoutBuilder::new(
-            ContentBuilder::Hbox { halign, valign, spans },
+            ContentBuilder::Hbox { halign, valign, spans: spans.into() },
             properties
         )
     }
@@ -88,19 +89,41 @@ impl LayoutBuilder {
         )
     }
 
+    pub fn from_expr(
+        expr: eval::Expression<Railwayhistory>,
+        err: &mut eval::Error
+    ) -> Result<Self, Failed> {
+        match expr.value {
+            eval::ExprVal::Custom(val) => Ok(val),
+            eval::ExprVal::Text(val) => {
+                Ok(LayoutBuilder::span(val, Default::default()))
+            }
+            _ => {
+                err.add(expr.pos, "expected layout or string");
+                return Err(Failed)
+            }
+        }
+    }
+
     pub fn rebase_properties(&mut self, base: &PropertiesBuilder) {
         self.properties.rebase(base)
     }
 
+    pub fn into_feature(
+        self, position: Position, on_path: bool, base: Properties
+    ) -> Feature {
+        Feature::Label(self.into_label(position, on_path, base))
+    }
+
     pub fn into_label(
         self, position: Position, on_path: bool, base: Properties
-    ) -> Label {
+    ) -> Label<Railwayhistory> {
         Label::new(position, on_path, self.into_layout(&base))
     }
 
     pub fn into_layout(
         self, base: &Properties
-    ) -> Layout {
+    ) -> Layout<Railwayhistory> {
         let properties = base.update(&self.properties);
         match self.content {
             ContentBuilder::Vbox { halign, valign, lines } => {
@@ -120,21 +143,60 @@ impl LayoutBuilder {
                 )
             }
             ContentBuilder::Span { content } => {
-                Layout::span(TextSpan::new(content, properties).into_rule())
+                Layout::span(Span::Text(TextSpan::new(content, properties)))
             }
             ContentBuilder::Hrule { width } => {
                 Layout::span(
-                    HruleSpan::new(width, properties.class).into_rule()
+                    Span::Hrule(HruleSpan::new(width, properties.class))
                 )
             }
         }
     }
 }
 
+impl From<LayoutBuilder> for eval::ExprVal<Railwayhistory> {
+    fn from(src: LayoutBuilder) -> Self {
+        eval::ExprVal::custom(src)
+    }
+}
+
 
 //------------ StackBuilder --------------------------------------------------
 
-pub type StackBuilder = Vec<LayoutBuilder>;
+#[derive(Clone, Debug, Default)]
+pub struct StackBuilder {
+    items: Vec<LayoutBuilder>,
+}
+
+impl StackBuilder {
+    pub fn from_args(
+        args: impl Iterator<Item = eval::Expression<Railwayhistory>>,
+        err: &mut eval::Error,
+    ) -> Result<Self, Failed> {
+        let mut res = Self::default();
+        for expr in args {
+            res.items.push(LayoutBuilder::from_expr(expr, err)?);
+        }
+        Ok(res)
+    }
+}
+
+
+impl From<Vec<LayoutBuilder>> for StackBuilder {
+    fn from(items: Vec<LayoutBuilder>) -> Self {
+        StackBuilder { items }
+    }
+}
+
+
+impl IntoIterator for StackBuilder {
+    type Item = <Vec<LayoutBuilder> as IntoIterator>::Item;
+    type IntoIter = <Vec<LayoutBuilder> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.items.into_iter()
+    }
+}
 
 
 //------------ PropertiesBuilder ---------------------------------------------
@@ -153,7 +215,7 @@ pub struct PropertiesBuilder {
 
 impl PropertiesBuilder {
     pub fn from_arg(
-        arg: eval::Expression,
+        arg: eval::Expression<Railwayhistory>,
         err: &mut eval::Error,
     ) -> Result<Self, Failed> {
         let mut symbols = arg.into_symbol_set(err)?.0;
@@ -298,7 +360,7 @@ impl Properties {
     }
 
     pub fn from_arg(
-        arg: eval::Expression,
+        arg: eval::Expression<Railwayhistory>,
         err: &mut eval::Error,
     ) -> Result<Self, Failed> {
         let mut symbols = arg.into_symbol_set(err)?.0;
@@ -325,8 +387,8 @@ impl Properties {
         canvas.apply_font(self.face, self.size.size());
     }
 
-    pub fn apply_color(&self, canvas: &Canvas) {
-        canvas.style().label_color(&self.class).apply(canvas);
+    pub fn apply_color(&self, style: &Style, canvas: &Canvas) {
+        style.label_color(&self.class).apply(canvas);
     }
 }
 
@@ -377,10 +439,42 @@ impl Default for FontSize {
 }
 
 
+//------------ Span ----------------------------------------------------------
+
+/// The various types of spans we support.
+pub enum Span {
+    Text(TextSpan),
+    Hrule(HruleSpan),
+}
+
+impl crate::render::label::Span<Railwayhistory> for Span {
+    fn extent(&self, style: &Style, canvas: &Canvas) -> (Rect, usize) {
+        match self {
+            Span::Text(span) => span.extent(style, canvas),
+            Span::Hrule(span) => span.extent(style, canvas),
+        }
+    }
+
+    fn render(
+        &self, style: &Style, canvas: &Canvas, depth: usize, point: Point,
+        extent: Rect, outer: Rect,
+    ) {
+        match self {
+            Span::Text(span) => {
+                span.render(style, canvas, depth, point, extent, outer)
+            }
+            Span::Hrule(span) => {
+                span.render(style, canvas, depth, point, extent, outer)
+            }
+        }
+    }
+}
+
+
 //------------ TextSpan ------------------------------------------------------
 
 /// The rendering rule for a span of text.
-struct TextSpan {
+pub struct TextSpan {
     text: String,
     properties: Properties,
 }
@@ -389,10 +483,8 @@ impl TextSpan {
     fn new(text: String, properties: Properties) -> Self {
         TextSpan { text, properties }
     }
-}
 
-impl RenderSpan for TextSpan {
-    fn extent(&self, canvas: &Canvas) -> (Rect, usize) {
+    fn extent(&self, _: &Style, canvas: &Canvas) -> (Rect, usize) {
         self.properties.apply_font(canvas);
 
         // We take the width from the text extents and the height from the
@@ -414,7 +506,7 @@ impl RenderSpan for TextSpan {
     }
 
     fn render(
-        &self, canvas: &Canvas, depth: usize, point: Point,
+        &self, style: &Style, canvas: &Canvas, depth: usize, point: Point,
         _extent: Rect, _outer: Rect,
     ) {
         match depth {
@@ -434,7 +526,7 @@ impl RenderSpan for TextSpan {
             }
             0 => {
                 self.properties.apply_font(canvas);
-                self.properties.apply_color(canvas);
+                self.properties.apply_color(style, canvas);
                 canvas.move_to(point.x, point.y);
                 canvas.show_text(&self.text);
             }
@@ -444,11 +536,10 @@ impl RenderSpan for TextSpan {
 }
 
 
-
 //------------ HruleSpan -----------------------------------------------------
 
 /// The rendering rule for a horizontal bar
-struct HruleSpan {
+pub struct HruleSpan {
     width: Distance,
     class: Class,
 }
@@ -461,23 +552,21 @@ impl HruleSpan {
     fn resolved_width(&self, canvas: &Canvas) -> f64 {
         self.width.canvas.map(|width| width * canvas.canvas_bp()).unwrap_or(0.)
     }
-}
 
-impl RenderSpan for HruleSpan {
-    fn extent(&self, canvas: &Canvas) -> (Rect, usize) {
+    fn extent(&self, _: &Style, canvas: &Canvas) -> (Rect, usize) {
         let height = self.resolved_width(canvas) / 2.;
         (Rect::new(0., -height, 0., height), 1)
     }
 
     fn render(
-        &self, canvas: &Canvas, depth: usize, point: Point,
+        &self, style: &Style, canvas: &Canvas, depth: usize, point: Point,
         _extent: Rect, outer: Rect,
     ) {
         if depth == 0 {
             canvas.set_line_width(self.resolved_width(canvas));
             canvas.move_to(point.x + outer.x0, point.y);
             canvas.line_to(point.x + outer.x1, point.y);
-            canvas.style().label_color(&self.class).apply(canvas);
+            style.label_color(&self.class).apply(canvas);
             canvas.stroke()
         }
     }

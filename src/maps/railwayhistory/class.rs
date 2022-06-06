@@ -11,6 +11,7 @@
 use crate::import::eval;
 use crate::import::Failed;
 use crate::import::eval::{Expression, SymbolSet};
+use super::theme::Railwayhistory;
 
 
 //------------ Class ---------------------------------------------------------
@@ -28,7 +29,7 @@ pub struct Class {
 
 impl Class {
     pub fn from_arg(
-        arg: Expression,
+        arg: Expression<Railwayhistory>,
         err: &mut eval::Error,
     ) -> Result<Self, Failed> {
         let mut symbols = arg.into_symbol_set(err)?.0;

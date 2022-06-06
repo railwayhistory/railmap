@@ -1,11 +1,13 @@
 /// The function we support during import.
 
-use crate::features::Color;
-use crate::features::path::Distance;
 use crate::import::Failed;
 use crate::import::eval;
 use crate::import::eval::ExprVal;
+use crate::render::color::Color;
+use crate::render::label::Align;
+use crate::render::path::Distance;
 use super::feature::label;
+use super::theme::Railwayhistory;
 
 
 /// All known functions.
@@ -21,8 +23,13 @@ use super::feature::label;
 const FUNCTIONS: &[(
     &str,
     &dyn Fn(
-        eval::ArgumentList, &eval::Scope, &mut eval::Error
-    ) -> Result<ExprVal, Result<eval::ArgumentList, Failed>>
+        eval::ArgumentList<Railwayhistory>,
+        &eval::Scope<Railwayhistory>,
+        &mut eval::Error
+    ) -> Result<
+        ExprVal<Railwayhistory>,
+        Result<eval::ArgumentList<Railwayhistory>, Failed>
+    >
 )] = &[
     // Produces a layout containing a horizontal bar.
     //
@@ -59,10 +66,10 @@ const FUNCTIONS: &[(
         let mut args = args.into_iter();
 
         let (mut align, pos) = args.next().unwrap().into_symbol_set(err)?;
-        let halign = label::Align::h_from_symbols(
+        let halign = Align::h_from_symbols(
             &mut align
-        ).unwrap_or(label::Align::Start);
-        let valign = match label::Align::v_from_symbols(&mut align) {
+        ).unwrap_or(Align::Start);
+        let valign = match Align::v_from_symbols(&mut align) {
             Some(align) => align,
             None => {
                 err.add(pos, "vertical alignment required");
@@ -71,12 +78,9 @@ const FUNCTIONS: &[(
         };
         let properties = label::PropertiesBuilder::from_symbols(&mut align);
         align.check_exhausted(err)?;
-        let mut lines = label::StackBuilder::new();
-        for expr in args {
-            lines.push(expr.into_layout(err)?.0);
-        }
         Ok(label::LayoutBuilder::hbox(
-            halign, valign, properties, lines,
+            halign, valign, properties,
+            label::StackBuilder::from_args(args, err)?,
         ).into())
     }),
 
@@ -190,25 +194,21 @@ const FUNCTIONS: &[(
         let mut args = args.into_iter();
 
         let (mut align, pos) = args.next().unwrap().into_symbol_set(err)?;
-        let halign = match label::Align::h_from_symbols(&mut align) {
+        let halign = match Align::h_from_symbols(&mut align) {
             Some(align) => align,
             None => {
                 err.add(pos, "horizonal alignment required");
                 return Err(Err(Failed))
             }
         };
-        let valign = label::Align::v_from_symbols(
+        let valign = Align::v_from_symbols(
             &mut align
-        ).unwrap_or(label::Align::Start);
+        ).unwrap_or(Align::Start);
         let properties = label::PropertiesBuilder::from_symbols(&mut align);
         align.check_exhausted(err)?;
-        let mut lines = label::StackBuilder::new();
-        for expr in args {
-            lines.push(expr.into_layout(err)?.0);
-        }
         Ok(label::LayoutBuilder::vbox(
             halign, valign, properties,
-            lines,
+            label::StackBuilder::from_args(args, err)?,
         ).into())
     }),
 ];
@@ -233,11 +233,14 @@ impl Function {
     }
 
     pub fn eval(
-        self,
-        args: eval::ArgumentList,
-        scope: &eval::Scope,
+        &self,
+        args: eval::ArgumentList<Railwayhistory>,
+        scope: &eval::Scope<Railwayhistory>,
         err: &mut eval::Error,
-    ) -> Result<ExprVal, Result<eval::ArgumentList, Failed>> {
+    ) -> Result<
+        ExprVal<Railwayhistory>,
+        Result<eval::ArgumentList<Railwayhistory>, Failed>
+    > {
         (*FUNCTIONS[self.0].1)(args, scope, err)
     }
 }

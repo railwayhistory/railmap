@@ -2,12 +2,14 @@
 //!
 //! Guides are thin lines attaching a label to something.
 
-use crate::canvas::Canvas;
-use crate::features::contour::RenderContour;
-use crate::features::path::Path;
+use kurbo::Rect;
 use crate::import::eval;
 use crate::import::Failed;
 use super::super::class::Class;
+use crate::render::canvas::Canvas;
+use crate::render::path::Trace;
+use super::super::style::Style;
+use super::super::theme::Railwayhistory;
 
 //------------ GuideContour --------------------------------------------------
 
@@ -21,11 +23,14 @@ pub struct GuideContour {
 
     /// Should the guide have a casing?
     casing: bool,
+
+    trace: Trace,
 }
 
 impl GuideContour {
     pub fn from_arg(
-        arg: eval::Expression,
+        arg: eval::Expression<Railwayhistory>,
+        trace: Trace,
         err: &mut eval::Error,
     ) -> Result<Self, Failed> {
         let mut symbols = arg.into_symbol_set(err)?.0;
@@ -33,30 +38,32 @@ impl GuideContour {
         let linenum = symbols.take("linenum");
         let casing = symbols.take("casing");
         symbols.check_exhausted(err)?;
-        Ok(GuideContour { class, linenum, casing })
+        Ok(GuideContour { class, linenum, casing, trace })
     }
-}
 
-impl RenderContour for GuideContour {
-    fn render(&self, canvas: &Canvas, path: &Path) {
+    pub fn storage_bounds(&self) -> Rect {
+        self.trace.storage_bounds()
+    }
+
+    pub fn render(&self, style: &Style, canvas: &Canvas) {
         let color = if self.linenum {
-            if !canvas.style().include_line_labels() {
+            if !style.include_line_labels() {
                 return
             }
-            canvas.style().label_color(&self.class)
+            style.label_color(&self.class)
         }
         else {
-            canvas.style().track_color(&self.class)
+            style.track_color(&self.class)
         };
-        path.apply(canvas);
+        self.trace.apply(canvas);
         if self.casing {
             canvas.set_line_width(
-                1.8 * canvas.style().dimensions().guide_width
+                1.8 * style.dimensions().guide_width
             );
             canvas.set_source_rgba(1., 1., 1., 0.7);
             canvas.stroke_preserve();
         }
-        canvas.set_line_width(canvas.style().dimensions().guide_width);
+        canvas.set_line_width(style.dimensions().guide_width);
         color.apply(canvas);
         canvas.stroke();
     }
