@@ -1,9 +1,9 @@
 use std::{fmt, ops};
 use std::str::FromStr;
 use kurbo::Point;
-use crate::features::FeatureSet;
-use crate::canvas::Canvas;
-use crate::library::{Style, StyleId};
+use crate::render::canvas::Canvas;
+use crate::render::feature::FeatureSet;
+use crate::theme::{Style, Theme};
 
 /// The maximum zoom level we support.
 ///
@@ -13,27 +13,29 @@ const MAX_ZOOM: u8 = 20;
 
 //------------ Tile ----------------------------------------------------------
 
-pub struct Tile {
-    id: TileId,
+pub struct Tile<T: Theme> {
+    style: T::Style,
+    id: TileId<<T::Style as Style>::StyleId>,
 }
 
-impl Tile {
-    pub fn new(id: TileId) -> Self {
-        Tile { id }
+impl<T: Theme> Tile<T> {
+    pub fn new(theme: &T, id: TileId<<T::Style as Style>::StyleId>) -> Self {
+        let style = theme.style(&id);
+        Tile { style, id }
     }
 
     pub fn content_type(&self) -> &'static str {
         self.id.content_type()
     }
 
-    pub fn render(&self, features: &FeatureSet) -> Vec<u8> {
+    pub fn render(&mut self, features: &FeatureSet<T>) -> Vec<u8> {
         let surface = Surface::new(self.id.format);
         self.render_surface(&surface, features);
         surface.finalize()
     }
 
     fn render_surface(
-        &self, surface: &Surface, features: &FeatureSet,
+        &mut self, surface: &Surface, features: &FeatureSet<T>,
     ) {
         let size = surface.size();
         let canvas = Canvas::new(
@@ -42,9 +44,9 @@ impl Tile {
             surface.canvas_bp(),
             self.id.nw(),
             size * self.id.n(),
-            Style::new(self.id.style, self.id.zoom),
+            &mut self.style,
         );
-        features.render(&canvas);
+        features.render(&self.style, &canvas);
     }
 }
 
@@ -52,7 +54,7 @@ impl Tile {
 //------------ TileId --------------------------------------------------------
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct TileId {
+pub struct TileId<StyleId> {
     pub zoom: u8,
     pub x: u32,
     pub y: u32,
@@ -60,7 +62,7 @@ pub struct TileId {
     pub style: StyleId,
 }
 
-impl TileId {
+impl<StyleId> TileId<StyleId> {
     /// Construct the tile ID from a URI path.
     ///
     /// The format of the path is expected to be:
@@ -68,7 +70,8 @@ impl TileId {
     /// ```text
     /// {style}/{zoom}/{x}/{y}.{fmt}
     /// ```
-    pub fn from_path(path: &str) -> Result<Self, TileIdError> {
+    pub fn from_path(path: &str) -> Result<Self, TileIdError>
+    where StyleId: FromStr {
         let mut path = path.split('/');
 
         let style = StyleId::from_str(
@@ -133,6 +136,7 @@ impl TileId {
         }
     }
 
+    /*
     pub fn is_covered(&self, features: &FeatureSet) -> bool {
         features.is_covered(
             self.style.detail(self.zoom),
@@ -141,9 +145,10 @@ impl TileId {
             )
         )
     }
+    */
 }
 
-impl fmt::Display for TileId {
+impl<StyleId: fmt::Display> fmt::Display for TileId<StyleId> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}/{}/{}.{}", self.zoom, self.x, self.y, self.format)
     }

@@ -5,26 +5,36 @@ use hyper::{Body, Request, Response};
 use hyper::body::Bytes;
 use hyper::service::{make_service_fn, service_fn};
 use lru::LruCache;
-use crate::features::FeatureSet;
+use crate::render::feature::FeatureSet;
 use crate::tile::{Tile, TileId};
+use crate::theme::{Style, Theme};
 
-#[derive(Clone)]
-pub struct Server {
-    features: Arc<FeatureSet>,
-    cache: Arc<Mutex<LruCache<TileId, Bytes>>>,
+
+pub struct Server<T: Theme> {
+    theme: T,
+    features: Arc<FeatureSet<T>>,
+    cache: Arc<Mutex<LruCache<TileId<<T::Style as Style>::StyleId>, Bytes>>>,
 }
 
 
-impl Server {
+impl<T: Theme> Server<T> {
     pub fn new(
-        features: FeatureSet,
+        theme: T,
+        features: FeatureSet<T>,
     ) -> Self {
         Server {
+            theme,
             features: Arc::new(features),
             cache: Arc::new(Mutex::new(LruCache::new(10_000))),
         }
     }
+}
 
+impl<T: Theme + Send + Sync + 'static> Server<T>
+where
+    <T::Style as Style>::StyleId: Send + Sync + 'static,
+    T::Feature: Send + Sync + 'static,
+{
     pub async fn run(&self, addr: SocketAddr) {
         let make_svc = make_service_fn(move |_conn| {
             let this = self.clone();
@@ -45,7 +55,7 @@ impl Server {
     }
 }
 
-impl Server {
+impl<T: Theme> Server<T> {
     async fn process(
         &self, request: Request<Body>
     ) -> Result<Response<Body>, Infallible> {
@@ -95,10 +105,10 @@ impl Server {
         let body = match cached {
             Some(bytes) => bytes.into(),
             None => {
-                let bytes: Bytes = Tile::new(tile).render(
+                let bytes: Bytes = Tile::new(&self.theme, tile.clone()).render(
                     &self.features
                 ).into();
-                self.cache.lock().unwrap().put(tile, bytes.clone());
+                self.cache.lock().unwrap().put(tile.clone(), bytes.clone());
                 bytes.into()
             }
         };
@@ -110,6 +120,15 @@ impl Server {
     }
 }
 
+impl<T: Theme> Clone for Server<T> {
+    fn clone(&self) -> Self {
+        Server {
+            theme: self.theme.clone(),
+            features: self.features.clone(),
+            cache: self.cache.clone()
+        }
+    }
+}
 
 pub struct Failed;
 

@@ -1,6 +1,6 @@
 use std::f64::consts::SQRT_2;
 use kurbo::Vec2;
-use crate::features::path::StoredPath;
+use crate::render::path::Path;
 
 
 
@@ -29,9 +29,9 @@ impl Segment {
         Segment { knots }
     }
 
-    pub fn to_path(&self) -> StoredPath {
+    pub fn to_path(&self) -> Path {
         if self.knots.len() < 3 {
-            let mut res = StoredPath::builder(self.knots[0].point.to_point());
+            let mut res = Path::builder(self.knots[0].point.to_point());
             if self.knots.len() == 2 {
                 res.curve_to(
                     self.knots[0].point.to_point(),
@@ -135,7 +135,7 @@ impl Segment {
             theta[k] = vv[k] - theta[k+1] * uu[k];
         }
 
-        let mut res = StoredPath::builder(self.knots[0].point.to_point());
+        let mut res = Path::builder(self.knots[0].point.to_point());
         for k in 0..n {
             let s = &self.knots[k];
             let t = &self.knots[k + 1];

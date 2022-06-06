@@ -1,5 +1,7 @@
 /// The units we understand.
 
+use crate::render::path::Distance;
+
 // Various canvas units in bp.
 pub const BP: f64 = 1.;
 pub const CM: f64 = 72./2.54;
@@ -50,6 +52,21 @@ pub const WORLD_DISTANCES: &[(&str, f64)] = &[
 ];
 
 
-/// The size of the equator in _bp._
-pub const EQUATOR_BP: f64 = 40075.016686 * KM;
+pub fn resolve_unit(number: f64, unit_name: &str) -> Option<Distance> {
+    for (unit, factor) in WORLD_DISTANCES {
+        if unit_name == *unit {
+            return Some(Distance::new(
+                Some(number * factor), None
+            ))
+        }
+    }
+    for (unit, factor) in CANVAS_DISTANCES {
+        if unit_name == *unit {
+            return Some(Distance::new(
+                None, Some(number * factor)
+            ))
+        }
+    }
+    None
+}
 

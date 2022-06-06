@@ -10,6 +10,10 @@ use serde::{Deserialize, Serialize};
 /// The map configuration.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
+    /// The theme to be used for interpreting the rules and rendering.
+    pub theme: String,
+
+    /// The regions of the map.
     pub regions: HashMap<String, Region>,
 }
 

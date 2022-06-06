@@ -4,7 +4,7 @@ use std::fmt;
 use std::convert::TryFrom;
 use std::num::ParseIntError;
 use serde::Deserialize;
-use crate::canvas::Canvas;
+use super::canvas::Canvas;
 
 
 /// A color.

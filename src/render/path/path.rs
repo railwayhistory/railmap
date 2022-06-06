@@ -1,37 +1,41 @@
-//! Stored paths.
-//!
-//! This is a private module. Its public types are re-exported by the parent.
+//! Paths.
 
 use std::{cmp, ops};
 use std::f64::consts::PI;
 use std::sync::Arc;
 use kurbo::{CubicBez, Line, ParamCurveArclen, Point};
-use crate::canvas::Canvas;
-use crate::library::units;
-use super::{STORAGE_ACCURACY, Segment};
+use super::super::canvas::Canvas;
+use super::trace::{STORAGE_ACCURACY, Segment};
 
 
-//------------ StoredPath ----------------------------------------------------
+//----------- Constants ------------------------------------------------------
+
+const M: f64 = 1_000. * (72./25.4);
+const KM: f64 = 1_000. * M;
+const EQUATOR_BP: f64 = 40075.016686 * KM;
+
+
+//------------ Path ----------------------------------------------------------
 
 /// An unmodified, imported path.
 ///
-/// Stored paths form the basis of the definition of all features: They are
-/// referenced when placing or tracing the features.
+/// Paths form the basis of the definition of all features: They are
+/// referenced when placing or tracing features.
 ///
-/// Stored paths are shared objects: their data is kept behind an arc. They
+/// Paths are shared objects: their data is kept behind an arc. They
 /// can be cloned cheaply for passing around.
 #[derive(Clone, Debug)]
-pub struct StoredPath {
+pub struct Path {
     /// The elements of the stored path.
     ///
     /// For simplicity, we keep the initial point as an element, too.
     elements: Arc<Box<[Element]>>,
 }
 
-impl StoredPath {
+impl Path {
     /// Creates a builder for a path starting a the given point.
-    pub fn builder(move_to: Point) -> StoredPathBuilder {
-        StoredPathBuilder::new(move_to)
+    pub fn builder(move_to: Point) -> PathBuilder {
+        PathBuilder::new(move_to)
     }
 
     /// Returns the minimum valid location on the path.
@@ -249,17 +253,17 @@ impl StoredPath {
 }
 
 
-//------------ StoredPathBuilder ---------------------------------------------
+//------------ PathBuilder ---------------------------------------------------
 
 /// A builder for a stored path.
-pub struct StoredPathBuilder {
+pub struct PathBuilder {
     elements: Vec<Element>,
 }
 
-impl StoredPathBuilder {
+impl PathBuilder {
     /// Creates a new stored path starting at the given point.
     pub fn new(move_to: Point) -> Self {
-        StoredPathBuilder {
+        PathBuilder {
             elements: vec![Element::move_to(move_to)]
         }
     }
@@ -287,8 +291,8 @@ impl StoredPathBuilder {
     }
 
     /// Finishes the builder and converts it into a stored path.
-    pub fn finish(self) -> StoredPath {
-        StoredPath {
+    pub fn finish(self) -> Path {
+        Path {
             elements: Arc::new(self.elements.into_boxed_slice())
         }
     }
@@ -574,7 +578,7 @@ impl Ord for SegTime {
 ///
 /// The point is already in storage coordinates.
 fn to_storage_distance(world: f64, at: Point) -> f64 {
-    (world / units::EQUATOR_BP) * scale_correction(at)
+    (world / EQUATOR_BP) * scale_correction(at)
 }
 
 /// The scale correction at a given point

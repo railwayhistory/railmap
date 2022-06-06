@@ -1,29 +1,32 @@
 
 use std::{fmt, fs, io};
 use std::path::Path as FsPath;
-use crate::features::FeatureSet;
+use crate::render::feature::FeatureSet;
+use crate::theme::Theme;
 use super::{ast, eval};
 use super::path::PathSet;
 use super::ast::StatementList;
 use super::eval::Scope;
 
 
-pub fn load(
-    feature_dir: &FsPath, paths: &PathSet
-) -> Result<FeatureSet, FeatureSetError> {
+pub fn load<T: Theme>(
+    theme: T, feature_dir: &FsPath, paths: &PathSet
+) -> Result<FeatureSet<T>, FeatureSetError> {
     let mut features = FeatureSet::new();
     let mut err = FeatureSetError::default();
     
-    load_dir(feature_dir, Scope::new(paths), &mut features, &mut err);
+    load_dir::<T>(
+        feature_dir, Scope::new(theme, paths), &mut features, &mut err
+    );
 
     err.check()?;
     Ok(features)
 }
 
-pub fn load_dir(
+pub fn load_dir<T: Theme>(
     path: &FsPath,
-    mut context: Scope,
-    target: &mut FeatureSet,
+    mut context: Scope<T>,
+    target: &mut FeatureSet<T>,
     err: &mut FeatureSetError,
 ) {
     // Before we do anything else, we run init.map if it is present on the
@@ -54,7 +57,7 @@ pub fn load_dir(
             Err(_) => continue, // And these, too.
         };
         if ftype.is_dir() {
-            load_dir(&entry.path(), context.clone(), target, err);
+            load_dir::<T>(&entry.path(), context.clone(), target, err);
         }
         else if ftype.is_file() {
             let path = entry.path();
@@ -71,10 +74,10 @@ pub fn load_dir(
     }
 }
 
-fn load_file(
+fn load_file<T: Theme>(
     path: &FsPath,
-    scope: &mut Scope,
-    target: &mut FeatureSet,
+    scope: &mut Scope<T>,
+    target: &mut FeatureSet<T>,
     err: &mut FeatureSetError,
 ) {
     let data = match fs::read_to_string(path) {

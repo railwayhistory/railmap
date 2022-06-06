@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::time::Instant;
 use clap::{Arg, App, crate_version, crate_authors};
 use railmap::{Config, LoadFeatures, Server};
+use railmap::maps::railwayhistory::Railwayhistory;
 
 #[tokio::main]
 async fn main() {
@@ -40,7 +41,7 @@ async fn main() {
     };
 
     let start = Instant::now();
-    let mut features = LoadFeatures::default();
+    let mut features = LoadFeatures::new(Railwayhistory);
     match matches.values_of("region") {
         Some(values) => {
             let mut values: Vec<_> = values.collect();
@@ -73,7 +74,7 @@ async fn main() {
         }
     };
 
-    let server = Server::new(features);
+    let server = Server::new(Railwayhistory, features);
     eprintln!("Server ready after {:.03}s.", start.elapsed().as_secs_f32());
     server.run(
         SocketAddr::from(([0, 0, 0, 0], 8080))

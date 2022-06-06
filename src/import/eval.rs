@@ -3,31 +3,30 @@ use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::collections::HashMap;
 use std::str::FromStr;
-use crate::features::{
-    Color,
-    FeatureSet,
-};
-use crate::features::path::{Distance, Line, Path, Position, Subpath};
+use crate::render::color::Color;
+use crate::render::feature::FeatureSet;
+use crate::render::path::{Distance, Edge, Position, Subpath, Trace};
 use crate::import::Failed;
 use crate::import::path::{ImportPath, PathSet};
-use crate::library::units;
-use crate::library::{Function, LayoutBuilder, Procedure};
+use crate::theme::Theme;
 use super::ast;
 use super::ast::ShortString;
 
 
 //------------ Scope ---------------------------------------------------------
 
-#[derive(Clone, Debug)]
-pub struct Scope<'a> {
+#[derive(Clone)]
+pub struct Scope<'a, T: Theme> {
+    theme: T,
     paths: &'a PathSet,
-    variables: HashMap<ShortString, ExprVal>,
-    params: RenderParams,
+    variables: HashMap<ShortString, ExprVal<T>>,
+    params: T::RenderParams,
 }
 
-impl<'a> Scope<'a> {
-    pub fn new(paths: &'a PathSet) -> Self {
+impl<'a, T: Theme> Scope<'a, T> {
+    pub fn new(theme: T, paths: &'a PathSet) -> Self {
         Scope {
+            theme,
             paths,
             variables: HashMap::new(),
             params: Default::default(),
@@ -38,138 +37,20 @@ impl<'a> Scope<'a> {
         &self.paths
     }
 
-    pub fn set_var(&mut self, ident: ShortString, value: ExprVal) {
+    pub fn set_var(&mut self, ident: ShortString, value: ExprVal<T>) {
         self.variables.insert(ident.clone(), value);
     }
 
-    pub fn get_var(&self, ident: &str) -> Option<&ExprVal> {
+    pub fn get_var(&self, ident: &str) -> Option<&ExprVal<T>> {
         self.variables.get(ident)
     }
 
-    pub fn get_var_cloned(&self, ident: &str) -> Option<ExprVal> {
+    pub fn get_var_cloned(&self, ident: &str) -> Option<ExprVal<T>> {
         self.variables.get(ident).cloned()
     }
 
-    pub fn params(&self) -> &RenderParams {
+    pub fn params(&self) -> &T::RenderParams {
         &self.params
-    }
-}
-
-
-//------------ RenderParams --------------------------------------------------
-
-#[derive(Clone, Debug, Default)]
-pub struct RenderParams {
-    detail: Option<(u8, u8)>,
-    layer: f64,
-    style: Option<ShortString>,
-}
-
-impl RenderParams {
-    fn update(
-        &mut self,
-        target: &str,
-        value: Expression,
-        pos: ast::Pos,
-        err: &mut Error
-    ) {
-        match target {
-            "detail" => self.update_detail(value, err),
-            "layer" => self.update_layer(value, err),
-            "link" => self.update_link(value, err),
-            "style" => self.update_style(value, err),
-            _ => {
-                err.add(pos, format!("unknown render param {}", target));
-            }
-        }
-    }
-
-    fn update_detail(
-        &mut self,
-        value: Expression,
-        err: &mut Error
-    ) {
-        match value.value {
-            ExprVal::Number(val) => {
-                match val.into_u8() {
-                    Ok(val) => self.detail = Some((val, val)),
-                    Err(_) => err.add(value.pos, "expected 8-bit integer"),
-                }
-            }
-            ExprVal::List(val) => {
-                if val.len() != 2 {
-                    err.add(value.pos, "expected number or pair of numbers");
-                    return;
-                }
-                let mut val = val.into_iter();
-                let left = match val.next().unwrap().into_u8(err) {
-                    Ok(left) => left.0,
-                    Err(_) => return,
-                };
-                let right = match val.next().unwrap().into_u8(err) {
-                    Ok(right) => right.0,
-                    Err(_) => return,
-                };
-                self.detail = Some(if left < right {
-                    (left, right)
-                }
-                else {
-                    (right, left)
-                });
-            }
-            _ => err.add(value.pos, "expected number or pair of numbers"),
-        }
-    }
-
-    fn update_layer(
-        &mut self,
-        value: Expression,
-        err: &mut Error
-    ) {
-        match value.value {
-            ExprVal::Number(val) => {
-                self.layer = val.into_f64();
-            }
-            _ => err.add(value.pos, "expected number"),
-        }
-    }
-
-    fn update_link(
-        &mut self,
-        value: Expression,
-        err: &mut Error
-    ) {
-        let _ = value.into_text(err);
-    }
-
-    fn update_style(
-        &mut self,
-        value: Expression,
-        err: &mut Error
-    ) {
-        if let Ok(value) = value.into_symbol(err) {
-            self.style = Some(value.0)
-        }
-    }
-
-    pub fn detail(
-        &self, pos: ast::Pos, err: &mut Error
-    ) -> Result<(u8, u8), Failed> {
-        match self.detail {
-            Some(detail) => Ok(detail),
-            None => {
-                err.add(pos, "no detail level selected yet");
-                Err(Failed)
-            }
-        }
-    }
-
-    pub fn layer(&self) -> f64 {
-        self.layer
-    }
-
-    pub fn style(&self) -> Option<&str> {
-        self.style.as_ref().map(ShortString::as_str)
     }
 }
 
@@ -179,14 +60,13 @@ impl RenderParams {
 /// An expression that has been evaluated for the current scope.
 ///
 /// The variants are the concrete types that we have.
-#[derive(Clone, Debug, Default)]
-pub struct Expression {
-    pub value: ExprVal,
+pub struct Expression<T: Theme> {
+    pub value: ExprVal<T>,
     pub pos: ast::Pos
 }
 
-impl Expression {
-    fn new(value: ExprVal, pos: ast::Pos) -> Self {
+impl<T: Theme> Expression<T> {
+    fn new(value: ExprVal<T>, pos: ast::Pos) -> Self {
         Expression { value, pos }
     }
 
@@ -209,21 +89,6 @@ impl Expression {
             ExprVal::Distance(val) => Ok((val, self.pos)),
             _ => {
                 err.add(self.pos, "expected distance");
-                Err(Failed)
-            }
-        }
-    }
-
-    pub fn into_layout(
-        self, err: &mut Error
-    ) -> Result<(LayoutBuilder, ast::Pos), Failed> {
-        match self.value {
-            ExprVal::Layout(val) => Ok((val, self.pos)),
-            ExprVal::Text(val) => {
-                Ok((LayoutBuilder::span(val, Default::default()), self.pos))
-            }
-            _ => {
-                err.add(self.pos, "expected layout or string");
                 Err(Failed)
             }
         }
@@ -262,9 +127,9 @@ impl Expression {
 
     pub fn into_path(
         self, err: &mut Error
-    ) -> Result<(Path, ast::Pos), Failed> {
+    ) -> Result<(Trace, ast::Pos), Failed> {
         match self.value {
-            ExprVal::Path(val) => Ok((val, self.pos)),
+            ExprVal::Trace(val) => Ok((val, self.pos)),
             _ => {
                 err.add(self.pos, "expected path");
                 Err(Failed)
@@ -329,38 +194,56 @@ impl Expression {
     }
 }
 
+impl<T: Theme> Default for Expression<T> {
+    fn default() -> Self {
+        Expression {
+            value: Default::default(),
+            pos: Default::default(),
+        }
+    }
+}
+
+impl<T: Theme> Clone for Expression<T> {
+    fn clone(&self) -> Self {
+        Expression {
+            value: self.value.clone(),
+            pos: self.pos
+        }
+    }
+}
+
 
 //------------ ExprVal -------------------------------------------------------
 
 /// The value of a resolved expression.
 ///
 /// This has a shorthand name because we are going to type it a lot.
-#[derive(Clone, Debug)]
-pub enum ExprVal {
+#[derive(Clone)]
+pub enum ExprVal<T: Theme> {
     Null,
     Color(Color),
     Distance(Distance),
     ImportPath(usize),
-    Layout(LayoutBuilder),
-    List(Vec<Expression>),
+    List(Vec<Expression<T>>),
     Number(Number),
-    Partial(Partial),
-    Path(Path),
+    Partial(Partial<T>),
+    Trace(Trace),
     Position(Position),
     SymbolSet(SymbolSet),
     Text(String),
     Vector((Distance, Distance)),
+    Custom(T::CustomExpr),
 }
 
-impl Default for ExprVal {
+impl<T: Theme> Default for ExprVal<T> {
     fn default() -> Self {
         ExprVal::Null
     }
 }
 
-impl From<LayoutBuilder> for ExprVal {
-    fn from(src: LayoutBuilder) -> Self {
-        ExprVal::Layout(src)
+impl<T: Theme> ExprVal<T> {
+    pub fn custom(src: T::CustomExpr) -> Self {
+        ExprVal::Custom(src)
     }
 }
 
@@ -407,28 +290,28 @@ impl Number {
 /// arguments or a procedure is called, its execution is delayed and a partial
 /// expression is retained instead. This can be called again supplying the
 /// missing arguments or adding more in another let expression.
-#[derive(Clone, Debug)]
-pub struct Partial {
+pub struct Partial<T: Theme> {
     /// The function or procedure to eventually execute.
     ///
     /// We abuse `Result` here as an either type.
-    function: Result<Function, Procedure>,
+    function: Result<T::Function, T::Procedure>,
 
     /// The arguments of the function.
     ///
     /// This is updated every time the partial function is evaluated again.
-    args: ArgumentList,
+    args: ArgumentList<T>,
 
     /// The position of the function.
     pos: ast::Pos,
 }
 
-impl Partial {
+impl<T: Theme> Partial<T> {
     fn new(
-        name: &str, args: ArgumentList, pos: ast::Pos, err: &mut Error
+        name: &str, args: ArgumentList<T>, pos: ast::Pos,
+        scope: &Scope<T>, err: &mut Error
     ) -> Result<Self, Failed> {
-        let function = Function::lookup(name).map(Ok).or_else(|| {
-            Procedure::lookup(name).map(Err)
+        let function = scope.theme.lookup_function(name).map(Ok).or_else(|| {
+            scope.theme.lookup_procedure(name).map(Err)
         }).or_else(|| {
             err.add(
                 pos,
@@ -442,16 +325,16 @@ impl Partial {
         }
     }
 
-    fn extend(&mut self, args: ArgumentList, pos: ast::Pos) {
+    fn extend(&mut self, args: ArgumentList<T>, pos: ast::Pos) {
         self.args.extend(args);
         self.pos = pos;
     }
 
     fn eval_expr(
-        mut self, scope: &Scope, err: &mut Error
-    ) -> Result<ExprVal, Failed> {
-        if let Ok(function) = self.function {
-            match function.eval(self.args, scope, err) {
+        mut self, scope: &Scope<T>, err: &mut Error
+    ) -> Result<ExprVal<T>, Failed> {
+        if let Ok(function) = self.function.as_ref() {
+            match scope.theme.eval_function(function, self.args, scope, err) {
                 Ok(res) => Ok(res),
                 Err(Ok(args)) => {
                     self.args = args;
@@ -467,18 +350,30 @@ impl Partial {
 
     fn eval_procedure(
         self, 
-        scope: &mut Scope,
-        features: &mut FeatureSet,
+        scope: &mut Scope<T>,
+        features: &mut FeatureSet<T>,
         err: &mut Error
     ) -> Result<(), Failed> {
-        match self.function {
+        match self.function.as_ref() {
             Ok(_) => {
                 err.add(self.pos, "expected procedure");
                 Err(Failed)
             }
             Err(procedure) => {
-                procedure.eval(self.pos, self.args, scope, features, err)
+                scope.theme.eval_procedure(
+                    procedure, self.pos, self.args, scope, features, err
+                )
             }
+        }
+    }
+}
+
+impl<T: Theme> Clone for Partial<T> {
+    fn clone(&self) -> Self {
+        Partial {
+            function: self.function.clone(),
+            args: self.args.clone(),
+            pos: self.pos
         }
     }
 }
@@ -549,19 +444,18 @@ impl iter::FromIterator<ast::Symbol> for SymbolSet {
 //------------ ArgumentList --------------------------------------------------
 
 /// Evaluated arguments of a function.
-#[derive(Clone, Debug)]
-pub struct ArgumentList {
+pub struct ArgumentList<T: Theme> {
     /// The positional arguments.
-    positional: Vec<Expression>,
+    positional: Vec<Expression<T>>,
 
     /// The keyword arguments
-    keyword: HashMap<ast::Identifier, Expression>,
+    keyword: HashMap<ast::Identifier, Expression<T>>,
 
     /// The start of this argument list in its source.
     pos: ast::Pos,
 }
 
-impl ArgumentList {
+impl<T: Theme> ArgumentList<T> {
     fn new(pos: ast::Pos) -> Self {
         ArgumentList {
             positional: Vec::new(),
@@ -580,7 +474,7 @@ impl ArgumentList {
         self.pos
     }
 
-    pub fn positional(&self) -> &[Expression] {
+    pub fn positional(&self) -> &[Expression<T>] {
         &self.positional
     }
 
@@ -588,7 +482,7 @@ impl ArgumentList {
         self,
         err: &mut Error,
         test: impl FnOnce(&Self, &mut Error) -> Result<bool, Failed>
-    ) -> Result<Vec<Expression>, Result<Self, Failed>> {
+    ) -> Result<Vec<Expression<T>>, Result<Self, Failed>> {
         if !self.keyword.is_empty() {
             err.add(self.pos, "expected positional arguments only");
             Err(Err(Failed))
@@ -604,8 +498,8 @@ impl ArgumentList {
 
     pub fn into_positionals<const N: usize>(
         self, err: &mut Error
-    ) -> Result<[Expression; N], Failed>
-    where [Expression; N]: Default {
+    ) -> Result<[Expression<T>; N], Failed>
+    where [Expression<T>; N]: Default {
         if !self.keyword.is_empty() {
             err.add(self.pos, "expected positional arguments only");
             return Err(Failed)
@@ -622,7 +516,7 @@ impl ArgumentList {
         //     mem::transmute doesn’t seem to like const generics just yet.
         //     Or I am doing something wrong.
 
-        let mut res: [Expression; N] = Default::default();
+        let mut res: [Expression<T>; N] = Default::default();
 
         for (pos, src) in self.positional.into_iter().enumerate() {
             res[pos] = src;
@@ -638,7 +532,7 @@ impl ArgumentList {
     /// arguments.
     pub fn into_n_positionals(
         self, n: usize, err: &mut Error
-    ) -> Result<Vec<Expression>, Result<ArgumentList, Failed>> {
+    ) -> Result<Vec<Expression<T>>, Result<ArgumentList<T>, Failed>> {
         self.into_var_positionals(err, |args, err| {
             match n.cmp(&args.positional().len()) {
                 Ordering::Greater => Ok(false),
@@ -657,7 +551,7 @@ impl ArgumentList {
     /// Returns the only positional argument.
     pub fn into_sole_positional(
         self, err: &mut Error
-    ) -> Result<Expression, Result<ArgumentList, Failed>> {
+    ) -> Result<Expression<T>, Result<ArgumentList<T>, Failed>> {
         self.into_n_positionals(1, err).map(|mut res| res.pop().unwrap())
     }
 
@@ -673,8 +567,18 @@ impl ArgumentList {
     }
 
     /// Returns a keyword argument.
-    pub fn get_keyword(&self, key: &str) -> Option<&Expression> {
+    pub fn get_keyword(&self, key: &str) -> Option<&Expression<T>> {
         self.keyword.get(key)
+    }
+}
+
+impl<T: Theme> Clone for ArgumentList<T> {
+    fn clone(&self) -> Self {
+        ArgumentList {
+            positional: self.positional.clone(),
+            keyword: self.keyword.clone(),
+            pos: self.pos
+        }
     }
 }
 
@@ -742,18 +646,18 @@ impl ops::Add for PositionOffset {
 //------------ Statements ----------------------------------------------------
 
 impl ast::StatementList {
-    pub fn eval_all(
-        self, scope: &mut Scope, features: &mut FeatureSet
+    pub fn eval_all<T: Theme>(
+        self, scope: &mut Scope<T>, features: &mut FeatureSet<T>
     ) -> Result<(), Error> {
         let mut err = Error::default();
         self.eval(scope, features, &mut err);
         err.check()
     }
 
-    pub fn eval(
+    pub fn eval<T: Theme>(
         self,
-        scope: &mut Scope,
-        features: &mut FeatureSet,
+        scope: &mut Scope<T>,
+        features: &mut FeatureSet<T>,
         err: &mut Error
     ) {
         for statement in self.statements {
@@ -763,10 +667,10 @@ impl ast::StatementList {
 }
 
 impl ast::Statement {
-    pub fn eval(
+    pub fn eval<T: Theme>(
         self,
-        scope: &mut Scope,
-        features: &mut FeatureSet,
+        scope: &mut Scope<T>,
+        features: &mut FeatureSet<T>,
         err: &mut Error
     ) {
         match self {
@@ -781,7 +685,7 @@ impl ast::Statement {
 }
 
 impl ast::Let {
-    fn eval(self, scope: &mut Scope, err: &mut Error) {
+    fn eval<T: Theme>(self, scope: &mut Scope<T>, err: &mut Error) {
         for assignment in self.assignments.assignments {
             let target = assignment.target.eval();
             let expression = match assignment.expression.eval(scope, err) {
@@ -794,10 +698,10 @@ impl ast::Let {
 }
 
 impl ast::Procedure {
-    fn eval(
+    fn eval<T: Theme>(
         self, 
-        scope: &mut Scope,
-        features: &mut FeatureSet,
+        scope: &mut Scope<T>,
+        features: &mut FeatureSet<T>,
         err: &mut Error
     ) -> Result<(), Failed> {
         let args = self.args.eval(scope, err)?;
@@ -815,10 +719,10 @@ impl ast::Procedure {
                 Err(Failed)
             }
             None => {
-                match Procedure::lookup(self.ident.as_ref()) {
+                match scope.theme.lookup_procedure(self.ident.as_ref()) {
                     Some(procedure) => {
-                        procedure.eval(
-                            self.pos, args, scope, features, err
+                        scope.theme.eval_procedure(
+                            &procedure, self.pos, args, scope, features, err
                         )
                     }
                     None => {
@@ -835,10 +739,10 @@ impl ast::Procedure {
 }
 
 impl ast::With {
-    pub fn eval(
+    pub fn eval<T: Theme>(
         self,
-        scope: &mut Scope,
-        features: &mut FeatureSet,
+        scope: &mut Scope<T>,
+        features: &mut FeatureSet<T>,
         err: &mut Error
     ) {
         // We need our own scope.
@@ -858,10 +762,10 @@ impl ast::With {
 //------------ Assignments and Arguments -------------------------------------
 
 impl ast::AssignmentList {
-    fn eval_params(
+    fn eval_params<T: Theme>(
         self,
-        params: &mut RenderParams,
-        scope: &Scope,
+        params: &mut T::RenderParams,
+        scope: &Scope<T>,
         err: &mut Error
     ) {
         for item in self.assignments {
@@ -870,15 +774,17 @@ impl ast::AssignmentList {
                 Ok(expression) => expression,
                 Err(_) => continue,
             };
-            params.update(&target, expression, item.pos, err);
+            let _ = scope.theme.update_render_params(
+                params, &target, expression, item.pos, err
+            );
         }
     }
 }
 
 impl ast::ArgumentList {
-    fn eval(
-        self, scope: &Scope, err: &mut Error
-    ) -> Result<ArgumentList, Failed> {
+    fn eval<T: Theme>(
+        self, scope: &Scope<T>, err: &mut Error
+    ) -> Result<ArgumentList<T>, Failed> {
         let mut good = true;
         let mut res = ArgumentList::new(self.pos);
         for argument in self.arguments {
@@ -912,15 +818,15 @@ impl ast::ArgumentList {
 //------------ Expressions ---------------------------------------------------
 
 impl ast::Expression {
-    fn eval(
-        self, scope: &Scope, err: &mut Error
-    ) -> Result<Expression, Failed> {
+    fn eval<T: Theme>(
+        self, scope: &Scope<T>, err: &mut Error
+    ) -> Result<Expression<T>, Failed> {
         if self.fragments.len() == 1 {
             let first = self.fragments.into_iter().next().unwrap();
             Ok(Expression::new(first.1.eval_simple(scope, err)?, self.pos))
         }
         else {
-            let mut path = Path::new();
+            let mut path = Trace::new();
             let mut fragments = self.fragments.into_iter();
             while let Some((conn, frag)) = fragments.next() {
                 let (post, pre) = conn.tension();
@@ -958,22 +864,22 @@ impl ast::Expression {
                                 return Err(Failed)
                             }
                         };
-                        path.push_line(post, pre, Line::new(pos, end_pos));
+                        path.push_edge(post, pre, Edge::new(pos, end_pos));
                     }
-                    PathComponent::Path(val) => {
-                        path.push_path(post, pre, val)
+                    PathComponent::Trace(val) => {
+                        path.push_trace(post, pre, val)
                     }
                 }
             }
-            Ok(Expression::new(ExprVal::Path(path), self.pos))
+            Ok(Expression::new(ExprVal::Trace(path), self.pos))
         }
     }
 }
 
 impl ast::Fragment {
-    fn eval_simple(
-        self, scope: &Scope, err: &mut Error
-    ) -> Result<ExprVal, Failed> {
+    fn eval_simple<T: Theme>(
+        self, scope: &Scope<T>, err: &mut Error
+    ) -> Result<ExprVal<T>, Failed> {
         match self {
             ast::Fragment::Complex(frag) => frag.eval_expr(scope, err),
             ast::Fragment::List(frag) => frag.eval_expr(scope, err),
@@ -982,8 +888,8 @@ impl ast::Fragment {
         }
     }
 
-    fn eval_path_component<'s>(
-        self, scope: &'s Scope, err: &mut Error
+    fn eval_path_component<'s, T: Theme>(
+        self, scope: &'s Scope<T>, err: &mut Error
     ) -> Result<PathComponent<'s>, Failed> {
         match self {
             ast::Fragment::Complex(frag) => {
@@ -998,9 +904,9 @@ impl ast::Fragment {
 }
 
 impl ast::Complex {
-    fn eval_expr(
-        self, scope: &Scope, err: &mut Error
-    ) -> Result<ExprVal, Failed> {
+    fn eval_expr<T: Theme>(
+        self, scope: &Scope<T>, err: &mut Error
+    ) -> Result<ExprVal<T>, Failed> {
         match self.section {
             Some(section) => {
                 let base = self.external.eval_import_path(scope, err)?;
@@ -1010,8 +916,8 @@ impl ast::Complex {
         }
     }
 
-    fn eval_path_component<'s>(
-        self, scope: &'s Scope, err: &mut Error
+    fn eval_path_component<'s, T: Theme>(
+        self, scope: &'s Scope<T>, err: &mut Error
     ) -> Result<PathComponent<'s>, Failed> {
         match self.section {
             Some(section) => {
@@ -1026,9 +932,9 @@ impl ast::Complex {
 }
 
 impl ast::External {
-    fn eval_expr(
-        self, scope: &Scope, err: &mut Error
-    ) -> Result<ExprVal, Failed> {
+    fn eval_expr<T: Theme>(
+        self, scope: &Scope<T>, err: &mut Error
+    ) -> Result<ExprVal<T>, Failed> {
         match self.args {
             Some(args) => {
                 let args = args.eval(scope, err)?;
@@ -1046,7 +952,7 @@ impl ast::External {
                     }
                     None => {
                         Partial::new(
-                            &self.ident.ident, args, self.pos, err
+                            &self.ident.ident, args, self.pos, scope, err
                         )
                     }
                 }?;
@@ -1071,8 +977,8 @@ impl ast::External {
         }
     }
 
-    fn eval_import_path<'s>(
-        self, scope: &'s Scope, err: &mut Error
+    fn eval_import_path<'s, T: Theme>(
+        self, scope: &'s Scope<T>, err: &mut Error
     ) -> Result<&'s ImportPath, Failed> {
         let pos = self.pos;
         match self.eval_expr(scope, err)? {
@@ -1086,15 +992,15 @@ impl ast::External {
         }
     }
 
-    fn eval_path_component<'s>(
-        self, scope: &'s Scope, err: &mut Error
+    fn eval_path_component<'s, T: Theme>(
+        self, scope: &'s Scope<T>, err: &mut Error
     ) -> Result<PathComponent<'s>, Failed> {
         if self.args.is_some() {
             err.add(self.pos, "expected path variable");
             return Err(Failed)
         }
         match scope.get_var(self.ident.as_ref()) {
-            Some(&ExprVal::Path(ref path)) => Ok(PathComponent::Path(path)),
+            Some(&ExprVal::Trace(ref path)) => Ok(PathComponent::Trace(path)),
             _ => {
                 err.add(self.pos, "expected path variable");
                 Err(Failed)
@@ -1104,8 +1010,8 @@ impl ast::External {
 }
 
 impl ast::Section {
-    fn eval_subpath(
-        self, base: &ImportPath, scope: &Scope, err: &mut Error
+    fn eval_subpath<T: Theme>(
+        self, base: &ImportPath, scope: &Scope<T>, err: &mut Error
     ) -> Result<Subpath, Failed> {
         let start = self.start.eval(&base, scope, err);
         let end = match self.end {
@@ -1134,8 +1040,8 @@ impl ast::Section {
         ))
     }
 
-    fn eval_position(
-        self, base: &ImportPath, scope: &Scope, err: &mut Error
+    fn eval_position<T: Theme>(
+        self, base: &ImportPath, scope: &Scope<T>, err: &mut Error
     ) -> Result<Position, Failed> {
         if self.end.is_some() {
             err.add(self.pos, "expected position section");
@@ -1162,8 +1068,8 @@ impl ast::Section {
         ))
     }
 
-    fn eval_either<'s>(
-        self, base: &ImportPath, scope: &'s Scope, err: &mut Error
+    fn eval_either<'s, T: Theme>(
+        self, base: &ImportPath, scope: &'s Scope<T>, err: &mut Error
     ) -> Result<PathComponent<'s>, Failed> {
         if self.end.is_some() {
             self.eval_subpath(base, scope, err).map(PathComponent::Subpath)
@@ -1173,14 +1079,14 @@ impl ast::Section {
         }
     }
 
-    fn eval_expr(
-        self, base: &ImportPath, scope: &Scope, err: &mut Error
-    ) -> Result<ExprVal, Failed> {
+    fn eval_expr<T: Theme>(
+        self, base: &ImportPath, scope: &Scope<T>, err: &mut Error
+    ) -> Result<ExprVal<T>, Failed> {
         if self.end.is_some() {
             self.eval_subpath(base, scope, err).map(|subpath| {
-                let mut path = Path::new();
+                let mut path = Trace::new();
                 path.push_subpath(1., 1., subpath);
-                ExprVal::Path(path)
+                ExprVal::Trace(path)
             })
         }
         else {
@@ -1190,8 +1096,8 @@ impl ast::Section {
 }
 
 impl ast::Location {
-    fn eval(
-        self, base: &ImportPath, scope: &Scope, err: &mut Error
+    fn eval<T: Theme>(
+        self, base: &ImportPath, scope: &Scope<T>, err: &mut Error
     ) -> Result<(u32, Distance), Failed> {
         let node = match base.get_named(self.node.as_ref()) {
             Some(node) => Ok(node),
@@ -1218,8 +1124,8 @@ impl ast::Location {
 }
 
 impl ast::Distance {
-    fn eval(
-        self, scope: &Scope, err: &mut Error
+    fn eval<T: Theme>(
+        self, scope: &Scope<T>, err: &mut Error
     ) -> Result<Distance, Failed> {
         let value = self.value.eval(scope, err)?;
         match self.op {
@@ -1230,8 +1136,8 @@ impl ast::Distance {
 }
 
 impl ast::Offset {
-    fn eval_subpath(
-        self, scope: &Scope, err: &mut Error
+    fn eval_subpath<T: Theme>(
+        self, scope: &Scope<T>, err: &mut Error
     ) -> Result<Distance, Failed> {
         match self {
             ast::Offset::Sideways(sideways) => {
@@ -1252,8 +1158,8 @@ impl ast::Offset {
         }
     }
 
-    fn eval_position(
-        self, scope: &Scope, err: &mut Error
+    fn eval_position<T: Theme>(
+        self, scope: &Scope<T>, err: &mut Error
     ) -> Result<PositionOffset, Failed> {
         match self {
             ast::Offset::Sideways(sideways) => {
@@ -1280,9 +1186,9 @@ impl ast::Offset {
 }
 
 impl ast::List {
-    fn eval_expr(
-        self, scope: &Scope, err: &mut Error
-    ) -> Result<ExprVal, Failed> {
+    fn eval_expr<T: Theme>(
+        self, scope: &Scope<T>, err: &mut Error
+    ) -> Result<ExprVal<T>, Failed> {
         self.content.into_iter().fold(Ok(Vec::new()), |res, expr| {
             match (res, expr.eval(scope, err)) {
                 (Ok(mut res), Ok(expr)) => {
@@ -1296,14 +1202,14 @@ impl ast::List {
 }
 
 impl ast::Vector {
-    fn eval_expr(
-        self, scope: &Scope, err: &mut Error
-    ) -> Result<ExprVal, Failed> {
+    fn eval_expr<T: Theme>(
+        self, scope: &Scope<T>, err: &mut Error
+    ) -> Result<ExprVal<T>, Failed> {
         self.eval(scope, err).map(|res| ExprVal::Vector(res))
     }
 
-    fn eval(
-        self, scope: &Scope, err: &mut Error
+    fn eval<T: Theme>(
+        self, scope: &Scope<T>, err: &mut Error
     ) -> Result<(Distance, Distance), Failed> {
         let x = self.x.eval(scope, err);
         let y = self.y.eval(scope, err)?;
@@ -1312,9 +1218,9 @@ impl ast::Vector {
 }
 
 impl ast::Atom {
-    fn eval(
-        self, scope: &Scope, err: &mut Error
-    ) -> Result<ExprVal, Failed> {
+    fn eval<T: Theme>(
+        self, scope: &Scope<T>, err: &mut Error
+    ) -> Result<ExprVal<T>, Failed> {
         match self {
             ast::Atom::Number(atom) => atom.eval_expr(scope, err),
             ast::Atom::SymbolSet(atom) => atom.eval_expr(scope, err),
@@ -1325,9 +1231,9 @@ impl ast::Atom {
 }
 
 impl ast::Number {
-    fn eval_expr(
-        self, _scope: &Scope, _err: &mut Error
-    ) -> Result<ExprVal, Failed> {
+    fn eval_expr<T: Theme>(
+        self, _scope: &Scope<T>, _err: &mut Error
+    ) -> Result<ExprVal<T>, Failed> {
         if let Ok(value) = i32::from_str(&self.value) {
             Ok(ExprVal::Number(Number::Int(value)))
         }
@@ -1344,9 +1250,9 @@ impl ast::Number {
 }
 
 impl ast::SymbolSet {
-    fn eval_expr(
-        self, _scope: &Scope, _err: &mut Error
-    ) -> Result<ExprVal, Failed> {
+    fn eval_expr<T: Theme>(
+        self, _scope: &Scope<T>, _err: &mut Error
+    ) -> Result<ExprVal<T>, Failed> {
         Ok(ExprVal::SymbolSet(
             self.symbols.into_iter().map(Into::into).collect()
         ))
@@ -1354,9 +1260,9 @@ impl ast::SymbolSet {
 }
 
 impl ast::Text {
-    fn eval_expr(
-        self, _scope: &Scope, _err: &mut Error
-    ) -> Result<ExprVal, Failed> {
+    fn eval_expr<T: Theme>(
+        self, _scope: &Scope<T>, _err: &mut Error
+    ) -> Result<ExprVal<T>, Failed> {
         let mut res = self.first.content;
         self.others.into_iter().for_each(|val| res.push_str(&val.content));
         Ok(ExprVal::Text(res))
@@ -1364,31 +1270,18 @@ impl ast::Text {
 }
 
 impl ast::UnitNumber {
-    fn eval_expr(
-        self, scope: &Scope, err: &mut Error
-    ) -> Result<ExprVal, Failed> {
+    fn eval_expr<T: Theme>(
+        self, scope: &Scope<T>, err: &mut Error
+    ) -> Result<ExprVal<T>, Failed> {
         self.eval(scope, err).map(|res| ExprVal::Distance(res))
     }
 
-    fn eval(
-        self, _scope: &Scope, err: &mut Error
+    fn eval<T: Theme>(
+        self, scope: &Scope<T>, err: &mut Error
     ) -> Result<Distance, Failed> {
-        for (unit, factor) in units::WORLD_DISTANCES {
-            if self.unit == unit {
-                return Ok(Distance::new(
-                    Some(self.number.eval_float() * factor), None
-                ))
-            }
-        }
-        for (unit, factor) in units::CANVAS_DISTANCES {
-            if self.unit == unit {
-                return Ok(Distance::new(
-                    None, Some(self.number.eval_float() * factor)
-                ))
-            }
-        }
-        err.add(self.pos, format!("unknown unit '{}'", self.unit));
-        Err(Failed)
+        scope.theme.eval_unit(
+            self.number.eval_float(), self.unit.as_ref(), self.pos, err
+        )
     }
 }
 
@@ -1404,7 +1297,7 @@ impl ast::Identifier {
 enum PathComponent<'s> {
     Subpath(Subpath),
     Position(Position),
-    Path(&'s Path),
+    Trace(&'s Trace),
 }
 
 

@@ -1,16 +1,15 @@
 //! Arrangements of text placed on the map.
 
-use std::{cmp, fmt};
-use std::sync::Arc;
+use std::cmp;
 use kurbo::{Point, Rect};
-use crate::canvas::Canvas;
 use crate::import::eval::SymbolSet;
+use crate::theme::Theme;
+use super::canvas::Canvas;
 use super::path::Position;
 
 //------------ Label ---------------------------------------------------------
 
-#[derive(Clone, Debug)]
-pub struct Label {
+pub struct Label<T: Theme> {
     /// The position the label is attached to.
     position: Position,
 
@@ -20,12 +19,12 @@ pub struct Label {
     on_path: bool,
 
     /// The layout to render
-    layout: Layout,
+    layout: Layout<T>,
 }
 
-impl Label {
+impl<T: Theme> Label<T> {
     pub fn new(
-        position: Position, on_path: bool, layout: Layout
+        position: Position, on_path: bool, layout: Layout<T>
     ) -> Self {
         Label { position, on_path, layout }
     }
@@ -34,8 +33,8 @@ impl Label {
         self.position.storage_bounds()
     }
 
-    pub fn render(&self, canvas: &Canvas) {
-        let (extent, depth) = self.layout.extent(canvas);
+    pub fn render(&self, style: &T::Style, canvas: &Canvas) {
+        let (extent, depth) = self.layout.extent(style, canvas);
         if depth == 0 {
             return
         }
@@ -48,7 +47,7 @@ impl Label {
 
         for depth in (0..depth).rev() {
             self.layout.render(
-               canvas, depth, Point::default(), extent, extent
+               style, canvas, depth, Point::default(), extent, extent
             );
         }
         canvas.identity_matrix();
@@ -69,58 +68,56 @@ impl Label {
 /// called the _anchor_ in all four directions. The extent is used to stack
 /// layouts: multiple layouts are placed in such a way that their extents
 /// touch.
-#[derive(Clone, Debug)]
-pub struct Layout {
+pub struct Layout<T: Theme> {
     /// The content of the layout.
-    content: Content,
+    content: Content<T>,
 }
 
-#[derive(Clone, Debug)]
-enum Content {
-    Vbox(Vbox),
-    Hbox(Hbox),
-    Span(Span),
+enum Content<T: Theme> {
+    Vbox(Vbox<T>),
+    Hbox(Hbox<T>),
+    Span(T::Span),
 }
 
-impl Layout {
-    pub fn vbox(halign: Align, valign: Align, lines: Vec<Layout>) -> Self {
+impl<T: Theme> Layout<T> {
+    pub fn vbox(halign: Align, valign: Align, lines: Vec<Layout<T>>) -> Self {
         Self::new(Content::Vbox(Vbox::new(halign, valign, lines)))
     }
 
-    pub fn hbox(halign: Align, valign: Align, spans: Vec<Layout>) -> Self {
+    pub fn hbox(halign: Align, valign: Align, spans: Vec<Layout<T>>) -> Self {
         Self::new(Content::Hbox(Hbox::new(halign, valign, spans)))
     }
 
-    pub fn span(rule: SpanRule) -> Self {
-        Self::new(Content::Span(Span::new(rule)))
+    pub fn span(rule: T::Span) -> Self {
+        Self::new(Content::Span(rule))
     }
 
-    fn new(content: Content) -> Self {
+    fn new(content: Content<T>) -> Self {
         Layout { content }
     }
 
     fn render(
-        &self, canvas: &Canvas, depth: usize, point: Point,
+        &self, style: &T::Style, canvas: &Canvas, depth: usize, point: Point,
         extent: Rect, outer: Rect,
     ) {
         match self.content {
             Content::Vbox(ref v)
-                => v.render(canvas, depth, point, extent),
+                => v.render(style, canvas, depth, point, extent),
             Content::Hbox(ref v)
-                => v.render(canvas, depth, point, extent),
+                => v.render(style, canvas, depth, point, extent),
             Content::Span(ref v)
-                => v.render(canvas, depth, point, extent, outer),
+                => v.render(style, canvas, depth, point, extent, outer),
         }
     }
 
     /// The extent of the layout.
     ///
     /// The values are given relative to the layout’s reference point.
-    fn extent(&self, canvas: &Canvas) -> (Rect, usize) {
+    fn extent(&self, style: &T::Style, canvas: &Canvas) -> (Rect, usize) {
         match self.content {
-            Content::Vbox(ref v) => v.extent(canvas),
-            Content::Hbox(ref v) => v.extent(canvas),
-            Content::Span(ref v) => v.extent(canvas),
+            Content::Vbox(ref v) => v.extent(style, canvas),
+            Content::Hbox(ref v) => v.extent(style, canvas),
+            Content::Span(ref v) => v.extent(style, canvas),
         }
     }
 }
@@ -128,33 +125,34 @@ impl Layout {
 
 //------------ Vbox ----------------------------------------------------------
 
-#[derive(Clone, Debug)]
-struct Vbox {
+struct Vbox<T: Theme> {
     halign: Align,
     valign: Align,
-    lines: Vec<Layout>,
+    lines: Vec<Layout<T>>,
 }
 
-impl Vbox {
-    fn new(halign: Align, valign: Align, lines: Vec<Layout>) -> Self {
+impl<T: Theme> Vbox<T> {
+    fn new(halign: Align, valign: Align, lines: Vec<Layout<T>>) -> Self {
         Vbox { halign, valign, lines }
     }
 
     fn render(
-        &self, canvas: &Canvas, depth: usize, point: Point, extent: Rect
+        &self, style: &T::Style, canvas: &Canvas,
+        depth: usize, point: Point, extent: Rect
     ) {
         let outer = extent;
-        self.render_op(canvas, point, extent, |layout, point, extent| {
-            layout.render(canvas, depth, point, extent, outer)
+        self.render_op(style, canvas, point, extent, |layout, point, extent| {
+            layout.render(style, canvas, depth, point, extent, outer)
         })
     }
 
-    fn render_op<F: Fn(&Layout, Point, Rect)>(
-        &self, canvas: &Canvas, mut point: Point, extent: Rect, op: F
+    fn render_op<F: Fn(&Layout<T>, Point, Rect)>(
+        &self, style: &T::Style, canvas: &Canvas,
+        mut point: Point, extent: Rect, op: F
     ) {
         point.y += extent.y0;
         for layout in &self.lines {
-            let (extent, _) = layout.extent(canvas);
+            let (extent, _) = layout.extent(style, canvas);
             point.y -= extent.y0;
             match self.halign {
                 Align::Start => {
@@ -195,12 +193,12 @@ impl Vbox {
         }
     }
 
-    fn extent(&self, canvas: &Canvas) -> (Rect, usize) {
+    fn extent(&self, style: &T::Style, canvas: &Canvas) -> (Rect, usize) {
         let mut res = Rect::default();
         let mut max_depth = 0;
         let mut top = None;
         for layout in &self.lines {
-            let (extent, depth) = layout.extent(canvas);
+            let (extent, depth) = layout.extent(style, canvas);
             max_depth = cmp::max(max_depth, depth);
             res.y1 += extent.height();
             if top.is_none() {
@@ -249,33 +247,34 @@ impl Vbox {
 //------------ Hbox ----------------------------------------------------------
 
 /// A sequence of layouts stacked horizontally.
-#[derive(Clone, Debug)]
-struct Hbox {
+struct Hbox<T: Theme> {
     halign: Align,
     valign: Align,
-    spans: Vec<Layout>,
+    spans: Vec<Layout<T>>,
 }
 
-impl Hbox {
-    fn new(halign: Align, valign: Align, spans: Vec<Layout>) -> Self {
+impl<T: Theme> Hbox<T> {
+    fn new(halign: Align, valign: Align, spans: Vec<Layout<T>>) -> Self {
         Hbox { halign, valign, spans }
     }
 
     fn render(
-        &self, canvas: &Canvas, depth: usize, point: Point, extent: Rect
+        &self, style: &T::Style, canvas: &Canvas,
+        depth: usize, point: Point, extent: Rect
     ) {
         let outer = extent;
-        self.render_op(canvas, point, extent, |layout, point, extent| {
-            layout.render(canvas, depth, point, extent, outer)
+        self.render_op(style, canvas, point, extent, |layout, point, extent| {
+            layout.render(style, canvas, depth, point, extent, outer)
         });
     }
 
-    fn render_op<F: Fn(&Layout, Point, Rect)>(
-        &self, canvas: &Canvas, mut point: Point, extent: Rect, op: F
+    fn render_op<F: Fn(&Layout<T>, Point, Rect)>(
+        &self, style: &T::Style, canvas: &Canvas,
+        mut point: Point, extent: Rect, op: F
     ) {
         point.x += extent.x0;
         for layout in &self.spans {
-            let (extent, _) = layout.extent(canvas);
+            let (extent, _) = layout.extent(style, canvas);
             point.x -= extent.x0;
             match self.valign {
                 Align::Start => {
@@ -316,12 +315,12 @@ impl Hbox {
         }
     }
 
-    fn extent(&self, canvas: &Canvas) -> (Rect, usize) {
+    fn extent(&self, style: &T::Style, canvas: &Canvas) -> (Rect, usize) {
         let mut res = Rect::default();
         let mut max_depth = 0;
         let mut left = None;
         for layout in &self.spans {
-            let (extent, depth) = layout.extent(canvas);
+            let (extent, depth) = layout.extent(style, canvas);
             max_depth = cmp::max(max_depth, depth);
             res.x1 += extent.width();
             if left.is_none() {
@@ -370,43 +369,13 @@ impl Hbox {
 //------------ Span ----------------------------------------------------------
 
 /// A run of text rendered with the same properties.
-///
-/// For the moment, we only support horizontal left-to-right text with no line
-/// breaks.
-///
-/// The extent is anchored at the base line and the start of the first
-/// character. It goes up by the font’s ascent, down by the font’s line height
-/// minus the ascent. It does not goes left but the full advance to the right.
-#[derive(Clone, Debug)]
-struct Span {
-    rule: SpanRule,
-}
-
-impl Span {
-    fn new(rule: SpanRule) -> Span {
-        Span { rule }
-    }
-
-    fn extent(&self, canvas: &Canvas) -> (Rect, usize) {
-        self.rule.0.extent(canvas)
-    }
-
-    fn render(
-        &self, canvas: &Canvas, depth: usize,
-        point: Point, extent: Rect, outer: Rect,
-    ) {
-        self.rule.0.render(canvas, depth, point, extent, outer)
-    }
-}
-
-
-pub trait RenderSpan: Send + Sync + 'static {
+pub trait Span<T: Theme> {
     /// Returns the extent and depth of the span.
     ///
     /// The extent describes the natural spread of the span on the
     /// canvas away from the anchor point. The depth describes the number
     /// of rendering rounds the span needs to properly render its content.
-    fn extent(&self, canvas: &Canvas) -> (Rect, usize);
+    fn extent(&self, style: &T::Style, canvas: &Canvas) -> (Rect, usize);
 
     /// Renders one round of the span.
     ///
@@ -421,23 +390,9 @@ pub trait RenderSpan: Send + Sync + 'static {
     /// the `render` method will be called with depth 1 first and then with
     /// depth 0 again.
     fn render(
-        &self, canvas: &Canvas, depth: usize, point: Point,
+        &self, style: &T::Style, canvas: &Canvas, depth: usize, point: Point,
         extent: Rect, outer: Rect,
     );
-
-    fn into_rule(self) -> SpanRule
-    where Self: Sized {
-        SpanRule(Arc::new(self))
-    }
-}
-
-#[derive(Clone)]
-pub struct SpanRule(Arc<dyn RenderSpan>);
-
-impl fmt::Debug for SpanRule {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SpanRule(...)")
-    }
 }
 
 

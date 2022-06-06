@@ -7,8 +7,8 @@ use kurbo::{
     BezPath, PathEl, ParamCurve, ParamCurveArclen, PathSeg, Point, Rect,
     TranslateScale, Vec2
 };
-use crate::features::path::{CANVAS_ACCURACY, SegTime};
-use crate::library::Style;
+use crate::theme::Style;
+use super::path::{CANVAS_ACCURACY, SegTime};
 
 
 //------------ Configurable Constants ----------------------------------------
@@ -65,9 +65,6 @@ pub struct Canvas {
     /// The size of a bp in canvas coordinates.
     canvas_bp: f64,
 
-    /// The map style.
-    style: Style,
-
     /// The font table.
     fonts: RefCell<FontTable>,
 }
@@ -81,21 +78,22 @@ impl Canvas {
     /// The nort-west corner will be at `nw` in storage coordinates and the
     /// storage coordinates will be mulitplied by `scale` when translating
     /// into canvas coordinates.
-    pub fn new(
+    pub fn new<S: Style>(
         surface: &cairo::Surface,
         size: Point,
         canvas_bp: f64,
         nw: Point,
         scale: f64,
-        mut style: Style,
+        style: &mut S,
     ) -> Self {
         // The size in storage coordinates.
         let feature_size = Point::new(size.x / scale, size.y / scale);
 
         // The bounds correction in storage coordinates.
+        let correct = style.bounds_correction();
         let correct = Point::new(
-            feature_size.x * BOUNDS_CORRECTION * style.detail() as f64,
-            feature_size.y * BOUNDS_CORRECTION * style.detail() as f64,
+            feature_size.x * correct,
+            feature_size.y * correct,
         );
 
         let canvas_bp = canvas_bp * style.mag();
@@ -122,7 +120,6 @@ impl Canvas {
             ),
             equator_scale: scale,
             canvas_bp,
-            style,
             fonts: RefCell::new(FontTable::new()),
         }
     }
@@ -179,16 +176,6 @@ impl Canvas {
     /// Returns the size of a _bp_ in canvas coordinates.
     pub fn canvas_bp(&self) -> f64 {
         self.canvas_bp
-    }
-
-    /// Returns the style.
-    pub fn style(&self) -> &Style {
-        &self.style
-    }
-
-    /// Returns the detail level.
-    pub fn detail(&self) -> u8 {
-        self.style.detail()
     }
 
     pub fn apply_font(&self, face: FontFace, size: f64) {

@@ -11,22 +11,30 @@
 /// *  `:closed`, `:removed`: The entity described by the marker has been
 ///    closed or removed.
 
+use kurbo::Rect;
 use std::f64::consts::PI;
-use crate::canvas::Canvas;
-use crate::features::marker::RenderMarker;
-use crate::features::path::Position;
 use crate::import::{ast, eval};
 use crate::import::Failed;
+use crate::render::canvas::Canvas;
+use crate::render::path::Position;
 use super::super::class::Class;
-use super::super::style::Dimensions;
+use super::super::style::{Dimensions, Style};
+use super::super::theme::Railwayhistory;
 
 
 //------------ StandardMarker ------------------------------------------------
 
 /// The rendering rule for a standard marker.
 pub struct StandardMarker {
-    /// Extra rotation in addition to whatever the position dictates.
-    rotation: f64,
+    /// The position the marker is attached to.
+    position: Position,
+
+    /// Orientation of the marker.
+    ///
+    /// If this in `None` the marker doesn’t need to be oriented at all.
+    /// Otherwise the value is the angle to be added to rotation from the
+    /// position.
+    orientation: Option<f64>,
 
     /// The feature class.
     class: Class,
@@ -38,15 +46,23 @@ pub struct StandardMarker {
 
 impl StandardMarker {
     pub fn from_arg(
-        arg: eval::Expression,
+        arg: eval::Expression<Railwayhistory>,
+        position: Position,
         err: &mut eval::Error,
     ) -> Result<Self, Failed> {
         let (mut symbols, pos) = arg.into_symbol_set(err)?;
-        let rotation = Self::rotation_from_symbols(&mut symbols, pos, err)?;
+        let (marker, rotate) = Self::marker_from_symbols(
+            &mut symbols, pos, err
+        )?;
+        let orientation = if rotate {
+            Some(Self::rotation_from_symbols(&mut symbols, pos, err)?)
+        }
+        else {
+            None
+        };
         let class = Class::from_symbols(&mut symbols);
-        let marker = Self::marker_from_symbols(&mut symbols, pos, err)?;
         symbols.check_exhausted(err)?;
-        Ok(StandardMarker { rotation, class, marker })
+        Ok(StandardMarker { position, orientation, class, marker })
     }
 
     fn rotation_from_symbols(
@@ -79,24 +95,36 @@ impl StandardMarker {
         symbols: &mut eval::SymbolSet,
         pos: ast::Pos,
         err: &mut eval::Error
-    ) -> Result<&'static (dyn Fn(&Canvas, Dimensions) + Sync), Failed> {
+    ) -> Result<
+        (&'static (dyn Fn(&Canvas, Dimensions) + Sync), bool),
+        Failed
+    > {
         for (name, marker) in MARKERS {
             if symbols.take(name) {
-                return Ok(marker)
+                return Ok((marker, true))
+            }
+        }
+        for (name, marker) in DOT_MARKERS {
+            if symbols.take(name) {
+                return Ok((marker, false))
             }
         }
         err.add(pos, "missing marker");
         Err(Failed)
     }
-}
 
-impl RenderMarker for StandardMarker {
-    fn render(&self, canvas: &Canvas, position: &Position) {
-        let (point, angle) = position.resolve(canvas);
+    pub fn storage_bounds(&self) -> Rect {
+        self.position.storage_bounds()
+    }
+
+    pub fn render(&self, style: &Style, canvas: &Canvas) {
+        let (point, angle) = self.position.resolve(canvas);
         canvas.translate(point.x, point.y);
-        canvas.rotate(angle + self.rotation);
-        canvas.style().primary_marker_color(&self.class).apply(canvas);
-        (self.marker)(canvas, canvas.style().dimensions());
+        if let Some(rotation) = self.orientation {
+            canvas.rotate(angle + rotation);
+        }
+        style.primary_marker_color(&self.class).apply(canvas);
+        (self.marker)(canvas, style.dimensions());
         canvas.identity_matrix();
     }
 }
@@ -104,7 +132,9 @@ impl RenderMarker for StandardMarker {
 
 //------------ Markers ------------------------------------------------------
 
-static MARKERS: &[(&'static str, &'static (dyn Fn(&Canvas, Dimensions) + Sync))] = &[
+static MARKERS: &[
+    (&'static str, &'static (dyn Fn(&Canvas, Dimensions) + Sync))
+] = &[
     ("de.abzw", &|canvas, u| {
         canvas.set_line_width(u.sp);
         canvas.move_to(0., 0.);
@@ -637,6 +667,32 @@ static MARKERS: &[(&'static str, &'static (dyn Fn(&Canvas, Dimensions) + Sync))]
         canvas.stroke();
     }),
 
+    ("tunnel.l", &|canvas, u| {
+        canvas.move_to(0., 0.);
+        canvas.move_to(0., 0.);
+        canvas.line_to(1.0 * u.dt, 0.0);
+        canvas.line_to(1.75 * u.dt, -0.75 * u.dt);
+        canvas.set_line_width(u.bp);
+        canvas.stroke();
+    }),
+    ("tunnel.dt", &|canvas, u| {
+        canvas.set_line_width(u.bp);
+        canvas.move_to(0., 0.);
+        canvas.line_to(0., u.dt);
+        canvas.stroke();
+    }),
+    ("tunnel.r", &|canvas, u| {
+        canvas.move_to(0., 0.);
+        canvas.line_to(-1.0 * u.dt, 0.0);
+        canvas.line_to(-1.75 * u.dt, -0.75 * u.dt);
+        canvas.set_line_width(u.bp);
+        canvas.stroke();
+    }),
+];
+
+static DOT_MARKERS: &[
+    (&'static str, &'static (dyn Fn(&Canvas, Dimensions) + Sync))
+] = &[
     ("statdot", &|canvas, u| {
         canvas.move_to(0., 0.);
         canvas.arc(0., 0., 0.7 * u.dt, 0., 2.0 * PI);
@@ -716,28 +772,6 @@ static MARKERS: &[(&'static str, &'static (dyn Fn(&Canvas, Dimensions) + Sync))]
         canvas.set_operator(cairo::Operator::Clear);
         canvas.stroke();
         canvas.set_operator(cairo::Operator::Over);
-    }),
-
-    ("tunnel.l", &|canvas, u| {
-        canvas.move_to(0., 0.);
-        canvas.move_to(0., 0.);
-        canvas.line_to(1.0 * u.dt, 0.0);
-        canvas.line_to(1.75 * u.dt, -0.75 * u.dt);
-        canvas.set_line_width(u.bp);
-        canvas.stroke();
-    }),
-    ("tunnel.dt", &|canvas, u| {
-        canvas.set_line_width(u.bp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., u.dt);
-        canvas.stroke();
-    }),
-    ("tunnel.r", &|canvas, u| {
-        canvas.move_to(0., 0.);
-        canvas.line_to(-1.0 * u.dt, 0.0);
-        canvas.line_to(-1.75 * u.dt, -0.75 * u.dt);
-        canvas.set_line_width(u.bp);
-        canvas.stroke();
     }),
 ];
 
