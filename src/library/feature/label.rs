@@ -317,7 +317,8 @@ impl Properties {
     }
 
     pub fn enable_linenum(&mut self) {
-        self.linenum = true
+        self.linenum = true;
+        self.size = FontSize::Badge;
     }
 
     pub fn apply_font(&self, canvas: &Canvas) {
