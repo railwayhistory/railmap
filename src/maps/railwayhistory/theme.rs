@@ -83,6 +83,10 @@ impl theme::Theme for Railwayhistory {
     ) -> Self::Style {
         Style::new(tile_id.style, tile_id.zoom)
     }
+
+    fn index_page(&self) -> &'static [u8] {
+        include_bytes!("../../../html/railwayhistory/index.html").as_ref()
+    }
 }
 
 

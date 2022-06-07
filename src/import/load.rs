@@ -8,14 +8,14 @@ use super::features::FeatureSetError;
 use super::path::{PathSet, PathSetError};
 
 
-pub struct LoadFeatures<T: Theme> {
-    theme: T,
+pub struct LoadFeatures<'a, T: Theme> {
+    theme: &'a T,
     features: FeatureSet<T>,
     err: ImportError,
 }
 
-impl<T: Theme> LoadFeatures<T> {
-    pub fn new(theme: T) -> Self {
+impl<'a, T: Theme> LoadFeatures<'a, T> {
+    pub fn new(theme: &'a T) -> Self {
         LoadFeatures {
             theme,
             features: Default::default(),

@@ -12,13 +12,13 @@ use crate::tile::TileId;
 
 //------------ Theme ---------------------------------------------------------
 
-pub trait Theme: Sized + Clone {
+pub trait Theme: Sized + Clone + Send + Sync + 'static {
     type Function: Clone;
     type Procedure: Clone;
     type CustomExpr: Clone;
     type RenderParams: Default + Clone;
     type Style: Style;
-    type Feature: Feature<Self>;
+    type Feature: Feature<Self> + Send + Sync + 'static;
     type Span: Span<Self>;
 
     fn eval_unit(
@@ -58,13 +58,15 @@ pub trait Theme: Sized + Clone {
     fn style(
         &self, tile_id: &TileId<<Self::Style as Style>::StyleId>,
     ) -> Self::Style;
+
+    fn index_page(&self) -> &'static [u8];
 }
 
 
 //------------ Style ---------------------------------------------------------
 
 pub trait Style {
-    type StyleId: Clone + Hash + Eq + FromStr;
+    type StyleId: Send + Sync + 'static + Clone + Hash + Eq + FromStr;
 
     /// Returns the a multiplier by which to grow the bounds.
     ///

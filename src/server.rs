@@ -30,11 +30,7 @@ impl<T: Theme> Server<T> {
     }
 }
 
-impl<T: Theme + Send + Sync + 'static> Server<T>
-where
-    <T::Style as Style>::StyleId: Send + Sync + 'static,
-    T::Feature: Send + Sync + 'static,
-{
+impl<T: Theme> Server<T> {
     pub async fn run(&self, addr: SocketAddr) {
         let make_svc = make_service_fn(move |_conn| {
             let this = self.clone();
@@ -64,7 +60,7 @@ impl<T: Theme> Server<T> {
                 return Ok(Response::builder()
                     .header("Content-Type", "text/html")
                     .body(From::<&'static [u8]>::from(
-                            include_bytes!("../html/index.html").as_ref()
+                        self.theme.index_page()
                     ))
                     .unwrap()
                 )
