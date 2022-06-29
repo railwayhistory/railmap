@@ -619,21 +619,21 @@ struct ColorSetSet {
 lazy_static! {
     static ref COLORS: ColorSetSet = {
         let base = ColorSet {
-            el_ole_ac_low_pax: Color::rgb(0.855, 0.071, 0.071),
-            el_ole_ac_high_pax: Color::rgb(0.588, 0.075, 0.851),
-            el_ole_dc_low_pax: Color::rgb(0.510, 0.600, 0.051),
-            el_ole_dc_high_pax: Color::rgb(0.145, 0.600, 0.055),
-            el_rail_low_pax: Color::rgb(0.059, 0.729, 0.663),
-            el_rail_high_pax: Color::rgb(0.059, 0.729, 0.663),
-            el_none_pax: Color::rgb(0.643, 0.443, 0.027),
+            el_none_pax:        Color::hex("98690dff").unwrap(),
+            el_ole_ac_high_pax: Color::hex("8845aaff").unwrap(),
+            el_ole_ac_low_pax:  Color::hex("aa4689ff").unwrap(),
+            el_ole_dc_high_pax: Color::hex("a51100ff").unwrap(),
+            el_ole_dc_low_pax:  Color::hex("d05113ff").unwrap(),
+            el_rail_high_pax:   Color::hex("007e49ff").unwrap(),
+            el_rail_low_pax:    Color::hex("6e6e00ff").unwrap(),
 
-            el_ole_ac_low: Color::rgb(0.659, 0.259, 0.259),
-            el_ole_ac_high: Color::rgb(0.525, 0.279, 0.647),
-            el_ole_dc_low: Color::rgb(0.553, 0.600, 0.349),
-            el_ole_dc_high: Color::rgb(0.392, 0.569, 0.357),
-            el_rail_low: Color::rgb(0.235, 0.545, 0.514),
-            el_rail_high: Color::rgb(0.235, 0.545, 0.514),
-            el_none: Color::rgb(0.608, 0.514, 0.329),
+            el_none:        Color::hex("523700ff").unwrap(),
+            el_ole_ac_high: Color::hex("4d2263ff").unwrap(),
+            el_ole_ac_low:  Color::hex("691f51ff").unwrap(),
+            el_ole_dc_high: Color::hex("720c00ff").unwrap(),
+            el_ole_dc_low:  Color::hex("ac3900ff").unwrap(),
+            el_rail_high:   Color::hex("004f2eff").unwrap(),
+            el_rail_low:    Color::hex("444400ff").unwrap(),
 
             pax_full_hsl: Color::rgb(0.588, 0.075, 0.851),
             pax_full_ole: Color::rgb(0.855, 0.071, 0.071),
@@ -642,14 +642,14 @@ lazy_static! {
             pax_ltd: Color::rgb(0.553, 0.600, 0.349),
             pax_none: Color::grey(0.100),
 
-            closed: Color::grey(0.600),
-            removed: Color::grey(0.700),
-            gone: Color::grey(0.850),
+            closed:  Color::grey(0.550),
+            removed: Color::grey(0.650),
+            gone:    Color::grey(0.850),
 
-            tram: Color::rgb(0.109, 0.387, 0.668),
-            tram_closed: Color::rgb(0.367, 0.555, 0.723),
+            tram:         Color::rgb(0.109, 0.387, 0.668),
+            tram_closed:  Color::rgb(0.367, 0.555, 0.723),
             tram_removed: Color::rgb(0.559, 0.686, 0.816),
-            tram_gone: Color::rgb(0.742, 0.820, 0.890),
+            tram_gone:    Color::rgb(0.742, 0.820, 0.890),
 
             toxic: Color::rgb(0.824, 0.824, 0.0),
         };
