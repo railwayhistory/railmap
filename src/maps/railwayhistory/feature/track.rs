@@ -139,7 +139,9 @@ impl TrackContour {
 
     fn render_detail_2(&self, style: &Style, canvas: &Canvas) {
         let units = style.dimensions();
-        if self.class.class.category().is_main() {
+        if self.class.class.category().is_main()
+            || self.class.class.category().is_tram()
+        {
             if self.class.double {
                 canvas.set_line_width(2.0 * units.line_width);
             }
