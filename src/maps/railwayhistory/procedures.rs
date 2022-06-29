@@ -115,12 +115,12 @@ const PROCEDURES: &[(
     ("marker", &|pos, args, scope, features, err| {
         let [class, position] = args.into_positionals(err)?;
         let position = position.into_position(err)?.0;
+        let marker = StandardMarker::from_arg(class, position, err)?;
+        let layer_offset = marker.class().layer_offset();
         features.insert(
-            Feature::Marker(
-                StandardMarker::from_arg(class, position, err)?
-            ),
+            Feature::Marker(marker),
             scope.params().detail(pos, err)?,
-            scope.params().layer() - 0.2,
+            scope.params().layer() - 0.2 + layer_offset,
         );
         Ok(())
     }),

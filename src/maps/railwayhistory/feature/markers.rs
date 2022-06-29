@@ -117,6 +117,10 @@ impl StandardMarker {
         Err(Failed)
     }
 
+    pub fn class(&self) -> &Class {
+        &self.class
+    }
+
     pub fn storage_bounds(&self) -> Rect {
         self.position.storage_bounds()
     }
