@@ -173,7 +173,7 @@ impl Class {
         else { -0.002 };
         let electric = if self.has_active_cat() { -0.00001 }
                        else if self.has_active_rail() { -0.00005 }
-                       else { 0. };
+                       else { -0.00008 };
         base + self.status().layer_offset() + electric
     }
 }
@@ -432,7 +432,7 @@ impl ElectricCat {
         match (system, voltage) {
             (Ac, voltage) if voltage >= 20000 => VoltageGroup::High,
             (Ac, _) => VoltageGroup::Low,
-            (Dc, voltage) if voltage >= 1000 => VoltageGroup::High,
+            (Dc, voltage) if voltage >= 2000 => VoltageGroup::High,
             (Dc, _) => VoltageGroup::Low,
         }
     }
