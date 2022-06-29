@@ -506,6 +506,13 @@ impl ColorSet {
         use ElectricSystem::*;
 
         class.cat().map(|cat| {
+            if class.category().is_tram() {
+                match cat.status {
+                    ElectricStatus::Open => return self.tram,
+                    ElectricStatus::Removed => return self.tram_removed,
+                }
+            }
+
             match cat.status {
                 ElectricStatus::Open => {
                     match (
@@ -544,6 +551,13 @@ impl ColorSet {
         use VoltageGroup::*;
 
         class.rail().map(|rail| {
+            if class.category().is_tram() {
+                match rail.status {
+                    ElectricStatus::Open => return self.tram,
+                    ElectricStatus::Removed => return self.tram_removed,
+                }
+            }
+
             match rail.status {
                 ElectricStatus::Open => {
                     match (rail.voltage_group(), class.pax().is_full()) {
