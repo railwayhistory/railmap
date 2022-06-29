@@ -96,7 +96,7 @@ impl<T: Theme> Layout<T> {
         Layout { content }
     }
 
-    fn render(
+    pub fn render(
         &self, style: &T::Style, canvas: &Canvas, depth: usize, point: Point,
         extent: Rect, outer: Rect,
     ) {
@@ -113,7 +113,7 @@ impl<T: Theme> Layout<T> {
     /// The extent of the layout.
     ///
     /// The values are given relative to the layout’s reference point.
-    fn extent(&self, style: &T::Style, canvas: &Canvas) -> (Rect, usize) {
+    pub fn extent(&self, style: &T::Style, canvas: &Canvas) -> (Rect, usize) {
         match self.content {
             Content::Vbox(ref v) => v.extent(style, canvas),
             Content::Hbox(ref v) => v.extent(style, canvas),
@@ -159,7 +159,7 @@ impl<T: Theme> Vbox<T> {
                     op(
                         layout, 
                         Point::new(
-                            point.x + extent.x0, // x0 is negative.
+                            point.x - extent.x0, // x0 is negative.
                             point.y
                         ),
                         extent
