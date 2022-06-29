@@ -120,7 +120,7 @@ const PROCEDURES: &[(
         features.insert(
             Feature::Marker(marker),
             scope.params().detail(pos, err)?,
-            scope.params().layer() - 0.2 + layer_offset,
+            scope.params().layer() - 0.3 + layer_offset,
         );
         Ok(())
     }),
@@ -168,11 +168,12 @@ const PROCEDURES: &[(
     ("platform", &|pos, args, scope, features, err| {
         let [class, trace] = args.into_positionals(err)?;
         let class = Class::from_arg(class, err)?;
+        let layer_offset = class.layer_offset();
         let trace = trace.into_path(err)?.0;
         features.insert(
             Feature::Area(AreaContour::new(class, trace)),
             scope.params().detail(pos, err)?,
-            scope.params().layer(),
+            scope.params().layer() - 0.2 + layer_offset,
         );
         Ok(())
     }),
