@@ -101,6 +101,7 @@ impl<'a> TryFrom<&'a str> for Color {
 
 //------------ InvalidHexColor -----------------------------------------------
 
+#[derive(Debug)]
 pub struct InvalidHexColor;
 
 impl From<ParseIntError> for InvalidHexColor {

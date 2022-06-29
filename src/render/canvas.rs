@@ -416,6 +416,7 @@ impl<'a> Path<'a> {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum FontFamily {
     FiraSans,
+    Inter,
 }
 
 impl FontFamily {
@@ -499,6 +500,13 @@ impl FontFace {
         FontFace { family, stretch, slant, weight }
     }
 
+    pub fn with_family(family: FontFamily) -> Self {
+        FontFace {
+            family,
+            .. Default::default()
+        }
+    }
+
     pub fn bold() -> Self {
         FontFace::new(
             FontFamily::FiraSans, FontStretch::default(),
@@ -531,55 +539,105 @@ impl FontTable {
         use cairo::FontSlant::{Italic, Normal};
         use cairo::FontWeight::{Bold, Normal as Book};
 
-        const FONT_NORMAL: &str = "Fira Sans Book";
-        const FONT_BOLD: &str = "Fira Sans";
-        const FONT_LIGHT: &str = "Fira Sans ExtraLight";
-        const FONT_NORMAL_COND: &str = "Fira Sans Condensed";
-        const FONT_BOLD_COND: &str = "Fira Sans Condensed";
-        const FONT_LIGHT_COND: &str = "Fira Sans Condensed Light";
+        const FIRA_NORMAL: &str = "Fira Sans Book";
+        const FIRA_BOLD: &str = "Fira Sans";
+        const FIRA_LIGHT: &str = "Fira Sans ExtraLight";
+        const FIRA_NORMAL_COND: &str = "Fira Sans Condensed";
+        const FIRA_BOLD_COND: &str = "Fira Sans Condensed";
+        const FIRA_LIGHT_COND: &str = "Fira Sans Condensed Light";
+        const INTER_NORMAL: &str = "Noto Sans CJK JP";
+        const INTER_BOLD: &str = "Noto Sans CJK JP";
+        const INTER_LIGHT: &str = "Noto Sans CJK JP";
+        const INTER_NORMAL_COND: &str = "Noto Sans CJK JP";
+        const INTER_BOLD_COND: &str = "Noto Sans CJK JP";
+        const INTER_LIGHT_COND: &str = "Noto Sans CJK JP";
 
         let (family, slant, weight) = match (face.family, face.stretch) {
             (FontFamily::FiraSans, FontStretch::Regular) => {
                 match (face.slant, face.weight) {
                     (FontSlant::Upright, FontWeight::Book) => {
-                        (FONT_NORMAL, Normal, Book)
+                        (FIRA_NORMAL, Normal, Book)
                     }
                     (FontSlant::Upright, FontWeight::Bold) => {
-                        (FONT_BOLD, Normal, Bold)
+                        (FIRA_BOLD, Normal, Bold)
                     }
                     (FontSlant::Upright, FontWeight::Light) => {
-                        (FONT_LIGHT, Normal, Book)
+                        (FIRA_LIGHT, Normal, Book)
                     }
                     (FontSlant::Italic, FontWeight::Book) => {
-                        (FONT_NORMAL, Italic, Book)
+                        (FIRA_NORMAL, Italic, Book)
                     }
                     (FontSlant::Italic, FontWeight::Bold) => {
-                        (FONT_BOLD, Italic, Bold)
+                        (FIRA_BOLD, Italic, Bold)
                     }
                     (FontSlant::Italic, FontWeight::Light) => {
-                        (FONT_LIGHT, Italic, Book)
+                        (FIRA_LIGHT, Italic, Book)
                     }
                 }
             }
             (FontFamily::FiraSans, FontStretch::Condensed) => {
                 match (face.slant, face.weight) {
                     (FontSlant::Upright, FontWeight::Book) => {
-                        (FONT_NORMAL_COND, Normal, Book)
+                        (FIRA_NORMAL_COND, Normal, Book)
                     }
                     (FontSlant::Upright, FontWeight::Bold) => {
-                        (FONT_BOLD_COND, Normal, Bold)
+                        (FIRA_BOLD_COND, Normal, Bold)
                     }
                     (FontSlant::Upright, FontWeight::Light) => {
-                        (FONT_LIGHT_COND, Normal, Book)
+                        (FIRA_LIGHT_COND, Normal, Book)
                     }
                     (FontSlant::Italic, FontWeight::Book) => {
-                        (FONT_NORMAL_COND, Italic, Book)
+                        (FIRA_NORMAL_COND, Italic, Book)
                     }
                     (FontSlant::Italic, FontWeight::Bold) => {
-                        (FONT_BOLD_COND, Italic, Bold)
+                        (FIRA_BOLD_COND, Italic, Bold)
                     }
                     (FontSlant::Italic, FontWeight::Light) => {
-                        (FONT_LIGHT_COND, Italic, Book)
+                        (FIRA_LIGHT_COND, Italic, Book)
+                    }
+                }
+            }
+            (FontFamily::Inter, FontStretch::Regular) => {
+                match (face.slant, face.weight) {
+                    (FontSlant::Upright, FontWeight::Book) => {
+                        (INTER_NORMAL, Normal, Book)
+                    }
+                    (FontSlant::Upright, FontWeight::Bold) => {
+                        (INTER_BOLD, Normal, Bold)
+                    }
+                    (FontSlant::Upright, FontWeight::Light) => {
+                        (INTER_LIGHT, Normal, Book)
+                    }
+                    (FontSlant::Italic, FontWeight::Book) => {
+                        (INTER_NORMAL, Italic, Book)
+                    }
+                    (FontSlant::Italic, FontWeight::Bold) => {
+                        (INTER_BOLD, Italic, Bold)
+                    }
+                    (FontSlant::Italic, FontWeight::Light) => {
+                        (INTER_LIGHT, Italic, Book)
+                    }
+                }
+            }
+            (FontFamily::Inter, FontStretch::Condensed) => {
+                match (face.slant, face.weight) {
+                    (FontSlant::Upright, FontWeight::Book) => {
+                        (INTER_NORMAL_COND, Normal, Book)
+                    }
+                    (FontSlant::Upright, FontWeight::Bold) => {
+                        (INTER_BOLD_COND, Normal, Bold)
+                    }
+                    (FontSlant::Upright, FontWeight::Light) => {
+                        (INTER_LIGHT_COND, Normal, Book)
+                    }
+                    (FontSlant::Italic, FontWeight::Book) => {
+                        (INTER_NORMAL_COND, Italic, Book)
+                    }
+                    (FontSlant::Italic, FontWeight::Bold) => {
+                        (INTER_BOLD_COND, Italic, Bold)
+                    }
+                    (FontSlant::Italic, FontWeight::Light) => {
+                        (INTER_LIGHT_COND, Italic, Book)
                     }
                 }
             }
