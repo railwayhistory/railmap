@@ -89,14 +89,14 @@ impl BorderContour {
 
     pub fn render(&self, style: &Style, canvas: &Canvas) {
         if style.detail() <= 2 {
-            self.render_low(canvas)
+            self.render_low(style, canvas)
         }
         else {
-            self.render_high(canvas)
+            self.render_high(style, canvas)
         }
     }
 
-    fn render_low(&self, canvas: &Canvas) {
+    fn render_low(&self, style: &Style, canvas: &Canvas) {
         canvas.set_line_width(LOW_BORDER_WIDTH * canvas.canvas_bp());
         if self.former {
             LOW_FORMER_BORDER_COLOR.apply(canvas);
@@ -104,11 +104,11 @@ impl BorderContour {
         else {
             LOW_BORDER_COLOR.apply(canvas);
         }
-        self.trace.apply(canvas);
+        self.trace.apply(canvas, style);
         canvas.stroke().unwrap();
     }
 
-    fn render_high(&self, canvas: &Canvas) {
+    fn render_high(&self, style: &Style, canvas: &Canvas) {
         self.category.apply_casing_width_high(canvas);
         if self.former {
             FORMER_CASING_COLOR.apply(canvas);
@@ -116,7 +116,7 @@ impl BorderContour {
         else {
             CASING_COLOR.apply(canvas);
         }
-        self.trace.apply(canvas);
+        self.trace.apply(canvas, style);
         canvas.stroke_preserve().unwrap();
         canvas.set_line_width(BORDER_WIDTH * canvas.canvas_bp());
         if self.former {

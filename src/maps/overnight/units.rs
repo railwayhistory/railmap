@@ -1,6 +1,6 @@
 /// The units we understand.
 
-use crate::render::path::Distance;
+use crate::render::path::{Distance, MapDistance};
 
 // Various canvas units in bp.
 pub const BP: f64 = 1.;
@@ -56,14 +56,14 @@ pub fn resolve_unit(number: f64, unit_name: &str) -> Option<Distance> {
     for (unit, factor) in WORLD_DISTANCES {
         if unit_name == *unit {
             return Some(Distance::new(
-                Some(number * factor), None
+                Some(number * factor), Vec::new(),
             ))
         }
     }
     for (unit, factor) in CANVAS_DISTANCES {
         if unit_name == *unit {
             return Some(Distance::new(
-                None, Some(number * factor)
+                None, vec![MapDistance::new(number * factor, 0)]
             ))
         }
     }

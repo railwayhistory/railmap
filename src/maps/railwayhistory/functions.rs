@@ -5,7 +5,7 @@ use crate::import::eval;
 use crate::import::eval::ExprVal;
 use crate::render::color::Color;
 use crate::render::label::Align;
-use crate::render::path::Distance;
+use crate::render::path::{Distance, MapDistance};
 use super::feature::label;
 use super::theme::Railwayhistory;
 
@@ -42,7 +42,7 @@ const FUNCTIONS: &[(
             .into_number(err)?.0.into_f64();
 
         Ok(label::LayoutBuilder::hrule(
-            Distance::new(None, Some(width)),
+            Distance::new(None, vec![MapDistance::new(width, 0)]),
             label::PropertiesBuilder::default()
         ).into())
     }),

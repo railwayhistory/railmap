@@ -55,7 +55,7 @@ impl GuideContour {
         else {
             style.track_color(&self.class)
         };
-        self.trace.apply(canvas);
+        self.trace.apply(canvas, style);
         if self.casing {
             canvas.set_line_width(
                 1.8 * style.dimensions().guide_width

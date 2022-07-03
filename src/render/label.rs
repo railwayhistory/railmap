@@ -40,7 +40,7 @@ impl<T: Theme> Label<T> {
         }
 
         let (point, angle) = self.position.resolve_label(
-            canvas, self.on_path
+            canvas, style, self.on_path
         );
         canvas.translate(point.x, point.y);
         canvas.rotate(angle);

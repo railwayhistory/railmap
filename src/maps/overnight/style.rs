@@ -4,6 +4,7 @@ use std::str::FromStr;
 use std::ops::MulAssign;
 use lazy_static::lazy_static;
 use crate::render::color::Color;
+use crate::render::path::MapDistance;
 use crate::theme;
 use super::class::{RouteColor, Class};
 use super::units;
@@ -74,6 +75,10 @@ impl theme::Style for Style {
 
     fn scale(&mut self, canvas_bp: f64) {
         self.dimensions *= canvas_bp;
+    }
+
+    fn resolve_distance(&self, distance: MapDistance) -> f64  {
+        distance.value()
     }
 }
 

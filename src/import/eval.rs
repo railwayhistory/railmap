@@ -586,7 +586,7 @@ impl<T: Theme> Clone for ArgumentList<T> {
 //------------ PositionOffset ------------------------------------------------
 
 /// The combined offset of a position.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct PositionOffset {
     sideways: Distance,
     shift: (Distance, Distance),
@@ -620,22 +620,16 @@ impl PositionOffset {
 
 }
 
-impl ops::Add for PositionOffset {
-    type Output = Self;
-
-    fn add(self, other: Self) -> Self {
-        PositionOffset {
-            sideways: self.sideways + other.sideways,
-            shift: (
-                self.shift.0 + other.shift.0,
-                self.shift.1 + other.shift.1
-            ),
-            rotation: match (self.rotation, other.rotation) {
-                (Some(l), Some(r)) => Some(l + r),
-                (Some(l), None) => Some(l),
-                (None, Some(r)) => Some(r),
-                (None, None) => None
-            },
+impl ops::AddAssign for PositionOffset {
+    fn add_assign(&mut self, other: Self) {
+        self.sideways += other.sideways;
+        self.shift.0 += other.shift.0;
+        self.shift.1 += other.shift.1;
+        self.rotation = match (self.rotation, other.rotation) {
+            (Some(l), Some(r)) => Some(l + r),
+            (Some(l), None) => Some(l),
+            (None, Some(r)) => Some(r),
+            (None, None) => None
         }
     }
 }
@@ -1025,8 +1019,9 @@ impl ast::Section {
             Ok(Distance::default()),
             |res, item| {
                 let item = item.eval_subpath(scope, err);
-                if let (Ok(res), Ok(item)) = (res, item) {
-                    Ok(res + item)
+                if let (Ok(mut res), Ok(item)) = (res, item) {
+                    res += item;
+                    Ok(res)
                 }
                 else {
                     Err(Failed)
@@ -1052,8 +1047,9 @@ impl ast::Section {
             Ok(PositionOffset::default()),
             |res, item| {
                 let item = item.eval_position(scope, err);
-                if let (Ok(res), Ok(item)) = (res, item) {
-                    Ok(res + item)
+                if let (Ok(mut res), Ok(item)) = (res, item) {
+                    res += item;
+                    Ok(res)
                 }
                 else {
                     Err(Failed)
@@ -1113,7 +1109,10 @@ impl ast::Location {
             Ok(Distance::default()),
             |res, item| {
                 match (res, item.eval(scope, err)) {
-                    (Ok(res), Ok(item)) => Ok(res + item),
+                    (Ok(mut res), Ok(item)) => {
+                        res += item;
+                        Ok(res)
+                    }
                     _ => Err(Failed),
                 }
             }
@@ -1279,7 +1278,7 @@ impl ast::UnitNumber {
     fn eval<T: Theme>(
         self, scope: &Scope<T>, err: &mut Error
     ) -> Result<Distance, Failed> {
-        scope.theme.eval_unit(
+        scope.theme.eval_distance(
             self.number.eval_float(), self.unit.as_ref(), self.pos, err
         )
     }

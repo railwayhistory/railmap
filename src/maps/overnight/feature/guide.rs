@@ -40,7 +40,7 @@ impl GuideContour {
     pub fn render(&self, style: &Style, canvas: &Canvas) {
         style.marker_color(&self.class).apply(canvas);
         canvas.set_line_width(style.dimensions().guide_width);
-        self.trace.apply(canvas);
+        self.trace.apply(canvas, style);
         canvas.stroke().unwrap();
     }
 }

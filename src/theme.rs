@@ -6,7 +6,7 @@ use crate::import::{ast, eval};
 use crate::import::Failed;
 use crate::render::feature::{Feature, FeatureSet};
 use crate::render::label::Span;
-use crate::render::path::Distance;
+use crate::render::path::{Distance, MapDistance};
 use crate::tile::TileId;
 
 
@@ -21,7 +21,7 @@ pub trait Theme: Sized + Clone + Send + Sync + 'static {
     type Feature: Feature<Self> + Send + Sync + 'static;
     type Span: Span<Self>;
 
-    fn eval_unit(
+    fn eval_distance(
         &self, number: f64, unit: &str, pos: ast::Pos, err: &mut eval::Error,
     ) -> Result<Distance, Failed>;
 
@@ -82,5 +82,10 @@ pub trait Style {
     fn detail(&self) -> u8;
 
     fn scale(&mut self, canvas_bp: f64);
+
+    /// Resolve a map distance.
+    ///
+    /// The returned value is a in _bp._
+    fn resolve_distance(&self, distance: MapDistance) -> f64;
 }
 

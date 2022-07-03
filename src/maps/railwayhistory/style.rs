@@ -5,6 +5,7 @@ use std::ops::MulAssign;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use crate::render::color::Color;
+use crate::render::path::MapDistance;
 use crate::theme;
 use super::class::{
     Category, Class, ElectricStatus, ElectricSystem, Pax, Status,
@@ -95,6 +96,11 @@ impl theme::Style for Style {
 
     fn scale(&mut self, canvas_bp: f64) {
         self.dimensions *= canvas_bp;
+    }
+
+    fn resolve_distance(&self, distance: MapDistance) -> f64 {
+        distance.value()
+        * units::MAP_DISTANCES[distance.unit()].1[self.detail as usize]
     }
 }
 
@@ -275,6 +281,7 @@ impl Dimensions {
 
     const D3: Self = Self {
         line_width: 1.,
+        dt: 0.7 * units::DT,
         .. Self::D0
     };
 

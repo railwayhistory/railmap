@@ -4,6 +4,7 @@ use std::{cmp, ops};
 use std::f64::consts::PI;
 use std::sync::Arc;
 use kurbo::{CubicBez, Line, ParamCurveArclen, Point};
+use crate::theme::Style;
 use super::super::canvas::Canvas;
 use super::trace::{STORAGE_ACCURACY, Segment};
 
@@ -40,12 +41,15 @@ impl Path {
 
     /// Returns the minimum valid location on the path.
     pub fn min_location(&self) -> Location {
-        Location::new(SegTime::new(1, 0.), 0.)
+        Location::new(SegTime::new(1, 0.), Vec::new())
     }
 
     /// Returns the last valid location of the path.
     pub fn max_location(&self) -> Location {
-        Location::new(SegTime::new(self.elements.len() as u32 - 1, 1.), 0.)
+        Location::new(
+            SegTime::new(self.elements.len() as u32 - 1, 1.),
+            Vec::new(),
+        )
     }
 
     /// Returns the number of nodes in the path.
@@ -99,11 +103,10 @@ impl Path {
         // this to the segment index which is the index of the end node of
         // the segment.
         //
-        // First let’s make sure there aren’t going to be any surprise.
+        // First let’s make sure there aren’t going to be any surprises.
         // Nodes are only referenced to by their name, we convert them into
         // indexes so there shouldn’t be an invalid index.
         assert!(node < self.node_len());
-        let canvas = distance.canvas.unwrap_or(0.);
 
         match distance.world {
             None => {
@@ -111,10 +114,10 @@ impl Path {
                 // component in `distance`, we only need to convert the node
                 // index into a segment index.
                 if node < self.node_len() - 1 {
-                    Location::new(SegTime::new(node + 1, 0.), canvas)
+                    Location::new(SegTime::new(node + 1, 0.), distance.map)
                 }
                 else {
-                    Location::new(SegTime::new(node, 1.), canvas)
+                    Location::new(SegTime::new(node, 1.), distance.map)
                 }
             }
             Some(world) if world < 0. => {
@@ -139,7 +142,7 @@ impl Path {
                                 node,
                                 1. - seg.rev().arctime_storage(storage)
                             ),
-                            canvas
+                            distance.map
                         );
                     }
                 }
@@ -171,7 +174,7 @@ impl Path {
                                 node,
                                 seg.arctime_storage(storage)
                             ),
-                            canvas
+                            distance.map
                         );
                     }
                 }
@@ -181,41 +184,41 @@ impl Path {
 
     /// Returns the time value for a location on a given canvas.
     pub fn location_time(
-        &self, location: Location, canvas: &Canvas
+        &self, location: &Location, canvas: &Canvas, style: &impl Style,
     ) -> SegTime {
         self._location_time(
-            Location::new(
-                location.world,
-                location.canvas * canvas.canvas_bp()
-            ),
+            location.world,
+            location.map.iter().map(
+                |canv| style.resolve_distance(*canv)
+            ).sum::<f64>() * canvas.canvas_bp(),
             canvas
         )
     }
 
-    fn _location_time(&self, location: Location, canvas: &Canvas) -> SegTime {
-        if location.canvas == 0. {
-            location.world
+    fn _location_time(
+        &self, world: SegTime, map: f64, canvas: &Canvas
+    ) -> SegTime {
+        if map == 0. {
+            world
         }
-        else if location.canvas < 0. {
-            let offset = -location.canvas;
+        else if map < 0. {
+            let offset = -map;
             let seg = self.segment(
-                location.world.seg
+                world.seg
             ).unwrap().transform(canvas);
-            let before = seg.sub(0., location.world.time);
+            let before = seg.sub(0., world.time);
             let arclen = before.arclen();
             if arclen >= offset {
-                let len = seg.sub(location.world.time, 1.).arclen() + offset;
+                let len = seg.sub(world.time, 1.).arclen() + offset;
                 SegTime::new(
-                    location.world.seg,
+                    world.seg,
                     1. - seg.rev().arctime(len)
                 )
             }
-            else if location.world.seg > 1 {
+            else if world.seg > 1 {
                 self._location_time(
-                    Location::new(
-                        SegTime::new(location.world.seg - 1, 1.),
-                        -(offset - arclen)
-                    ),
+                    SegTime::new(world.seg - 1, 1.),
+                    -(offset - arclen),
                     canvas
                 )
             }
@@ -224,27 +227,25 @@ impl Path {
             }
         }
         else {
-            let offset = location.canvas;
+            let offset = map;
             let seg = self.segment(
-                location.world.seg
+                world.seg
             ).unwrap().transform(canvas);
-            let after = seg.sub(location.world.time, 1.);
+            let after = seg.sub(world.time, 1.);
             let arclen = after.arclen();
             if arclen > offset {
-                let len = seg.sub(0., location.world.time).arclen() + offset;
+                let len = seg.sub(0., world.time).arclen() + offset;
                 SegTime::new(
-                    location.world.seg, seg.arctime(len)
+                    world.seg, seg.arctime(len)
                 )
             }
-            else if location.world.seg == self.node_len() - 1 {
-                SegTime::new(location.world.seg, 1.)
+            else if world.seg == self.node_len() - 1 {
+                SegTime::new(world.seg, 1.)
             }
             else {
                 self._location_time(
-                    Location::new(
-                        SegTime::new(location.world.seg + 1, 0.),
-                        offset - arclen
-                    ),
+                    SegTime::new(world.seg + 1, 0.),
+                    offset - arclen,
                     canvas
                 )
             }
@@ -351,6 +352,45 @@ impl Element {
 }
 
 
+//------------ MapDistance ---------------------------------------------------
+
+/// A distance in map units.
+///
+/// The distance consists of a value and a unit that scales this value into
+/// actual map coordinates. Since the actual factor for each unit may depend
+/// on the style, the unit depends on the theme. To avoid having the make the
+/// type generic over the unit, we use a simple index as a standin. This
+/// index is chosen by the theme when evaluating the map rules and is
+/// available to the style when resolving the map distance.
+#[derive(Clone, Copy, Debug)]
+pub struct MapDistance {
+    /// The value of the distance.
+    value: f64,
+
+    /// The unit of the distance.
+    unit: usize,
+}
+
+impl MapDistance {
+    /// Creates a new map distance from a value and a unit index.
+    pub fn new(value: f64, unit: usize) -> Self {
+        MapDistance { value, unit }
+    }
+
+    pub fn resolve(self, style: &impl Style) -> f64 {
+        style.resolve_distance(self)
+    }
+
+    pub fn value(self) -> f64 {
+        self.value
+    }
+
+    pub fn unit(self) -> usize {
+        self.unit
+    }
+}
+
+
 //------------ Distance ------------------------------------------------------
 
 /// Describes a distance from a point.
@@ -360,7 +400,7 @@ impl Element {
 /// points which is combined from a world distance and a map distance. This
 /// way we can create schematic representations that are pleasing at a range
 /// of scales.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Distance {
     /// The world component of the distance.
     ///
@@ -368,39 +408,47 @@ pub struct Distance {
     /// acutal distance along the face of the Earth in _bp._
     pub world: Option<f64>,
 
-    /// The canvas component of the distance.
+    /// The map component of the distance.
     ///
-    /// This is the distance along the canvas in _bp._
-    pub canvas: Option<f64>,
+    /// Since map distances can only be interpreted at rendering time, we
+    /// need to keep all the given values.
+    pub map: Vec<MapDistance>,
 }
 
 impl Distance {
     /// Creates a new distance from the world and canvas components.
-    pub fn new(world: Option<f64>, canvas: Option<f64>) -> Self {
-        Distance { world, canvas }
+    pub fn new(world: Option<f64>, map: Vec<MapDistance>) -> Self {
+        Distance { world, map }
     }
 
     /// Returns whether both dimensions of the distance are `None`.
-    pub fn is_none(self) -> bool {
-        self.world.is_none() && self.canvas.is_none()
+    pub fn is_none(&self) -> bool {
+        self.world.is_none() && self.map.is_empty()
     }
 
     /// Resolves the distance at the given point in storage coordinates.
-    pub fn resolve(self, point: Point, canvas: &Canvas) -> f64 {
-        let world = match self.world {
-            Some(world) => {
-                to_storage_distance(world, point) * canvas.equator_scale()
-            }
-            None => 0.
-        };
-        let canv = match self.canvas {
-            Some(canv) => canv * canvas.canvas_bp(),
-            None => 0.
-        };
-        world + canv
+    pub fn resolve(
+        &self, point: Point, canvas: &Canvas, style: &impl Style,
+    ) -> f64 {
+        let mut res = self.world.map(|world| {
+            to_storage_distance(world, point) * canvas.equator_scale()
+        }).unwrap_or(0.);
+
+        for item in &self.map {
+            res += item.resolve(style) * canvas.canvas_bp()
+        }
+
+        res
     }
 }
 
+impl Default for Distance {
+    fn default() -> Self {
+        Distance { world: None, map: Vec::new() }
+    }
+}
+
+/*
 impl ops::Add for Distance {
     type Output = Self;
 
@@ -409,6 +457,7 @@ impl ops::Add for Distance {
         self
     }
 }
+*/
 
 impl ops::AddAssign for Distance {
     fn add_assign(&mut self, other: Distance) {
@@ -420,19 +469,15 @@ impl ops::AddAssign for Distance {
                 self.world = Some(o)
             }
         }
-        if let Some(o) = other.canvas {
-            if let Some(s) = self.canvas.as_mut() {
-                *s += o
-            }
-            else {
-                self.canvas = Some(o)
-            }
-        }
+        self.map.extend_from_slice(&other.map);
     }
 }
 
+/*
 impl ops::SubAssign for Distance {
     fn sub_assign(&mut self, other: Distance) {
+        unimplemented!();
+        /*
         if let Some(o) = other.world {
             if let Some(s) = self.world.as_mut() {
                 *s -= o
@@ -449,17 +494,20 @@ impl ops::SubAssign for Distance {
                 self.canvas = Some(-o)
             }
         }
+        */
     }
 }
+*/
 
 impl ops::Neg for Distance {
     type Output = Self;
 
-    fn neg(self) -> Self::Output {
-        Distance {
-            world: self.world.map(|val| -val),
-            canvas: self.canvas.map(|val| -val),
+    fn neg(mut self) -> Self::Output {
+        self.world = self.world.map(ops::Neg::neg);
+        for item in &mut self.map {
+            item.value = -item.value
         }
+        self
     }
 }
 
@@ -490,7 +538,7 @@ impl ops::Neg for Distance {
 /// respectively.
 ///
 /// [`Distance`]: struct.Distance.html
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Location {
     /// The time value of the world location.
     pub world: SegTime,
@@ -499,13 +547,13 @@ pub struct Location {
     ///
     /// Positive values are further along the path, negative values are
     /// backwards on the path.
-    pub canvas: f64,
+    pub map: Vec<MapDistance>,
 }
 
 impl Location {
     /// Creates a new location from its components.
-    pub fn new(world: SegTime, canvas: f64) -> Self {
-        Location { world, canvas }
+    pub fn new(world: SegTime, map: Vec<MapDistance>) -> Self {
+        Location { world, map }
     }
 }
 

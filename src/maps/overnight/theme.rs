@@ -24,7 +24,7 @@ impl theme::Theme for Overnight {
     type Feature = Feature;
     type Span = Span;
 
-    fn eval_unit(
+    fn eval_distance(
         &self, number: f64, unit: &str, pos: ast::Pos, err: &mut eval::Error,
     ) -> Result<Distance, Failed> {
         super::units::resolve_unit(number, unit).ok_or_else(|| {

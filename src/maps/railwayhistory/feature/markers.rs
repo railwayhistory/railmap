@@ -126,7 +126,7 @@ impl StandardMarker {
     }
 
     pub fn render(&self, style: &Style, canvas: &Canvas) {
-        let (point, angle) = self.position.resolve(canvas);
+        let (point, angle) = self.position.resolve(canvas, style);
         canvas.translate(point.x, point.y);
         if let Some(rotation) = self.orientation {
             canvas.rotate(angle + rotation);

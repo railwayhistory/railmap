@@ -549,12 +549,12 @@ impl HruleSpan {
         HruleSpan { width, class }
     }
 
-    fn resolved_width(&self, canvas: &Canvas) -> f64 {
-        self.width.canvas.map(|width| width * canvas.canvas_bp()).unwrap_or(0.)
+    fn resolved_width(&self, style: &Style, canvas: &Canvas) -> f64 {
+        self.width.resolve(Default::default(), canvas, style)
     }
 
-    fn extent(&self, _: &Style, canvas: &Canvas) -> (Rect, usize) {
-        let height = self.resolved_width(canvas) / 2.;
+    fn extent(&self, style: &Style, canvas: &Canvas) -> (Rect, usize) {
+        let height = self.resolved_width(style, canvas) / 2.;
         (Rect::new(0., -height, 0., height), 1)
     }
 
@@ -563,7 +563,7 @@ impl HruleSpan {
         _extent: Rect, outer: Rect,
     ) {
         if depth == 0 {
-            canvas.set_line_width(self.resolved_width(canvas));
+            canvas.set_line_width(self.resolved_width(style, canvas));
             canvas.move_to(point.x + outer.x0, point.y);
             canvas.line_to(point.x + outer.x1, point.y);
             style.label_color(&self.class).apply(canvas);

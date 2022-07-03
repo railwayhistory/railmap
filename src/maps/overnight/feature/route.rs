@@ -44,7 +44,7 @@ impl RouteContour {
             combination.set_dash(style, canvas);
         }
         style.route_color(&self.class).apply(canvas);
-        self.trace.apply(canvas);
+        self.trace.apply(canvas, style);
         canvas.stroke().unwrap();
         canvas.set_dash(&[], 0.);
     }

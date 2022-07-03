@@ -1,6 +1,6 @@
 /// The units we understand.
 
-use crate::render::path::Distance;
+use crate::render::path::{Distance, MapDistance};
 
 // Various canvas units in bp.
 pub const BP: f64 = 1.;
@@ -12,32 +12,12 @@ pub const PT: f64 = 1.;
 pub const DL: f64 = 0.66 * DT;
 pub const DT: f64 = 0.75 * MM;
 pub const SW: f64 = 3.2 * DT;
-pub const SH: f64 = 3. * DT;
-pub const SSW: f64 = 1.6 * DT;
+pub const SH: f64 = 3.0 * DT;
+pub const SSW: f64 = 0.5 * SW;
+pub const SSH: f64 = 0.5 * SH;
 
 pub const M: f64 = 1_000. * (72./25.4);
 pub const KM: f64 = 1_000. * M;
-
-/// The list of canvas distance units.
-/// 
-/// The list contains pairs of the unit’s name and how many base units fit
-/// into it. The base distance unit is a Postscript point, aka _bp._. It is
-/// exactly 1/72nd of an inch.
-pub const CANVAS_DISTANCES: &[(&str, f64)] = &[
-    // Real units.
-    ("bp", BP),
-    ("pt", PT),
-    ("in", IN),
-    ("mm", MM),
-    ("cm", CM),
-
-    // Relative units.
-    ("dt", DT), // Distance between tracks. 0.5 mm
-    ("dl", DL), // Length of a track crossing between two tracks one dt apart.
-    ("sw", SW),
-    ("sh", SH),
-    ("ssw", SSW),
-];
 
 
 /// The list of world distance units.
@@ -52,18 +32,40 @@ pub const WORLD_DISTANCES: &[(&str, f64)] = &[
 ];
 
 
+/// The list of map distance units.
+///
+/// The list contains a pair of the unit name and a value for each of the
+/// 6 distance levels. The base distance unit is a Postscript point,
+/// aka _bp._. It is exactly 1/72nd of an inch.
+pub const MAP_DISTANCES: &[(&str, [f64; 6])] = &[
+    // Real units.
+    ("bp", [BP; 6]),
+    ("pt", [PT; 6]),
+    ("in", [IN; 6]),
+    ("mm", [MM; 6]),
+    ("cm", [CM; 6]),
+
+    // Relative units.
+    ("dt",  [DT, DT, DT, 0.7 * DT, DT, DT]),
+    ("dl",  [DL, DL, DL, DL, DL, DL]),
+    ("sw",  [SSW, SSW, SSW, SSW, SW, SW]),
+    ("sh",  [SSH, SSH, SSH, SSH, SH, SH]),
+    ("ssw", [SSW, SSW, SSW, SSW, SW, SW]), // deprecated!
+];
+
+
 pub fn resolve_unit(number: f64, unit_name: &str) -> Option<Distance> {
     for (unit, factor) in WORLD_DISTANCES {
         if unit_name == *unit {
             return Some(Distance::new(
-                Some(number * factor), None
+                Some(number * factor), Vec::new(),
             ))
         }
     }
-    for (unit, factor) in CANVAS_DISTANCES {
+    for (index, (unit, _)) in MAP_DISTANCES.iter().enumerate() {
         if unit_name == *unit {
             return Some(Distance::new(
-                None, Some(number * factor)
+                None, vec![MapDistance::new(number, index)]
             ))
         }
     }
