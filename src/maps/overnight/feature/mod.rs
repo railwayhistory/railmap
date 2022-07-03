@@ -29,7 +29,7 @@ impl crate::render::feature::Feature<Overnight> for Feature {
         }
     }
 
-    fn render(&self, style: &Style, canvas: &Canvas) {
+    fn render(&self, style: &Style, canvas: &Canvas, _depth: usize) {
         match self {
             Feature::Border(value) => value.render(style, canvas),
             Feature::Guide(value) => value.render(style, canvas),

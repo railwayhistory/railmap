@@ -34,7 +34,7 @@ impl crate::render::feature::Feature<Railwayhistory> for Feature {
         }
     }
 
-    fn render(&self, style: &Style, canvas: &Canvas) {
+    fn render(&self, style: &Style, canvas: &Canvas, depth: usize) {
         match self {
             Feature::Area(value) => value.render(style, canvas),
             Feature::Border(value) => value.render(style, canvas),
@@ -42,7 +42,7 @@ impl crate::render::feature::Feature<Railwayhistory> for Feature {
             Feature::Guide(value) => value.render(style, canvas),
             Feature::Label(value) => value.render(style, canvas),
             Feature::Marker(value) => value.render(style, canvas),
-            Feature::Track(value) => value.render(style, canvas),
+            Feature::Track(value) => value.render(style, canvas, depth),
         }
     }
 }

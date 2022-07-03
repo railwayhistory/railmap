@@ -364,6 +364,10 @@ impl Surface {
             None
         }
     }
+
+    pub fn is_tunnel(self) -> bool {
+        matches!(self, Surface::Tunnel)
+    }
 }
 
 

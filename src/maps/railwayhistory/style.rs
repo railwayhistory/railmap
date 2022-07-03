@@ -286,6 +286,7 @@ impl Dimensions {
     };
 
     const D4: Self = Self {
+        line_width: 1.,
         mark: 0.8 * super::units::DT,
         sw: units::SW,
         sh: units::SH,
@@ -294,7 +295,7 @@ impl Dimensions {
         ds: 0.05 * units::SH,
         sp: 0.8,
         bp: 0.6,
-        .. Self::D3
+        .. Self::D0
     };
 
     pub fn mark(&self, tight: bool) -> f64 {

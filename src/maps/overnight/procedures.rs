@@ -74,7 +74,7 @@ const PROCEDURES: &[(
         features.insert(
             Feature::Border(BorderContour::from_arg(class, trace, err)?),
             scope.params().detail(pos, err)?,
-            scope.params().layer(),
+            scope.params().layer(), 1,
         );
         Ok(())
     }),
@@ -110,7 +110,7 @@ const PROCEDURES: &[(
         features.insert(
             Feature::Guide(GuideContour::from_arg(class, trace, err)?),
             scope.params().detail(pos, err)?,
-            scope.params().layer(),
+            scope.params().layer(), 1,
         );
         Ok(())
     }),
@@ -127,7 +127,7 @@ const PROCEDURES: &[(
         features.insert(
             layout.into_feature(position, false, properties.into()),
             scope.params().detail(pos, err)?,
-            scope.params().layer(),
+            scope.params().layer(), 1,
         );
         Ok(())
     }),
@@ -200,7 +200,7 @@ const PROCEDURES: &[(
         features.insert(
             Feature::Route(RouteContour::from_args(args, err)?),
             scope.params().detail(pos, err)?,
-            scope.params().layer(),
+            scope.params().layer(), 1,
         );
 
         Ok(())
@@ -361,7 +361,7 @@ const PROCEDURES: &[(
                 position?.0, left?.0, right?.0, class?,
             )),
             scope.params().detail(pos, err)?,
-            scope.params().layer(),
+            scope.params().layer(), 1,
         );
         Ok(())
     }),

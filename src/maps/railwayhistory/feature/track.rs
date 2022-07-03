@@ -8,6 +8,7 @@ use crate::import::eval;
 use crate::import::Failed;
 use crate::import::eval::{Expression, SymbolSet};
 use crate::render::canvas::Canvas;
+//use crate::render::color::Color;
 use crate::render::path::Trace;
 use crate::theme::Style as _;
 use super::super::class::{Category, Class, Gauge, GaugeGroup};
@@ -104,7 +105,18 @@ impl TrackContour {
         self.trace.storage_bounds()
     }
 
-    pub fn render(&self, style: &Style, canvas: &Canvas) {
+    pub fn render(&self, style: &Style, canvas: &Canvas, _depth: usize) {
+        /*
+        if self.class.class().surface().is_tunnel() {
+            if depth == 0 {
+                if style.detail() > 3 {
+                    self.render_tunnel_full(style, canvas);
+                }
+                return;
+            }
+        }
+        */
+
         match style.detail() {
             0 => self.render_detail_0(style, canvas),
             1 => self.render_detail_1(style, canvas),
@@ -457,6 +469,42 @@ impl TrackContour {
         }
         canvas.stroke().unwrap();
     }
+
+    /*
+    fn render_tunnel_full(&self, style: &Style, canvas: &Canvas) {
+        if self.class.double {
+            let offset = style.dimensions().dt * 0.5;
+            self.render_tunnel_base(Some(offset), style, canvas);
+            self.render_tunnel_base(Some(-offset), style, canvas);
+        }
+        else {
+            self.render_tunnel_base(None, style, canvas);
+        }
+    }
+
+    fn render_tunnel_base(
+        &self,
+        offset: Option<f64>,
+        style: &Style, canvas: &Canvas
+    ) {
+        if let Some(offset) = offset {
+            self.trace.apply_offset(offset, canvas, style);
+        }
+        else {
+            self.trace.apply(canvas, style);
+        }
+        canvas.set_line_width(
+            0.4 * if self.class.class.category().is_main() {
+                style.dimensions().line_width
+            }
+            else {
+                style.dimensions().other_width
+            }
+        );
+        Color::WHITE.apply(canvas);
+        canvas.stroke().unwrap();
+    }
+    */
 }
 
 

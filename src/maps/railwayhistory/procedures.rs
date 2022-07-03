@@ -35,7 +35,7 @@ const PROCEDURES: &[(
         features.insert(
             Feature::Area(AreaContour::new(class, trace)),
             scope.params().detail(pos, err)?,
-            scope.params().layer(),
+            scope.params().layer(), 1,
         );
         Ok(())
     }),
@@ -53,6 +53,7 @@ const PROCEDURES: &[(
             layout.into_feature(position, true, properties.into()),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
+            1,
         );
         Ok(())
     }),
@@ -69,6 +70,7 @@ const PROCEDURES: &[(
             Feature::Border(BorderContour::from_arg(class, trace, err)?),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
+            1,
         );
         Ok(())
     }),
@@ -87,6 +89,7 @@ const PROCEDURES: &[(
             Feature::Casing(TrackCasing::new(class, trace)),
             scope.params().detail(pos, err)?,
             scope.params().layer() - 0.1 + layer_offset,
+            1,
         );
         Ok(())
     }),
@@ -102,7 +105,7 @@ const PROCEDURES: &[(
         features.insert(
             Feature::Guide(GuideContour::from_arg(class, trace, err)?),
             scope.params().detail(pos, err)?,
-            scope.params().layer(),
+            scope.params().layer(), 1,
         );
         Ok(())
     }),
@@ -121,6 +124,7 @@ const PROCEDURES: &[(
             Feature::Marker(marker),
             scope.params().detail(pos, err)?,
             scope.params().layer() - 0.3 + layer_offset,
+            1,
         );
         Ok(())
     }),
@@ -137,7 +141,7 @@ const PROCEDURES: &[(
         features.insert(
             layout.into_feature(position, false, properties.into()),
             scope.params().detail(pos, err)?,
-            scope.params().layer(),
+            scope.params().layer(), 1,
         );
         Ok(())
     }),
@@ -158,7 +162,7 @@ const PROCEDURES: &[(
         features.insert(
             layout.into_feature(position, true, properties),
             scope.params().detail(pos, err)?,
-            scope.params().layer(),
+            scope.params().layer(), 1,
         );
         Ok(())
     }),
@@ -174,6 +178,7 @@ const PROCEDURES: &[(
             Feature::Area(AreaContour::new(class, trace)),
             scope.params().detail(pos, err)?,
             scope.params().layer() - 0.2 + layer_offset,
+            1,
         );
         Ok(())
     }),
@@ -220,7 +225,7 @@ const PROCEDURES: &[(
                 label::Properties::with_size(label::FontSize::Small),
             ),
             scope.params().detail(pos, err)?,
-            scope.params().layer(),
+            scope.params().layer(), 1,
         );
         Ok(())
     }),
@@ -309,7 +314,7 @@ const PROCEDURES: &[(
         features.insert(
             layout.into_feature(position, false, properties),
             scope.params().detail(pos, err)?,
-            scope.params().layer(),
+            scope.params().layer(), 1,
         );
         Ok(())
     }),
@@ -322,12 +327,14 @@ const PROCEDURES: &[(
     ("track", &|pos, args, scope, features, err| {
         let [class, trace] = args.into_positionals(err)?;
         let class = TrackClass::from_arg(class, err)?;
+        //let is_tunnel = class.class().surface().is_tunnel();
         let layer_offset = class.class().layer_offset();
         let trace = trace.into_path(err)?.0;
         features.insert(
             Feature::Track(TrackContour::new(class, trace)),
             scope.params().detail(pos, err)?,
             scope.params().layer() - 0.1 + layer_offset,
+            1, //if is_tunnel { 2 } else { 1 },
         );
         Ok(())
     }),
