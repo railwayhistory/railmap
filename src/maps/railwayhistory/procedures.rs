@@ -155,9 +155,12 @@ const PROCEDURES: &[(
         let (properties, position, layout) = label_args(
             args, err, label::Properties::with_size(label::FontSize::Badge)
         )?;
-        let layout = label::LayoutBuilder::hbox(
-            Align::Center, Align::Center, Default::default(),
-            vec![layout]
+        let layout = label::LayoutBuilder::badge_frame(
+            label::PropertiesBuilder::packed(),
+            label::LayoutBuilder::hbox(
+                Align::Center, Align::Center, Default::default(),
+                vec![layout]
+            ),
         );
         features.insert(
             layout.into_feature(position, true, properties),

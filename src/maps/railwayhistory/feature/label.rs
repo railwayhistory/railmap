@@ -44,6 +44,9 @@ enum ContentBuilder {
     Hrule {
         width: Distance,
     },
+    BadgeFrame {
+        content: Box<LayoutBuilder>,
+    },
 }
 
 impl LayoutBuilder {
@@ -85,6 +88,16 @@ impl LayoutBuilder {
     ) -> Self {
         LayoutBuilder::new(
             ContentBuilder::Hrule { width },
+            properties
+        )
+    }
+
+    pub fn badge_frame(
+        properties: PropertiesBuilder,
+        content: LayoutBuilder,
+    ) -> Self {
+        LayoutBuilder::new(
+            ContentBuilder::BadgeFrame { content: content.into() },
             properties
         )
     }
@@ -150,6 +163,13 @@ impl LayoutBuilder {
                     Span::Hrule(HruleSpan::new(width, properties.class))
                 )
             }
+            ContentBuilder::BadgeFrame { content } => {
+                Layout::span(
+                    Span::BadgeFrame(BadgeFrame::new(
+                        content.into_layout(&properties)
+                    ))
+                )
+            }
         }
     }
 }
@@ -211,6 +231,8 @@ pub struct PropertiesBuilder {
 
     /// Changes to the parent’s class.
     class: Class,
+
+    packed: Option<bool>,
 }
 
 impl PropertiesBuilder {
@@ -229,6 +251,7 @@ impl PropertiesBuilder {
             font: FontFaceBuilder::from_symbols(symbols),
             size: FontSize::from_symbols(symbols),
             class: Class::from_symbols(symbols),
+            packed: None
         };
         if symbols.take("former") {
             res.class.set_status(Status::Removed)
@@ -239,6 +262,13 @@ impl PropertiesBuilder {
     pub fn with_size(size: FontSize) -> Self {
         PropertiesBuilder {
             size: Some(size),
+            .. Default::default()
+        }
+    }
+
+    pub fn packed() -> Self {
+        PropertiesBuilder {
+            packed: Some(true),
             .. Default::default()
         }
     }
@@ -342,6 +372,7 @@ pub struct Properties {
     face: FontFace,
     size: FontSize,
     class: Class,
+    packed: bool,
 }
 
 impl Properties {
@@ -375,6 +406,7 @@ impl Properties {
             face: update.font.apply(self.face),
             size: update.size.unwrap_or(self.size),
             class: self.class.update(&update.class),
+            packed: update.packed.unwrap_or(self.packed),
         }
     }
 
@@ -445,6 +477,7 @@ impl Default for FontSize {
 pub enum Span {
     Text(TextSpan),
     Hrule(HruleSpan),
+    BadgeFrame(BadgeFrame),
 }
 
 impl crate::render::label::Span<Railwayhistory> for Span {
@@ -452,6 +485,7 @@ impl crate::render::label::Span<Railwayhistory> for Span {
         match self {
             Span::Text(span) => span.extent(style, canvas),
             Span::Hrule(span) => span.extent(style, canvas),
+            Span::BadgeFrame(span) => span.extent(style, canvas),
         }
     }
 
@@ -464,6 +498,9 @@ impl crate::render::label::Span<Railwayhistory> for Span {
                 span.render(style, canvas, depth, point, extent, outer)
             }
             Span::Hrule(span) => {
+                span.render(style, canvas, depth, point, extent, outer)
+            }
+            Span::BadgeFrame(span) => {
                 span.render(style, canvas, depth, point, extent, outer)
             }
         }
@@ -492,17 +529,26 @@ impl TextSpan {
         let text = canvas.text_extents(&self.text).unwrap();
         let font = canvas.font_extents().unwrap();
  
-        // The font height may be bigger than ascent plus descent so we correct
-        // the descent for this.
-        let top = -font.ascent;
-        let bottom = top + font.height;
+        // If we are packed, we only consider the inked area, otherwise
+        // use the font’s extents.
+        let (top, bottom) = if self.properties.packed {
+            (text.y_bearing, text.y_bearing + text.height)
+        }
+        else {
+            // The font height may be bigger than ascent plus descent so
+            // we correct descent for this.
+            (-font.ascent, -font.ascent + font.height)
+        };
 
         // For the width, we use the text’s x_advance. This should consider the
         // intended width instead of the inked width.
         let left = 0.;
         let right = text.x_advance;
 
-        (Rect::new(left, top, right, bottom), 2)
+        (
+            Rect::new(left, top, right, bottom),
+            if self.properties.packed { 1 }  else { 2 }
+        )
     }
 
     fn render(
@@ -569,6 +615,61 @@ impl HruleSpan {
             style.label_color(&self.class).apply(canvas);
             canvas.stroke().unwrap();
         }
+    }
+}
+
+
+//------------ BadgeFrame ---------------------------------------------------
+
+/// The rendering rule for a frame around more label.
+pub struct BadgeFrame {
+    content: Box<Layout<Railwayhistory>>,
+}
+
+impl BadgeFrame {
+    fn new(
+        content: Layout<Railwayhistory>,
+    ) -> Self {
+        BadgeFrame { content: content.into() }
+    }
+
+    fn extent(&self, style: &Style, canvas: &Canvas) -> (Rect, usize) {
+        let (mut extent, depth) = self.content.extent(style, canvas);
+        let xmargin = style.dimensions().dt * 0.2;
+        let ymargin = style.dimensions().dt * 0.1;
+        extent.x0 -= xmargin;
+        extent.x1 += xmargin;
+        extent.y0 -= ymargin;
+        extent.y1 += ymargin;
+        (extent, depth)
+    }
+
+    fn render(
+        &self, style: &Style, canvas: &Canvas, depth: usize, mut point: Point,
+        extent: Rect, outer: Rect,
+    ) {
+        let xmargin = style.dimensions().dt * 0.2;
+        let ymargin = style.dimensions().dt * 0.1;
+        if depth == 0 {
+            canvas.move_to(
+                point.x + extent.x0 - xmargin, point.y + outer.y0 - ymargin,
+            );
+            canvas.line_to(
+                point.x + extent.x1 + xmargin, point.y + outer.y0 - ymargin,
+            );
+            canvas.line_to(
+                point.x + extent.x1 + xmargin, point.y + outer.y1 + ymargin,
+            );
+            canvas.line_to(
+                point.x + extent.x0 - xmargin, point.y + outer.y1 + ymargin
+            );
+            canvas.close_path();
+            Color::WHITE.apply(canvas);
+            canvas.fill().unwrap();
+        }
+        point.x += xmargin;
+        point.y += ymargin;
+        self.content.render(style, canvas, depth, point, extent, outer)
     }
 }
 

@@ -347,8 +347,15 @@ impl<T: Theme> Hbox<T> {
         match self.halign {
             Align::Start => { }
             Align::Center => {
-                res.x0 = -res.x1 / 2.;
-                res.x1 = res.x1 / 2.
+                let half = res.width() / 2.;
+                if let Some(left) = left {
+                    res.x0 = -half + left;
+                    res.x1 = half + left;
+                }
+                else {
+                    res.x0 = -half;
+                    res.x1 = half;
+                }
             }
             Align::Ref => {
                 if let Some(left) = left {
