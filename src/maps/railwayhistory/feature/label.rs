@@ -12,7 +12,6 @@ use crate::import::Failed;
 use super::super::class::{Class, Status};
 use super::super::style::Style;
 use super::super::theme::Railwayhistory;
-use super::Feature;
 
 
 //------------ LayoutBuilder -------------------------------------------------
@@ -123,15 +122,27 @@ impl LayoutBuilder {
     }
 
     pub fn into_feature(
-        self, position: Position, on_path: bool, base: Properties
-    ) -> Feature {
-        Feature::Label(self.into_label(position, on_path, base))
+        self,
+        label_properties: LabelProperties,
+        position: Position,
+        on_path: bool,
+        base: Properties,
+    ) -> super::Feature {
+        super::Feature::Label(
+            self.into_label(label_properties, position, on_path, base)
+        )
     }
 
     pub fn into_label(
-        self, position: Position, on_path: bool, base: Properties
-    ) -> Label<Railwayhistory> {
-        Label::new(position, on_path, self.into_layout(&base))
+        self,
+        label_properties: LabelProperties,
+        position: Position,
+        on_path: bool,
+        base: Properties,
+    ) -> Feature {
+        Feature::new(
+            label_properties, position, on_path, self.into_layout(&base)
+        )
     }
 
     pub fn into_layout(
@@ -251,7 +262,7 @@ impl PropertiesBuilder {
             font: FontFaceBuilder::from_symbols(symbols),
             size: FontSize::from_symbols(symbols),
             class: Class::from_symbols(symbols),
-            packed: None
+            packed: None,
         };
         if symbols.take("former") {
             res.class.set_status(Status::Removed)
@@ -364,11 +375,49 @@ impl FontFaceBuilder {
 }
 
 
+//------------ LabelProperties -----------------------------------------------
+
+#[derive(Clone, Debug, Default)]
+pub struct LabelProperties {
+    linenum: bool,
+}
+
+impl LabelProperties {
+    pub fn from_arg(
+        linenum: bool,
+        arg: eval::Expression<Railwayhistory>,
+        err: &mut eval::Error,
+    ) -> Result<(Self, Properties), Failed> {
+        let mut symbols = arg.into_symbol_set(err)?.0;
+        let mut properties = PropertiesBuilder::from_symbols(&mut symbols);
+        let label_properties = LabelProperties {
+            linenum: symbols.take("linenum") || linenum,
+        };
+        symbols.check_exhausted(err)?;
+        if label_properties.linenum {
+            properties.size = Some(FontSize::Badge)
+        }
+        Ok((label_properties, Properties::default().update(&properties)))
+    }
+
+    pub fn default_pair(linenum: bool) -> (Self, Properties) {
+        (
+            LabelProperties { linenum },
+            if linenum {
+                Properties::with_size(FontSize::Badge)
+            }
+            else {
+                Properties::default()
+            }
+        )
+    }
+}
+
+
 //------------ Properties ----------------------------------------------------
 
 #[derive(Clone, Debug, Default)]
 pub struct Properties {
-    linenum: bool,
     face: FontFace,
     size: FontSize,
     class: Class,
@@ -402,17 +451,11 @@ impl Properties {
 
     pub fn update(&self, update: &PropertiesBuilder) -> Self {
         Properties {
-            linenum: false,
             face: update.font.apply(self.face),
             size: update.size.unwrap_or(self.size),
             class: self.class.update(&update.class),
             packed: update.packed.unwrap_or(self.packed),
         }
-    }
-
-    pub fn enable_linenum(&mut self) {
-        self.linenum = true;
-        self.size = FontSize::Badge;
     }
 
     pub fn apply_font(&self, canvas: &Canvas) {
@@ -469,6 +512,38 @@ impl Default for FontSize {
         FontSize::Medium
     }
 }
+
+
+//------------ Feature -------------------------------------------------------
+
+/// The feature for the label.
+pub struct Feature {
+    properties: LabelProperties,
+    label: Label<Railwayhistory>,
+}
+
+impl Feature {
+    pub fn new(
+        properties: LabelProperties,
+        position: Position, on_path: bool, layout: Layout<Railwayhistory>,
+    ) -> Self {
+        Feature {
+            properties,
+            label: Label::new(position, on_path, layout)
+        }
+    }
+
+    pub fn storage_bounds(&self) -> Rect {
+        self.label.storage_bounds()
+    }
+
+    pub fn render(&self, style: &Style, canvas: &Canvas) {
+        if !self.properties.linenum || style.include_line_labels() {
+            self.label.render(style, canvas)
+        }
+    }
+}
+
 
 
 //------------ Span ----------------------------------------------------------
@@ -664,7 +739,7 @@ impl BadgeFrame {
                 point.x + extent.x0 - xmargin, point.y + outer.y1 + ymargin
             );
             canvas.close_path();
-            Color::WHITE.apply(canvas);
+            Color::rgba(1., 1., 1., 0.85).apply(canvas);
             canvas.fill().unwrap();
         }
         point.x += xmargin;

@@ -123,6 +123,10 @@ impl Class {
         self.status = Some(status);
     }
 
+    pub fn is_open(&self) -> bool {
+        matches!(self.status(), Status::Open)
+    }
+
     pub fn surface(&self) -> Surface {
         self.surface.unwrap_or_default()
     }

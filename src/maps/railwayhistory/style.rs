@@ -136,7 +136,7 @@ impl Style {
     }
 
     pub fn include_line_labels(&self) -> bool {
-        true
+        self.palette().show_linenum()
     }
 }
 
@@ -375,6 +375,14 @@ impl Palette {
     pub fn primary_marker_color(self, class: &Class) -> Color {
         COLORS.marker.color(self, class)
     }
+
+    /// Returns whether to draw line numbers.
+    pub fn show_linenum(self) -> bool {
+        match self {
+            Palette::Pax => false,
+            _ => true
+        }
+    }
 }
 
 
@@ -397,12 +405,10 @@ pub struct ColorSet {
     pub el_rail_high: Color,
     pub el_none: Color,
 
-    pub pax_full_hsl: Color,
-    pub pax_full_ole: Color,
-    pub pax_full_rail: Color,
     pub pax_full: Color,
     pub pax_ltd: Color,
     pub pax_none: Color,
+    pub pax_closed: Color,
 
     pub closed: Color,
     pub removed: Color,
@@ -481,28 +487,16 @@ impl ColorSet {
     }
 
     fn pax_color(&self, class: &Class) -> Color {
-        if let Some(color) = self.common_color(class) {
-            return color
+        if !class.is_open() {
+            self.pax_closed
         }
-        match class.pax() {
-            Pax::None => self.pax_none,
-            Pax::Full => {
-                if class.speed().is_hsl() {
-                    self.pax_full_hsl
-                }
-                else if class.has_active_cat() {
-                    self.pax_full_ole
-                }
-                else if class.has_active_rail() {
-                    self.pax_full_rail
-                }
-                else {
-                    self.pax_full
-                }
+        else {
+            match class.pax() {
+                Pax::None => self.pax_none,
+                Pax::Full => self.pax_full,
+                _ => self.pax_ltd,
             }
-            _ => self.pax_ltd,
         }
-
     }
 
     fn proof_color(&self, class: &Class) -> Color {
@@ -657,12 +651,10 @@ lazy_static! {
             el_rail_high:   Color::hex("004f2eff").unwrap(),
             el_rail_low:    Color::hex("444400ff").unwrap(),
 
-            pax_full_hsl: Color::rgb(0.588, 0.075, 0.851),
-            pax_full_ole: Color::rgb(0.855, 0.071, 0.071),
-            pax_full_rail: Color::rgb(0.059, 0.729, 0.663),
-            pax_full: Color::rgb(0.145, 0.600, 0.055),
-            pax_ltd: Color::rgb(0.553, 0.600, 0.349),
-            pax_none: Color::grey(0.100),
+            pax_full: Color::grey(0.1),
+            pax_ltd: Color::grey(0.3),
+            pax_none: Color::grey(0.7),
+            pax_closed: Color::grey(0.9),
 
             closed:  Color::grey(0.550),
             removed: Color::grey(0.650),

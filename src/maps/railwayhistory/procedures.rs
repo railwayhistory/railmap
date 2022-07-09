@@ -46,11 +46,13 @@ const PROCEDURES: &[(
     // badge([properties: symbol-set,] position: position, layout: layout)
     // ```
     ("badge", &|pos, args, scope, features, err| {
-        let (properties, position, layout) = label_args(
-            args, err, Default::default()
+        let (label_properties, properties, position, layout) = label_args(
+            false, args, err,
         )?;
         features.insert(
-            layout.into_feature(position, true, properties.into()),
+            layout.into_feature(
+                label_properties, position, true, properties.into()
+            ),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
             1,
@@ -135,11 +137,13 @@ const PROCEDURES: &[(
     // label([properties: symbol-set,] position: position, layout: layout)
     // ```
     ("label", &|pos, args, scope, features, err| {
-        let (properties, position, layout) = label_args(
-            args, err, Default::default(),
+        let (label_properties, properties, position, layout) = label_args(
+            false, args, err,
         )?;
         features.insert(
-            layout.into_feature(position, false, properties.into()),
+            layout.into_feature(
+                label_properties, position, false, properties.into()
+            ),
             scope.params().detail(pos, err)?,
             scope.params().layer(), 1,
         );
@@ -152,8 +156,8 @@ const PROCEDURES: &[(
     // line_badge(class: symbol-set, position: position, text: Text)
     // ```
     ("line_badge", &|pos, args, scope, features, err| {
-        let (properties, position, layout) = label_args(
-            args, err, label::Properties::with_size(label::FontSize::Badge)
+        let (label_properties, properties, position, layout) = label_args(
+            true, args, err,
         )?;
         let layout = label::LayoutBuilder::badge_frame(
             label::PropertiesBuilder::packed(),
@@ -163,7 +167,7 @@ const PROCEDURES: &[(
             ),
         );
         features.insert(
-            layout.into_feature(position, true, properties),
+            layout.into_feature(label_properties, position, true, properties),
             scope.params().detail(pos, err)?,
             scope.params().layer(), 1,
         );
@@ -224,6 +228,7 @@ const PROCEDURES: &[(
             label::LayoutBuilder::hbox(
                 halign, valign, properties, vec![text]
             ).into_feature(
+                Default::default(),
                 position, false,
                 label::Properties::with_size(label::FontSize::Small),
             ),
@@ -315,7 +320,9 @@ const PROCEDURES: &[(
         symbols.check_exhausted(err)?;
 
         features.insert(
-            layout.into_feature(position, false, properties),
+            layout.into_feature(
+                Default::default(), position, false, properties,
+            ),
             scope.params().detail(pos, err)?,
             scope.params().layer(), 1,
         );
@@ -385,10 +392,17 @@ impl Procedure {
 /// ([class: symbol-set,] position: position, layout: Layout)
 /// ```
 fn label_args(
+    linenum: bool,
     args: eval::ArgumentList<Railwayhistory>,
     err: &mut eval::Error,
-    mut base_properties: label::Properties
-) -> Result<(label::Properties, Position, label::LayoutBuilder), Failed> {
+) -> Result<
+    (
+        label::LabelProperties, label::Properties,
+        Position, label::LayoutBuilder,
+    ),
+    Failed
+>
+{
     let args = args.into_var_positionals(err,  |args, err| {
         if args.positional().len() == 2 || args.positional().len() == 3 {
             Ok(true)
@@ -404,20 +418,14 @@ fn label_args(
 
     let three = args.len() > 2;
     let mut args = args.into_iter();
-    let properties = if three {
-        let mut symbols = args.next().unwrap().into_symbol_set(err)?.0;
-        let properties = label::PropertiesBuilder::from_symbols(&mut symbols);
-        if symbols.take("linenum") {
-            base_properties.enable_linenum()
-        }
-        symbols.check_exhausted(err)?;
-        base_properties.update(&properties)
+    let (label_properties, properties) = if three {
+        label::LabelProperties::from_arg(linenum, args.next().unwrap(), err)?
     }
     else {
-        base_properties
+        label::LabelProperties::default_pair(linenum)
     };
     let position = args.next().unwrap().into_position(err)?.0;
     let layout = label::LayoutBuilder::from_expr(args.next().unwrap(), err)?;
-    Ok((properties, position, layout))
+    Ok((label_properties, properties, position, layout))
 }
 

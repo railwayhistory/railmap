@@ -7,7 +7,6 @@ pub mod track;
 
 use kurbo::Rect;
 use crate::render::canvas::Canvas;
-use crate::render::label::Label;
 use super::Railwayhistory;
 use super::style::Style;
 
@@ -16,7 +15,7 @@ pub enum Feature {
     Border(border::BorderContour),
     Casing(track::TrackCasing),
     Guide(guide::GuideContour),
-    Label(Label<Railwayhistory>),
+    Label(label::Feature),
     Marker(markers::StandardMarker),
     Track(track::TrackContour),
 }
