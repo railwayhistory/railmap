@@ -454,7 +454,7 @@ impl ColorSet {
         if let Some(color) = self.common_color(class) {
             color
         }
-        else if let Some(cat) = class.cat() {
+        else if let Some(cat) = class.active_cat() {
             match (cat.system, cat.voltage_group(), class.pax().is_full()) {
                 (Some(Ac), High, true) => self.el_ole_ac_high_pax,
                 (Some(Ac), High, false) => self.el_ole_ac_high,
@@ -467,7 +467,7 @@ impl ColorSet {
                 _ => self.toxic,
             }
         }
-        else if let Some(rail) = class.rail() {
+        else if let Some(rail) = class.active_rail() {
             match (rail.voltage_group(), class.pax().is_full()) {
                 (High, true) => self.el_rail_high_pax,
                 (High, false) => self.el_rail_high,
@@ -641,7 +641,8 @@ lazy_static! {
             el_ole_dc_high_pax: Color::hex("a51100ff").unwrap(),
             el_ole_dc_low_pax:  Color::hex("d05113ff").unwrap(),
             el_rail_high_pax:   Color::hex("007e49ff").unwrap(),
-            el_rail_low_pax:    Color::hex("6e6e00ff").unwrap(),
+            el_rail_low_pax:   Color::hex("007e49ff").unwrap(),
+            //el_rail_low_pax:    Color::hex("6e6e00ff").unwrap(),
 
             el_none:        Color::hex("523700ff").unwrap(),
             el_ole_ac_high: Color::hex("4d2263ff").unwrap(),
@@ -649,7 +650,8 @@ lazy_static! {
             el_ole_dc_high: Color::hex("720c00ff").unwrap(),
             el_ole_dc_low:  Color::hex("ac3900ff").unwrap(),
             el_rail_high:   Color::hex("004f2eff").unwrap(),
-            el_rail_low:    Color::hex("444400ff").unwrap(),
+            el_rail_low:   Color::hex("004f2eff").unwrap(),
+            //el_rail_low:    Color::hex("444400ff").unwrap(),
 
             pax_full: Color::grey(0.1),
             pax_ltd: Color::grey(0.3),
@@ -660,10 +662,10 @@ lazy_static! {
             removed: Color::grey(0.650),
             gone:    Color::grey(0.850),
 
-            tram:         Color::rgb(0.109, 0.387, 0.668),
-            tram_closed:  Color::rgb(0.367, 0.555, 0.723),
-            tram_removed: Color::rgb(0.559, 0.686, 0.816),
-            tram_gone:    Color::rgb(0.742, 0.820, 0.890),
+            tram:         Color::hex("1c63abff").unwrap(),
+            tram_closed:  Color::hex("5e8eb9ff").unwrap(),
+            tram_removed: Color::hex("8fb0d1ff").unwrap(),
+            tram_gone:    Color::hex("bed2e4ff").unwrap(),
 
             toxic: Color::rgb(0.824, 0.824, 0.0),
         };

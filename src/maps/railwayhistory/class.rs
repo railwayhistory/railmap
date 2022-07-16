@@ -144,6 +144,16 @@ impl Class {
         }
     }
 
+    pub fn active_cat(&self) -> Option<ElectricCat> {
+        if let Some(cat) = self.cat {
+            if matches!(cat.status, ElectricStatus::Open) {
+                return Some(cat)
+            }
+        }
+        None
+    }
+
+
     pub fn rail(&self) -> Option<ElectricRail> {
         self.rail
     }
@@ -155,6 +165,15 @@ impl Class {
         else {
             false
         }
+    }
+
+    pub fn active_rail(&self) -> Option<ElectricRail> {
+        if let Some(rail) = self.rail {
+            if matches!(rail.status, ElectricStatus::Open) {
+                return Some(rail)
+            }
+        }
+        None
     }
 
     pub fn speed(&self) -> Speed {
