@@ -3,6 +3,7 @@
 use std::fmt;
 use std::convert::TryFrom;
 use std::num::ParseIntError;
+use std::str::FromStr;
 use serde::Deserialize;
 use super::canvas::Canvas;
 
@@ -94,6 +95,14 @@ impl<'a> TryFrom<&'a str> for Color {
     type Error = InvalidHexColor;
 
     fn try_from(src: &'a str) -> Result<Self, Self::Error> {
+        Self::hex(src)
+    }
+}
+
+impl FromStr for Color {
+    type Err = InvalidHexColor;
+
+    fn from_str(src: &str) -> Result<Self, Self::Err> {
         Self::hex(src)
     }
 }

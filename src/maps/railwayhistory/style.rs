@@ -1,9 +1,9 @@
 //! The style of the map to be rendered.
 
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::ops::MulAssign;
-use lazy_static::lazy_static;
-use serde::Deserialize;
+use std::sync::Arc;
 use crate::render::color::Color;
 use crate::render::path::MapDistance;
 use crate::theme;
@@ -77,6 +77,7 @@ pub struct Style {
     detail: u8,
     mag: f64,
     dimensions: Dimensions,
+    colors: Arc<ColorSet>,
 }
 
 impl theme::Style for Style {
@@ -105,7 +106,7 @@ impl theme::Style for Style {
 }
 
 impl Style {
-    pub fn new(id: StyleId, zoom: u8) -> Self {
+    pub fn new(id: StyleId, zoom: u8, colors: Arc<ColorSet>) -> Self {
         let detail = id.detail(zoom);
         let dimensions = if detail < 3 {
             Dimensions::D0
@@ -121,6 +122,7 @@ impl Style {
             detail,
             mag: id.mag(zoom),
             dimensions,
+            colors,
         }
     }
 
@@ -146,32 +148,27 @@ impl Style {
 impl Style {
     /// Returns the color for a piece of track.
     pub fn track_color(&self, class: &Class) -> Color {
-        self.palette().track_color(class)
+        self.colors.color(self.palette(), class)
     }
 
     /// Returns the color for cat markings if they should be drawn.
     pub fn cat_color(&self, class: &Class) -> Option<Color> {
-        self.palette().cat_color(class)
+        self.colors.cat_color(self.palette(), class)
     }
 
     /// Returns the color for third rail markings if they should be drawn.
     pub fn rail_color(&self, class: &Class) -> Option<Color> {
-        self.palette().rail_color(class)
-    }
-
-    /// Returns the color for track glow.
-    pub fn glow_color(&self, class: &Class) -> Color {
-        self.palette().glow_color(class)
+        self.colors.rail_color(self.palette(), class)
     }
 
     /// Returns the color for a station label.
     pub fn label_color(&self, class: &Class) -> Color {
-        self.palette().label_color(class)
+        self.colors.color(self.palette(), class)
     }
 
     /// Returns the primary color for a marker.
     pub fn primary_marker_color(&self, class: &Class) -> Color {
-        self.palette().primary_marker_color(class)
+        self.colors.color(self.palette(), class)
     }
 }
 
@@ -346,36 +343,6 @@ pub enum Palette {
 
 
 impl Palette {
-    /// Returns the color for a piece of track.
-    pub fn track_color(self, class: &Class) -> Color {
-        COLORS.track.color(self, class)
-    }
-
-    /// Returns the color for cat markings if they should be drawn.
-    pub fn cat_color(self, class: &Class) -> Option<Color> {
-        COLORS.track.cat_color(self, class)
-    }
-
-    /// Returns the color for third rail markings if they should be drawn.
-    pub fn rail_color(self, class: &Class) -> Option<Color> {
-        COLORS.track.rail_color(self, class)
-    }
-
-    /// Returns the color for track glow.
-    pub fn glow_color(self, class: &Class) -> Color {
-        COLORS.glow.color(self, class)
-    }
-
-    /// Returns the color for a station label.
-    pub fn label_color(self, class: &Class) -> Color {
-        COLORS.label.color(self, class)
-    }
-
-    /// Returns the primary color for a marker.
-    pub fn primary_marker_color(self, class: &Class) -> Color {
-        COLORS.marker.color(self, class)
-    }
-
     /// Returns whether to draw line numbers.
     pub fn show_linenum(self) -> bool {
         match self {
@@ -388,38 +355,58 @@ impl Palette {
 
 //------------ ColorSet ------------------------------------------------------
 
-#[derive(Clone, Default, Deserialize)]
-pub struct ColorSet {
-    pub el_ole_ac_low_pax: Color,
-    pub el_ole_ac_high_pax: Color,
-    pub el_ole_dc_low_pax: Color,
-    pub el_ole_dc_high_pax: Color,
-    pub el_rail_low_pax: Color,
-    pub el_rail_high_pax: Color,
-    pub el_none_pax: Color,
-    pub el_ole_ac_low: Color,
-    pub el_ole_ac_high: Color,
-    pub el_ole_dc_low: Color,
-    pub el_ole_dc_high: Color,
-    pub el_rail_low: Color,
-    pub el_rail_high: Color,
-    pub el_none: Color,
+macro_rules! color_set {
+    ( $( $name:ident, )* ) => {
+        #[derive(Clone, Debug)]
+        pub struct ColorSet {
+            $(
+                pub $name: Color,
+            )*
+        }
 
-    pub pax_full: Color,
-    pub pax_ltd: Color,
-    pub pax_none: Color,
-    pub pax_closed: Color,
+        impl ColorSet {
+            pub fn update(&mut self, src: &HashMap<String, Color>) {
+                $(
+                    if let Some(color) = src.get(stringify!($name)) {
+                        self.$name = *color;
+                    }
+                )*
+            }
+        }
+    }
+}
 
-    pub closed: Color,
-    pub removed: Color,
-    pub gone: Color,
+color_set! {
+    el_ole_ac_low_pax,
+    el_ole_ac_high_pax,
+    el_ole_dc_low_pax,
+    el_ole_dc_high_pax,
+    el_rail_low_pax,
+    el_rail_high_pax,
+    el_none_pax,
+    el_ole_ac_low,
+    el_ole_ac_high,
+    el_ole_dc_low,
+    el_ole_dc_high,
+    el_rail_low,
+    el_rail_high,
+    el_none,
 
-    pub tram: Color,
-    pub tram_closed: Color,
-    pub tram_removed: Color,
-    pub tram_gone: Color,
+    pax_full,
+    pax_ltd,
+    pax_none,
+    pax_closed,
 
-    pub toxic: Color,
+    closed,
+    removed,
+    gone,
+
+    tram,
+    tram_closed,
+    tram_removed,
+    tram_gone,
+
+    toxic,
 }
 
 impl ColorSet {
@@ -621,20 +608,9 @@ impl ColorSet {
     }
 }
 
-
-//------------ ColorSetSet ---------------------------------------------------
-
-#[derive(Clone, Default)]
-struct ColorSetSet {
-    track: ColorSet,
-    glow: ColorSet,
-    label: ColorSet,
-    marker: ColorSet,
-}
-
-lazy_static! {
-    static ref COLORS: ColorSetSet = {
-        let base = ColorSet {
+impl Default for ColorSet {
+    fn default() -> Self {
+        ColorSet {
             el_none_pax:        Color::hex("98690dff").unwrap(),
             el_ole_ac_high_pax: Color::hex("8845aaff").unwrap(),
             el_ole_ac_low_pax:  Color::hex("aa4689ff").unwrap(),
@@ -668,17 +644,9 @@ lazy_static! {
             tram_gone:    Color::hex("bed2e4ff").unwrap(),
 
             toxic: Color::rgb(0.824, 0.824, 0.0),
-        };
-
-        ColorSetSet {
-            track: base.clone(),
-            glow: base.clone(),
-            label: base.clone(),
-            marker: base,
         }
-    };
+    }
 }
-
 
 //------------ InvalidStyle --------------------------------------------------
 

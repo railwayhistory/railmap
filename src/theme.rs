@@ -2,6 +2,7 @@
 
 use std::hash::Hash;
 use std::str::FromStr;
+use crate::config::Config;
 use crate::import::{ast, eval};
 use crate::import::Failed;
 use crate::render::feature::{Feature, FeatureSet};
@@ -20,6 +21,8 @@ pub trait Theme: Sized + Clone + Send + Sync + 'static {
     type Style: Style;
     type Feature: Feature<Self> + Send + Sync + 'static;
     type Span: Span<Self>;
+
+    fn config(&mut self, _config: &Config) { }
 
     fn eval_distance(
         &self, number: f64, unit: &str, pos: ast::Pos, err: &mut eval::Error,

@@ -1,4 +1,6 @@
 
+use std::sync::Arc;
+use crate::config::Config;
 use crate::import::Failed;
 use crate::import::{ast, eval};
 use crate::render::feature::FeatureSet;
@@ -7,13 +9,15 @@ use crate::theme;
 use crate::tile::TileId;
 use super::feature::Feature;
 use super::feature::label::Span;
-use super::style::Style;
+use super::style::{ColorSet, Style};
 
 
 //------------ Railwayhistory ------------------------------------------------
 
-#[derive(Clone)]
-pub struct Railwayhistory;
+#[derive(Clone, Default)]
+pub struct Railwayhistory {
+    colors: Arc<ColorSet>,
+}
 
 impl theme::Theme for Railwayhistory {
     type Function = super::functions::Function;
@@ -23,6 +27,12 @@ impl theme::Theme for Railwayhistory {
     type Style = Style;
     type Feature = Feature;
     type Span = Span;
+
+    fn config(&mut self, config: &Config) {
+        let mut colors = ColorSet::default();
+        colors.update(&config.colors);
+        self.colors = Arc::new(colors);
+    }
 
     fn eval_distance(
         &self, number: f64, unit: &str, pos: ast::Pos, err: &mut eval::Error,
@@ -81,7 +91,7 @@ impl theme::Theme for Railwayhistory {
     fn style(
         &self, tile_id: &TileId<<Self::Style as theme::Style>::StyleId>,
     ) -> Self::Style {
-        Style::new(tile_id.style, tile_id.zoom)
+        Style::new(tile_id.style, tile_id.zoom, self.colors.clone())
     }
 
     fn index_page(&self) -> &'static [u8] {

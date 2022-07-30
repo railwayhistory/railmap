@@ -3,18 +3,23 @@
 use std::{fs, io};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use crate::render::color::Color;
 
 //------------ Config --------------------------------------------------------
 
 /// The map configuration.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     /// The theme to be used for interpreting the rules and rendering.
     pub theme: String,
 
     /// The regions of the map.
     pub regions: HashMap<String, Region>,
+
+    /// Overide of the default colors of the map.
+    #[serde(default)]
+    pub colors: HashMap<String, Color>,
 }
 
 impl Config {
@@ -38,7 +43,7 @@ impl Config {
 //------------ Region --------------------------------------------------------
 
 /// A region of the map.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Region {
     /// The directory where the paths live.
     pub paths: PathBuf,

@@ -7,8 +7,9 @@ use railmap::theme::Theme;
 use railmap::maps::overnight::Overnight;
 use railmap::maps::railwayhistory::Railwayhistory;
 
-async fn run<T: Theme>(config: Config, matches: ArgMatches, theme: T) {
+async fn run<T: Theme>(config: Config, matches: ArgMatches, mut theme: T) {
     let start = Instant::now();
+    theme.config(&config);
     let mut features = LoadFeatures::new(&theme);
     match matches.values_of("region") {
         Some(values) => {
@@ -102,7 +103,9 @@ async fn main() {
     };
 
     match config.theme.as_ref() {
-        "railwayhistory" => run(config, matches, Railwayhistory).await,
+        "railwayhistory" => {
+            run(config, matches, Railwayhistory::default()).await
+        }
         "overnight" => run(config, matches, Overnight).await,
         theme => {
             eprintln!("Unknown theme '{}' in config.", theme);
