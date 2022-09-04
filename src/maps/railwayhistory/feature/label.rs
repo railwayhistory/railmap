@@ -490,7 +490,7 @@ impl FontSize {
             Medium => 7.,
             Large => 9.,
             Xlarge => 11.,
-            Badge => 5.5,
+            Badge => 5.6,
         }
     }
 
@@ -739,8 +739,9 @@ impl BadgeFrame {
                 point.x + extent.x0 - xmargin, point.y + outer.y1 + ymargin
             );
             canvas.close_path();
-            Color::rgba(1., 1., 1., 0.85).apply(canvas);
+            canvas.set_operator(cairo::Operator::Clear);
             canvas.fill().unwrap();
+            canvas.set_operator(cairo::Operator::Over);
         }
         point.x += xmargin;
         point.y += ymargin;
