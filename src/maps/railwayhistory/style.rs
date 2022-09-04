@@ -263,7 +263,7 @@ impl Dimensions {
         line_width: 0.8,
         other_width: 0.5,
         guide_width: 0.3,
-        seg: 5.0 * units::DT,
+        seg: 6. * units::DT,
         dt: units::DT,
         mark: 0.6 *  units::DT,
         tight_mark: 0.55 * units::DT,
@@ -278,18 +278,23 @@ impl Dimensions {
 
     const D3: Self = Self {
         line_width: 1.,
-        dt: 0.7 * units::DT,
+        mark: 0.8 * units::DT,
+        seg: 5. * units::DT,
+        sw: units::S3W,
+        sh: units::S3H,
+        ds: 0.15 * units::S3W,
+        sp: 0.8,
         .. Self::D0
     };
 
     const D4: Self = Self {
         line_width: 1.,
-        mark: 0.8 * super::units::DT,
+        mark: 0.8 * units::DT,
         sw: units::SW,
         sh: units::SH,
         ksw: 0.8 * units::SW,
         ksh: 0.8 * units::SH,
-        ds: 0.05 * units::SH,
+        ds: 0.075 * units::SH,
         sp: 0.8,
         bp: 0.6,
         .. Self::D0
@@ -381,15 +386,15 @@ color_set! {
     el_ole_ac_high_pax,
     el_ole_dc_low_pax,
     el_ole_dc_high_pax,
-    el_rail_low_pax,
-    el_rail_high_pax,
+    el_rail_pax,
+    el_rail_four_pax,
     el_none_pax,
     el_ole_ac_low,
     el_ole_ac_high,
     el_ole_dc_low,
     el_ole_dc_high,
-    el_rail_low,
-    el_rail_high,
+    el_rail,
+    el_rail_four,
     el_none,
 
     pax_full,
@@ -455,12 +460,11 @@ impl ColorSet {
             }
         }
         else if let Some(rail) = class.active_rail() {
-            match (rail.voltage_group(), class.pax().is_full()) {
-                (High, true) => self.el_rail_high_pax,
-                (High, false) => self.el_rail_high,
-                (Low, true) => self.el_rail_low_pax,
-                (Low, false) => self.el_rail_low,
-                _ => self.toxic,
+            match (rail.fourth, class.pax().is_full()) {
+                (false, true) => self.el_rail_pax,
+                (false, false) => self.el_rail,
+                (true, true) => self.el_rail_four_pax,
+                (true, false) => self.el_rail_four,
             }
         }
         else {
@@ -537,8 +541,6 @@ impl ColorSet {
     }
 
     fn el_rail_color(&self, class: &Class) -> Option<Color> {
-        use VoltageGroup::*;
-
         class.rail().map(|rail| {
             if class.category().is_tram() {
                 match rail.status {
@@ -549,12 +551,11 @@ impl ColorSet {
 
             match rail.status {
                 ElectricStatus::Open => {
-                    match (rail.voltage_group(), class.pax().is_full()) {
-                        (High, true) => self.el_rail_high_pax,
-                        (High, false) => self.el_rail_high,
-                        (Low, true) => self.el_rail_low_pax,
-                        (Low, false) => self.el_rail_low,
-                        _ => self.toxic,
+                    match (rail.fourth, class.pax().is_full()) {
+                        (false, true) => self.el_rail_pax,
+                        (false, false) => self.el_rail,
+                        (true, true) => self.el_rail_four_pax,
+                        (true, false) => self.el_rail_four,
                     }
                 }
                 ElectricStatus::Removed => self.removed,
@@ -616,18 +617,16 @@ impl Default for ColorSet {
             el_ole_ac_low_pax:  Color::hex("aa4689ff").unwrap(),
             el_ole_dc_high_pax: Color::hex("a51100ff").unwrap(),
             el_ole_dc_low_pax:  Color::hex("d05113ff").unwrap(),
-            el_rail_high_pax:   Color::hex("007e49ff").unwrap(),
-            el_rail_low_pax:   Color::hex("007e49ff").unwrap(),
-            //el_rail_low_pax:    Color::hex("6e6e00ff").unwrap(),
+            el_rail_pax:        Color::hex("007e49ff").unwrap(),
+            el_rail_four_pax:   Color::hex("6e6e00ff").unwrap(),
 
             el_none:        Color::hex("523700ff").unwrap(),
             el_ole_ac_high: Color::hex("4d2263ff").unwrap(),
             el_ole_ac_low:  Color::hex("691f51ff").unwrap(),
             el_ole_dc_high: Color::hex("720c00ff").unwrap(),
             el_ole_dc_low:  Color::hex("ac3900ff").unwrap(),
-            el_rail_high:   Color::hex("004f2eff").unwrap(),
-            el_rail_low:   Color::hex("004f2eff").unwrap(),
-            //el_rail_low:    Color::hex("444400ff").unwrap(),
+            el_rail:        Color::hex("004f2eff").unwrap(),
+            el_rail_four:   Color::hex("444400ff").unwrap(),
 
             pax_full: Color::grey(0.1),
             pax_ltd: Color::grey(0.3),
