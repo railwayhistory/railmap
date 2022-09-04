@@ -7,7 +7,7 @@ use crate::render::label::Align;
 use crate::render::path::Position;
 use super::class::Class;
 use super::feature::Feature;
-use super::feature::area::AreaContour;
+use super::feature::area::{AreaContour, PlatformContour};
 use super::feature::border::BorderContour;
 use super::feature::markers::StandardMarker;
 use super::feature::track::{TrackCasing, TrackClass, TrackContour};
@@ -182,7 +182,7 @@ const PROCEDURES: &[(
         let layer_offset = class.layer_offset();
         let trace = trace.into_path(err)?.0;
         features.insert(
-            Feature::Area(AreaContour::new(class, trace)),
+            Feature::Platform(PlatformContour::new(class, trace)),
             scope.params().detail(pos, err)?,
             scope.params().layer() - 0.2 + layer_offset,
             1,

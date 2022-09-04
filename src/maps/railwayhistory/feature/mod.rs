@@ -17,6 +17,7 @@ pub enum Feature {
     Guide(guide::GuideContour),
     Label(label::Feature),
     Marker(markers::StandardMarker),
+    Platform(area::PlatformContour),
     Track(track::TrackContour),
 }
 
@@ -29,6 +30,7 @@ impl crate::render::feature::Feature<Railwayhistory> for Feature {
             Feature::Guide(value) => value.storage_bounds(),
             Feature::Label(value) => value.storage_bounds(),
             Feature::Marker(value) => value.storage_bounds(),
+            Feature::Platform(value) => value.storage_bounds(),
             Feature::Track(value) => value.storage_bounds(),
         }
     }
@@ -41,6 +43,7 @@ impl crate::render::feature::Feature<Railwayhistory> for Feature {
             Feature::Guide(value) => value.render(style, canvas),
             Feature::Label(value) => value.render(style, canvas),
             Feature::Marker(value) => value.render(style, canvas),
+            Feature::Platform(value) => value.render(style, canvas),
             Feature::Track(value) => value.render(style, canvas, depth),
         }
     }
