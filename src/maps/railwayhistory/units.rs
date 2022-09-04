@@ -13,6 +13,8 @@ pub const DL: f64 = 0.66 * DT;
 pub const DT: f64 = 0.75 * MM;
 pub const SW: f64 = 3.2 * DT;
 pub const SH: f64 = 3.0 * DT;
+pub const S3W: f64 = 0.6 * SW;
+pub const S3H: f64 = 0.6 * SH;
 pub const SSW: f64 = 0.5 * SW;
 pub const SSH: f64 = 0.5 * SH;
 
@@ -46,15 +48,17 @@ pub const MAP_DISTANCES: &[(&str, [f64; 6])] = &[
     ("cm", [CM; 6]),
 
     // Relative units.
-    ("dt",  [DT, DT, DT, 0.7 * DT, DT, DT]),
+    ("dt",  [DT, DT, DT, DT, DT, DT]),
     ("dl",  [DL, DL, DL, DL, DL, DL]),
-    ("sw",  [SSW, SSW, SSW, SSW, SW, SW]),
-    ("sh",  [SSH, SSH, SSH, SSH, SH, SH]),
-    ("ssw", [SSW, SSW, SSW, SSW, SW, SW]), // deprecated!
+    ("sw",  [SSW, SSW, SSW, S3W, SW, SW]),
+    ("sh",  [SSH, SSH, SSH, S3H, SH, SH]),
+    ("ssw", [SSW, SSW, SSW, S3W, SW, SW]), // deprecated!
 ];
 
 
-pub fn resolve_unit(number: f64, unit_name: &str) -> Option<Distance> {
+pub fn resolve_unit(
+    number: f64, unit_name: &str,
+) -> Option<Distance> {
     for (unit, factor) in WORLD_DISTANCES {
         if unit_name == *unit {
             return Some(Distance::new(
