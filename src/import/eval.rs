@@ -1,4 +1,4 @@
-use std::{iter, ops};
+use std::ops;
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::collections::HashMap;
@@ -171,9 +171,9 @@ impl<T: Theme> Expression<T> {
 
     pub fn into_symbol_set(
         self, err: &mut Error
-    ) -> Result<(SymbolSet, ast::Pos), Failed> {
+    ) -> Result<SymbolSet, Failed> {
         match self.value {
-            ExprVal::SymbolSet(val) => Ok((val, self.pos)),
+            ExprVal::SymbolSet(val) => Ok(val),
             _ => {
                 err.add(self.pos, "expected symbol set");
                 Err(Failed)
@@ -385,9 +385,19 @@ impl<T: Theme> Clone for Partial<T> {
 #[derive(Clone, Debug, Default)]
 pub struct SymbolSet {
     set: HashMap<ShortString, Option<ast::Pos>>,
+    pos: ast::Pos,
 }
 
 impl SymbolSet {
+    fn new(set: ast::SymbolSet) -> Self {
+        SymbolSet {
+            set: HashMap::from_iter(set.symbols.into_iter().map(|item| {
+                (item.ident.ident, Some(item.pos))
+            })),
+            pos: set.pos
+        }
+    }
+
     pub fn insert(&mut self, symbol: impl Into<ShortString>) -> bool {
         // XXX This inserts the symbol as used.
         self.set.insert(symbol.into(), None).is_none()
@@ -411,6 +421,10 @@ impl SymbolSet {
         self.set.len()
     }
 
+    pub fn pos(&self) -> ast::Pos {
+        self.pos
+    }
+
     pub fn is_empty(&self) -> bool {
         self.set.is_empty()
     }
@@ -425,18 +439,35 @@ impl SymbolSet {
         Ok(())
     }
 
+    /// Returns the final member of the symbols set.
+    ///
+    /// If there is more than one item left, adds an error. If there are no
+    /// items left, returns `Ok(None)`.
+    pub fn take_final(
+        self, err: &mut Error
+    ) -> Result<Option<ShortString>, Failed> {
+        let mut res = None;
+        let mut many = false;
+
+        for (key, value) in self.set.into_iter() {
+            if let Some(pos) = value {
+                if res.is_some() {
+                    err.add(pos, format!("unexpected symbol ':{}'", key));
+                    many = true;
+                }
+                else {
+                    res = Some(key)
+                }
+            }
+        }
+        if many {
+            return Err(Failed);
+        }
+        Ok(res)
+    }
+
     pub fn into_iter(self) -> impl Iterator<Item = ShortString> {
         self.set.into_iter().map(|item| item.0)
-    }
-}
-
-impl iter::FromIterator<ast::Symbol> for SymbolSet {
-    fn from_iter<T: IntoIterator<Item = ast::Symbol>>(iter: T) -> Self {
-        SymbolSet {
-            set: HashMap::from_iter(iter.into_iter().map(|item| {
-                (item.ident.ident, Some(item.pos))
-            }))
-        }
     }
 }
 
@@ -1252,9 +1283,7 @@ impl ast::SymbolSet {
     fn eval_expr<T: Theme>(
         self, _scope: &Scope<T>, _err: &mut Error
     ) -> Result<ExprVal<T>, Failed> {
-        Ok(ExprVal::SymbolSet(
-            self.symbols.into_iter().map(Into::into).collect()
-        ))
+        Ok(ExprVal::SymbolSet(SymbolSet::new(self)))
     }
 }
 

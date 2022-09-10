@@ -12,14 +12,16 @@
 ///    closed or removed.
 
 use kurbo::Rect;
+use lazy_static::lazy_static;
+use std::collections::HashMap;
 use std::f64::consts::PI;
-use crate::import::{ast, eval};
+use crate::import::eval;
 use crate::import::Failed;
 use crate::render::canvas::Canvas;
 use crate::render::path::Position;
+use crate::theme::{Style as _};
 use super::super::class::Class;
 use super::super::style::{Dimensions, Style};
-use super::super::theme::Railwayhistory;
 
 
 //------------ StandardMarker ------------------------------------------------
@@ -34,42 +36,44 @@ pub struct StandardMarker {
     /// If this in `None` the marker doesn’t need to be oriented at all.
     /// Otherwise the value is the angle to be added to rotation from the
     /// position.
-    orientation: Option<f64>,
+    orientation: f64,
 
     /// The feature class.
     class: Class,
 
     /// The marker to use.
-    marker: &'static (
-        dyn Fn(&Canvas, Dimensions) -> Result<(), cairo::Error> + Sync
-    ),
+    marker: Marker,
 }
 
 
 impl StandardMarker {
     pub fn from_arg(
-        arg: eval::Expression<Railwayhistory>,
+        mut symbols: eval::SymbolSet,
         position: Position,
         err: &mut eval::Error,
     ) -> Result<Self, Failed> {
-        let (mut symbols, pos) = arg.into_symbol_set(err)?;
-        let (marker, rotate) = Self::marker_from_symbols(
-            &mut symbols, pos, err
-        )?;
-        let orientation = if rotate {
-            Some(Self::rotation_from_symbols(&mut symbols, pos, err)?)
-        }
-        else {
-            None
-        };
+        let orientation = Self::rotation_from_symbols(&mut symbols, err)?;
         let class = Class::from_symbols(&mut symbols);
-        symbols.check_exhausted(err)?;
+        let pos = symbols.pos();
+        let marker = match symbols.take_final(err)? {
+            Some(marker) => marker,
+            None => {
+                err.add(pos, "missing marker");
+                return Err(Failed)
+            }
+        };
+        let marker = match MARKERS.get(marker.as_str()) {
+            Some(marker) => *marker,
+            None => {
+                err.add(pos, "missing marker");
+                return Err(Failed)
+            }
+        };
         Ok(StandardMarker { position, orientation, class, marker })
     }
 
     fn rotation_from_symbols(
         symbols: &mut eval::SymbolSet,
-        _pos: ast::Pos,
         _err: &mut eval::Error
     ) -> Result<f64, Failed> {
         if symbols.take("top") {
@@ -93,30 +97,6 @@ impl StandardMarker {
         }
     }
 
-    fn marker_from_symbols(
-        symbols: &mut eval::SymbolSet,
-        pos: ast::Pos,
-        err: &mut eval::Error
-    ) -> Result<
-        (&'static (
-            dyn Fn(&Canvas, Dimensions) -> Result<(), cairo::Error> + Sync
-        ), bool),
-        Failed
-    > {
-        for (name, marker) in MARKERS {
-            if symbols.take(name) {
-                return Ok((marker, true))
-            }
-        }
-        for (name, marker) in DOT_MARKERS {
-            if symbols.take(name) {
-                return Ok((marker, false))
-            }
-        }
-        err.add(pos, "missing marker");
-        Err(Failed)
-    }
-
     pub fn class(&self) -> &Class {
         &self.class
     }
@@ -128,673 +108,893 @@ impl StandardMarker {
     pub fn render(&self, style: &Style, canvas: &Canvas) {
         let (point, angle) = self.position.resolve(canvas, style);
         canvas.translate(point.x, point.y);
-        if let Some(rotation) = self.orientation {
-            canvas.rotate(angle + rotation);
-        }
+        canvas.rotate(angle + self.orientation);
         style.primary_marker_color(&self.class).apply(canvas);
-        (self.marker)(canvas, style.dimensions()).unwrap();
+        if style.detail() > 3 {
+            (self.marker.large)(canvas, style.dimensions()).unwrap();
+        }
+        else {
+            (self.marker.small)(canvas, style.dimensions()).unwrap();
+        }
         canvas.identity_matrix();
     }
 }
 
 
-//------------ Markers ------------------------------------------------------
+//------------ Marker --------------------------------------------------------
 
-static MARKERS: &[
-    (&'static str, &'static (
-        dyn Fn(&Canvas, Dimensions) -> Result<(), cairo::Error> + Sync)
+#[derive(Clone, Copy)]
+struct Marker {
+    large: RenderFn,
+    small: RenderFn,
+}
+
+type RenderFn = &'static (
+    dyn Fn(&Canvas, Dimensions) -> Result<(), cairo::Error> + Sync
+);
+
+
+macro_rules! markers {
+    (
+        $(
+            ( $( $name:expr ),* ) => ( $( $closure:expr ),* )
+        ),*
     )
-] = &[
-    ("de.abzw", &|canvas, u| {
-        canvas.set_line_width(u.sp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., 0.5 * u.sh);
-        canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
-        canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
-        canvas.move_to(-0.5 * u.sw, u.sh);
-        canvas.line_to(0., 0.5 * u.sh);
-        canvas.line_to(0.5 * u.sw, u.sh);
-        canvas.stroke()
-    }),
+    => {
+        lazy_static! {
+            static ref MARKERS: HashMap<&'static str, Marker> = {
+                let mut set = HashMap::new();
+                $(
+                    let marker = make_marker!( $( $closure, )* );
+                    $(
+                        set.insert($name, marker);
+                    )*
+                )*
+                set
+            };
+        }
+    }
+}
 
-    ("de.abzw.casing", &|canvas, u| {
-        canvas.set_operator(cairo::Operator::Clear);
-        canvas.set_line_cap(cairo::LineCap::Round);
-        canvas.set_line_width(4.0 * u.sp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., 0.5 * u.sh);
-        canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
-        canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
-        canvas.move_to(-0.5 * u.sw, u.sh);
-        canvas.line_to(0., 0.5 * u.sh);
-        canvas.line_to(0.5 * u.sw, u.sh);
-        canvas.stroke()?;
-        canvas.set_operator(cairo::Operator::Over);
-        canvas.set_line_cap(cairo::LineCap::Butt);
-        Ok(())
-    }),
-
-    ("de.anst", &|canvas, u| {
-        canvas.set_line_width(u.sp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., 0.5 * u.sh);
-        canvas.move_to(-0.5 * u.sw, u.sh);
-        canvas.line_to(0., 0.5 * u.sh);
-        canvas.line_to(0.5 * u.sw, u.sh);
-        canvas.stroke()
-    }),
-
-    ("de.aw", &|canvas, u| {
-        canvas.set_line_width(2. * u.sp);
-        canvas.new_path();
-        canvas.arc(0., 0.5 * u.sh, 0.5 * u.sh - u.sp, 0., 2. * PI);
-        let seg = PI * (0.5 * u.sh - u.sp) / 6.;
-        canvas.set_dash(&[seg, seg], 0.);
-        canvas.stroke()?;
-        canvas.set_dash(&[], 0.);
-        canvas.set_line_width(u.sp);
-        canvas.new_path();
-        canvas.arc(0., 0.5 * u.sh, 0.5 * u.sh - u.sp, 0., 2. * PI);
-        canvas.fill()
-    }),
-
-    ("de.awanst", &|canvas, u| {
-        canvas.set_line_width(u.sp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., u.sh);
-        canvas.move_to(-0.5 * u.sw, u.sh);
-        canvas.line_to(0., 0.5 * u.sh);
-        canvas.line_to(0.5 * u.sw, u.sh);
-        canvas.stroke()
-    }),
-
-    ("de.bbf", &|canvas, u| {
-        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
-        canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.);
-        canvas.set_line_width(u.sp);
-        canvas.stroke()?;
-        canvas.move_to(0.5 * u.sw - 0.5 * u.sp, 0.);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sw - 0.5 * u.sp);
-        canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
-        canvas.close_path();
-        canvas.fill()
-    }),
-
-    ("de.bf", &|canvas, u| {
-        canvas.move_to(-0.5 * u.sw, 0.);
-        canvas.line_to(-0.5 * u.sw, u.sh - u.ds);
-        canvas.curve_to(
-            -0.5 * u.sw, u.sh - 1.5 * u.ds,
-            -0.5 * u.sw + 0.5 * u.ds, u.sh,
-            -0.5 * u.sw + u.ds, u.sh
-        );
-        canvas.line_to(0.5 * u.sw - u.ds, u.sh);
-        canvas.curve_to(
-            0.5 * u.sw - 0.5 * u.ds, u.sh,
-            0.5 * u.sw, u.sh - 0.5 * u.ds,
-            0.5 * u.sw, u.sh - u.ds
-        );
-        canvas.line_to(0.5 * u.sw, 0.);
-        canvas.close_path();
-        canvas.fill()
-    }),
-
-    ("de.bf.casing", &|canvas, u| {
-        canvas.move_to(-0.5 * u.sw, 0.);
-        canvas.line_to(-0.5 * u.sw, u.sh - u.ds);
-        canvas.curve_to(
-            -0.5 * u.sw, u.sh - 1.5 * u.ds,
-            -0.5 * u.sw + 0.5 * u.ds, u.sh,
-            -0.5 * u.sw + u.ds, u.sh
-        );
-        canvas.line_to(0.5 * u.sw - u.ds, u.sh);
-        canvas.curve_to(
-            0.5 * u.sw - 0.5 * u.ds, u.sh,
-            0.5 * u.sw, u.sh - 0.5 * u.ds,
-            0.5 * u.sw, u.sh - u.ds
-        );
-        canvas.line_to(0.5 * u.sw, 0.);
-        canvas.set_operator(cairo::Operator::Clear);
-        canvas.set_line_width(3.0 * u.sp);
-        canvas.stroke()?;
-        canvas.set_operator(cairo::Operator::Over);
-        Ok(())
-    }),
-
-    ("de.bft", &|canvas, u| {
-        canvas.move_to(-0.3 * u.sw + 0.5 * u.sp, 0.);
-        canvas.line_to(-0.3 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.line_to(0.3 * u.sw - 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.line_to(0.3 * u.sw - 0.5 * u.sp, 0.);
-        canvas.set_line_width(u.sp);
-        canvas.stroke()?;
-        canvas.move_to(0.3 * u.sw - 0.5 * u.sp, 0.);
-        canvas.line_to(0.3 * u.sw - 0.5 * u.sp, u.sw - 0.5 * u.sp);
-        canvas.line_to(-0.3 * u.sw + 0.5 * u.sp, 0.);
-        canvas.close_path();
-        canvas.fill()
-    }),
-
-    ("de.bft.casing", &|canvas, u| {
-        canvas.move_to(-0.3 * u.sw + 0.5 * u.sp, 0.);
-        canvas.line_to(-0.3 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.line_to(0.3 * u.sw - 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.line_to(0.3 * u.sw - 0.5 * u.sp, 0.);
-        canvas.set_operator(cairo::Operator::Clear);
-        canvas.set_line_width(3.0 * u.sp);
-        canvas.stroke()?;
-        canvas.set_operator(cairo::Operator::Over);
-        Ok(())
-    }),
-
-    ("de.bftk", &|canvas, u| {
-        canvas.move_to(-0.2 * u.sw, 0.);
-        canvas.line_to(-0.2 * u.sw, u.sh - u.ds);
-        canvas.curve_to(
-            -0.2 * u.sw, u.sh - 1.5 * u.ds,
-            -0.2 * u.sw + 0.5 * u.ds, u.sh,
-            -0.2 * u.sw + u.ds, u.sh
-        );
-        canvas.line_to(0.2 * u.sw - u.ds, u.sh);
-        canvas.curve_to(
-            0.2 * u.sw - 0.5 * u.ds, u.sh,
-            0.2 * u.sw, u.sh - 0.5 * u.ds,
-            0.2 * u.sw, u.sh - u.ds
-        );
-        canvas.line_to(0.2 * u.sw, 0.);
-        canvas.close_path();
-        canvas.fill()
-    }),
-
-    ("de.bftp", &|canvas, u| {
-        canvas.move_to(-0.3 * u.sw, 0.);
-        canvas.line_to(-0.3 * u.sw, u.sh - u.ds);
-        canvas.curve_to(
-            -0.3 * u.sw, u.sh - 1.5 * u.ds,
-            -0.3 * u.sw + 0.5 * u.ds, u.sh,
-            -0.3 * u.sw + u.ds, u.sh
-        );
-        canvas.line_to(0.3 * u.sw - u.ds, u.sh);
-        canvas.curve_to(
-            0.3 * u.sw - 0.5 * u.ds, u.sh,
-            0.3 * u.sw, u.sh - 0.5 * u.ds,
-            0.3 * u.sw, u.sh - u.ds
-        );
-        canvas.line_to(0.3 * u.sw, 0.);
-        canvas.close_path();
-        canvas.fill()
-    }),
-
-    ("de.bft.abzw", &|canvas, u| {
-        /*
-        canvas.move_to(-0.3 * u.sw, 0.);
-        canvas.line_to(-0.3 * u.sw, 0.5 * u.sh);
-        canvas.line_to(0.3 * u.sw, 0.5 * u.sh);
-        canvas.line_to(0.3 * u.sw, 0.);
-        canvas.close_path();
-        canvas.fill();
-        */
-        canvas.set_line_width(u.sp);
-        canvas.move_to(-0.15 * u.sw, 0.);
-        canvas.line_to(-0.15 * u.sw, 0.5 * u.sh);
-        canvas.move_to(0.15 * u.sw, 0.);
-        canvas.line_to(0.15 * u.sw, 0.5 * u.sh);
-        canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
-        canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
-        canvas.move_to(-0.5 * u.sw, u.sh);
-        canvas.line_to(0., 0.5 * u.sh);
-        canvas.line_to(0.5 * u.sw, u.sh);
-        canvas.stroke()
-    }),
-
-    ("de.bk", &|canvas, u| {
-        canvas.set_line_width(u.sp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., u.sh);
-        canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
-        canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
-        canvas.stroke()
-    }),
-    ("de.bk.casing", &|canvas, u| {
-        canvas.set_line_width(3. * u.sp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., u.sh + u.sp);
-        canvas.move_to(-0.5 * u.sw - u.sp, 0.5 * u.sh);
-        canvas.line_to(0.5 * u.sw + u.sp, 0.5 * u.sh);
-        canvas.set_operator(cairo::Operator::Clear);
-        canvas.stroke()?;
-        canvas.set_operator(cairo::Operator::Over);
-        Ok(())
-    }),
-
-    ("de.bw", &|canvas, u| {
-        canvas.set_line_width(2. * u.sp);
-        canvas.new_path();
-        canvas.arc(0., 0.5 * u.sh, 0.5 * u.sh - u.sp, 0., 2. * PI);
-        let seg = PI * (0.5 * u.sh - u.sp) / 6.;
-        canvas.set_dash(&[seg, seg], 0.);
-        canvas.stroke()?;
-        canvas.set_dash(&[], 0.);
-        canvas.set_line_width(u.sp);
-        canvas.new_path();
-        canvas.arc(0., 0.5 * u.sh, 0.5 * u.sh - 1.5 * u.sp, 0., 2. * PI);
-        canvas.stroke()?;
-        canvas.arc(0., 0.5 * u.sh, 0.15 * u.sh, 0., 2. * PI);
-        canvas.fill()
-    }),
-
-    ("de.dirgr", &|canvas, u| {
-        let r = 0.8 * u.dt;
-        canvas.set_line_width(u.bp);
-        canvas.move_to(0., -0.5 * u.dt);
-        canvas.line_to(0., 2. * r);
-        canvas.stroke()?;
-        canvas.arc(0., 3. * r, r, 0., 2. * PI);
-        canvas.stroke()?;
-        canvas.arc(0., 3. * r, 0.5 * r, 0., 2. * PI);
-        canvas.fill()
-    }),
-
-    ("de.dkst", &|canvas, u| {
-        canvas.set_line_width(u.sp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., 0.5 * u.sh);
-        canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
-        canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
-        canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
-        canvas.line_to(0., u.sh);
-        canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
-        canvas.stroke()
-    }),
-
-    ("de.est", &|canvas, u| {
-        canvas.set_line_width(2. * u.sp);
-        canvas.new_path();
-        canvas.arc(0., 0.5 * u.sh, 0.5 * u.sh - u.sp, 0., 2. * PI);
-        let seg = PI * (0.5 * u.sh - u.sp) / 6.;
-        canvas.set_dash(&[seg, seg], 0.);
-        canvas.stroke()?;
-        canvas.set_dash(&[], 0.);
-        canvas.set_line_width(u.sp);
-        canvas.new_path();
-        canvas.arc(0., 0.5 * u.sh, 0.5 * u.sh - 1.5 * u.sp, 0., 2. * PI);
-        canvas.stroke()
-    }),
-
-    ("de.gbf", &|canvas, u| {
-        canvas.set_line_width(u.sp);
-        canvas.move_to(-0.5 * u.sw, 0.);
-        canvas.line_to(0., u.sh);
-        canvas.line_to(0.5 * u.sw, 0.);
-        canvas.fill()
-    }),
-
-    ("de.hp", &|canvas, u| {
-        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
-        canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.);
-        canvas.set_line_width(u.sp);
-        canvas.stroke()
-    }),
-
-    ("de.hp.casing", &|canvas, u| {
-        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
-        canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.);
-        canvas.set_operator(cairo::Operator::Clear);
-        canvas.set_line_width(3.0 * u.sp);
-        canvas.stroke()?;
-        canvas.set_operator(cairo::Operator::Over);
-        Ok(())
-    }),
-
-    ("de.hpext", &|canvas, u| {
-        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
-        canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, u.dt);
-        canvas.move_to(0.5 * u.sw - 0.5 * u.sp, u.dt);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.);
-        canvas.set_line_width(u.sp);
-        canvas.stroke()
-    }),
-
-    ("de.hpext.casing", &|canvas, u| {
-        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
-        canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, u.dt);
-        canvas.move_to(0.5 * u.sw - 0.5 * u.sp, u.dt);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.);
-        canvas.set_operator(cairo::Operator::Clear);
-        canvas.set_line_width(3.0 * u.sp);
-        canvas.stroke()?;
-        canvas.set_operator(cairo::Operator::Over);
-        Ok(())
-    }),
-
-    ("de.hst", &|canvas, u| {
-        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
-        canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.);
-        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, u.sh);
-        canvas.line_to(0., 0.05 * u.sh);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh);
-        canvas.set_line_width(u.sp);
-        canvas.stroke()
-    }),
-
-    ("de.inbf", &|canvas, u| {
-        let sh = 2.0 * u.dt;
-        canvas.move_to(-0.5 * u.sw, 0.);
-        canvas.line_to(-0.5 * u.sw, sh - u.ds);
-        canvas.curve_to(
-            -0.5 * u.sw, sh - 1.5 * u.ds,
-            -0.5 * u.sw + 0.5 * u.ds, sh,
-            -0.5 * u.sw + u.ds, sh
-        );
-        canvas.line_to(0.5 * u.sw - u.ds, sh);
-        canvas.curve_to(
-            0.5 * u.sw - 0.5 * u.ds, sh,
-            0.5 * u.sw, sh - 0.5 * u.ds,
-            0.5 * u.sw, sh - u.ds
-        );
-        canvas.line_to(0.5 * u.sw, 0.);
-        canvas.close_path();
-        canvas.fill()
-    }),
-
-    ("de.kabzw", &|canvas, u| {
-        canvas.set_line_width(u.sp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., 0.5 * u.ksh);
-        canvas.move_to(-0.5 * u.ksw, 0.5 * u.ksh);
-        canvas.line_to(0.5 * u.ksw, 0.5 * u.ksh);
-        canvas.move_to(-0.5 * u.ksw, u.ksh);
-        canvas.line_to(0., 0.5 * u.ksh);
-        canvas.line_to(0.5 * u.ksw, u.ksh);
-        canvas.stroke()
-    }),
-
-    ("de.kbf", &|canvas, u| {
-        canvas.move_to(-0.5 * u.ksw, 0.);
-        canvas.line_to(-0.5 * u.ksw, u.ksh - u.ds);
-        canvas.curve_to(
-            -0.5 * u.ksw, u.ksh - 1.5 * u.ds,
-            -0.5 * u.ksw + 0.5 * u.ds, u.ksh,
-            -0.5 * u.ksw + u.ds, u.ksh
-        );
-        canvas.line_to(0.5 * u.ksw - u.ds, u.ksh);
-        canvas.curve_to(
-            0.5 * u.ksw - 0.5 * u.ds, u.ksh,
-            0.5 * u.ksw, u.ksh - 0.5 * u.ds,
-            0.5 * u.ksw, u.ksh - u.ds
-        );
-        canvas.line_to(0.5 * u.ksw, 0.);
-        canvas.close_path();
-        canvas.fill()
-    }),
-
-    ("de.khp", &|canvas, u| {
-        canvas.move_to(-0.5 * u.ksw + 0.5 * u.sp, 0.);
-        canvas.line_to(-0.5 * u.ksw + 0.5 * u.sp, u.ksh - 0.5 * u.sp);
-        canvas.line_to(0.5 * u.ksw - 0.5 * u.sp, u.ksh - 0.5 * u.sp);
-        canvas.line_to(0.5 * u.ksw - 0.5 * u.sp, 0.);
-        canvas.set_line_width(u.sp);
-        canvas.stroke()
-    }),
-
-    ("de.kzst", &|canvas, u| {
-        canvas.move_to(-0.5 * u.ksw + 0.5 * u.sp, 0.);
-        canvas.line_to(-0.5 * u.ksw + 0.5 * u.sp, u.ksh - 0.5 * u.sp);
-        canvas.line_to(0.5 * u.ksw - 0.5 * u.sp, u.ksh - 0.5 * u.sp);
-        canvas.line_to(0.5 * u.ksw - 0.5 * u.sp, 0.);
-        canvas.move_to(-0.5 * u.ksw + 0.5 * u.sp, 0.5 * u.sp);
-        canvas.set_line_width(u.sp);
-        canvas.stroke()?;
-        canvas.move_to(-0.5 * u.ksw + 0.5 * u.sp, u.ksh - 0.5 * u.sp);
-        canvas.line_to(0., 0.3 * u.ksh);
-        canvas.line_to(0.5 * u.ksw - 0.5 * u.sp, u.ksh - 0.5 * u.sp);
-        canvas.close_path();
-        canvas.fill()
-    }),
-
-    ("de.ldst", &|canvas, u| {
-        canvas.set_line_width(u.sp);
-        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
-        canvas.line_to(0., u.sh - 0.5 * u.sp);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.);
-        canvas.stroke()
-    }),
-
-    ("de.lgr", &|canvas, u| {
-        let r = 0.8 * u.dt;
-        canvas.set_line_width(u.bp);
-        canvas.move_to(0., -0.5 * u.dt);
-        canvas.line_to(0., 2. * r);
-        canvas.stroke()?;
-        canvas.arc(0., 3. * r, r, 0., 2. * PI);
-        canvas.fill()
-    }),
-
-    ("de.stw", &|canvas, u| {
-        canvas.set_line_width(u.sp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., 2. * u.dt);
-        canvas.move_to(-u.dt, u.dt);
-        canvas.line_to(u.dt, u.dt);
-        canvas.stroke()
-    }),
-    ("de.stw.casing", &|canvas, u| {
-        canvas.set_line_width(1.5 * u.sp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., 2. * u.dt);
-        canvas.move_to(-u.dt, u.dt);
-        canvas.line_to(u.dt, u.dt);
-        canvas.set_operator(cairo::Operator::Clear);
-        canvas.stroke()?;
-        canvas.set_operator(cairo::Operator::Over);
-        Ok(())
-    }),
-
-    ("de.uest", &|canvas, u| {
-        canvas.set_line_width(u.sp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., 0.5 * u.sh);
-        canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
-        canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
-        canvas.move_to(-0.25 * u.sw, 0.5 * u.sh);
-        canvas.line_to(-0.25 * u.sw, u.sh);
-        canvas.move_to(0.25 * u.sw, 0.5 * u.sh);
-        canvas.line_to(0.25 * u.sw, u.sh);
-        canvas.stroke()
-    }),
-    ("de.uest.casing", &|canvas, u| {
-        canvas.set_operator(cairo::Operator::Clear);
-        canvas.set_line_cap(cairo::LineCap::Round);
-        canvas.set_line_width(4.0 * u.sp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., 0.5 * u.sh);
-        canvas.move_to(-0.5 * u.sw, 0.5 * u.sh);
-        canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
-        canvas.move_to(-0.25 * u.sw, 0.5 * u.sh);
-        canvas.line_to(-0.25 * u.sw, u.sh);
-        canvas.move_to(0.25 * u.sw, 0.5 * u.sh);
-        canvas.line_to(0.25 * u.sw, u.sh);
-        canvas.stroke()?;
-        canvas.set_operator(cairo::Operator::Over);
-        canvas.set_line_cap(cairo::LineCap::Butt);
-        Ok(())
-    }),
-
-    ("de.zst", &|canvas, u| {
-        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.);
-        canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.);
-        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.5 * u.sp);
-        canvas.set_line_width(u.sp);
-        canvas.stroke()?;
-        canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.line_to(0., 0.3 * u.sh);
-        canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh - 0.5 * u.sp);
-        canvas.close_path();
-        canvas.fill()
-    }),
-
-    ("ref", &|canvas, u| {
-        canvas.set_line_width(u.bp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., 0.5 * u.sh);
-        canvas.stroke()
-    }),
-
-    ("refdt", &|canvas, u| {
-        canvas.set_line_width(u.bp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., u.dt);
-        canvas.stroke()
-    }),
-
-    ("statcase", &|canvas, u| {
-        canvas.move_to(-0.5 * u.sw, 0.);
-        canvas.line_to(-0.5 * u.sw, u.sh - u.ds);
-        canvas.curve_to(
-            -0.5 * u.sw, u.sh - 1.5 * u.ds,
-            -0.5 * u.sw + 0.5 * u.ds, u.sh,
-            -0.5 * u.sw + u.ds, u.sh
-        );
-        canvas.line_to(0.5 * u.sw - u.ds, u.sh);
-        canvas.curve_to(
-            0.5 * u.sw - 0.5 * u.ds, u.sh,
-            0.5 * u.sw, u.sh - 0.5 * u.ds,
-            0.5 * u.sw, u.sh - u.ds
-        );
-        canvas.line_to(0.5 * u.sw, 0.);
-        canvas.set_line_width(2. * u.sp);
-        canvas.set_operator(cairo::Operator::Clear);
-        canvas.stroke()?;
-        canvas.set_operator(cairo::Operator::Over);
-        Ok(())
-    }),
-
-    ("statdt", &|canvas, u| {
-        canvas.set_line_width(u.sp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., u.dt);
-        canvas.stroke()
-    }),
-
-    ("tunnel.l", &|canvas, u| {
-        canvas.move_to(0., 0.);
-        canvas.move_to(0., 0.);
-        canvas.line_to(1.0 * u.dt, 0.0);
-        canvas.line_to(1.75 * u.dt, -0.75 * u.dt);
-        canvas.set_line_width(u.bp);
-        canvas.stroke()
-    }),
-    ("tunnel.dt", &|canvas, u| {
-        canvas.set_line_width(u.bp);
-        canvas.move_to(0., 0.);
-        canvas.line_to(0., u.dt);
-        canvas.stroke()
-    }),
-    ("tunnel.r", &|canvas, u| {
-        canvas.move_to(0., 0.);
-        canvas.line_to(-1.0 * u.dt, 0.0);
-        canvas.line_to(-1.75 * u.dt, -0.75 * u.dt);
-        canvas.set_line_width(u.bp);
-        canvas.stroke()
-    }),
-];
-
-static DOT_MARKERS: &[
-    (&'static str, &'static (
-        dyn Fn(&Canvas, Dimensions) -> Result<(), cairo::Error> + Sync
-    ))
-] = &[
-    ("statdot", &|canvas, u| {
-        canvas.move_to(0., 0.);
-        canvas.arc(0., 0., 0.7 * u.dt, 0., 2.0 * PI);
-        canvas.set_line_width(4. * u.sp);
-        canvas.set_operator(cairo::Operator::Clear);
-        canvas.stroke()?;
-        canvas.set_operator(cairo::Operator::Over);
-        canvas.move_to(0., 0.);
-        canvas.arc(0., 0., 0.7 * u.dt, 0., 2.0 * PI);
-        canvas.fill()
-    }),
+macro_rules! make_marker {
+    ( $large:expr, ) => {
+        Marker { large: &$large, small: &$large }
+    };
+    ( $large:expr, $small:expr, ) => {
+        Marker { large: &$large, small: &$small }
+    }
+}
 
 
-    ("dot.filled", &|canvas, u| {
-        canvas.move_to(0., 0.);
-        canvas.arc(0., 0., 0.7 * u.dt + 0.5 * u.sp, 0., 2.0 * PI);
-        canvas.fill()
-    }),
-    ("dot.open", &|canvas, u| {
-        canvas.move_to(0.7 * u.dt, 0.);
-        canvas.arc(0., 0., 0.7 * u.dt, 0., 2.0 * PI);
-        canvas.set_line_width(u.sp);
-        canvas.stroke()
-    }),
-    ("dot.casing", &|canvas, u| {
-        canvas.move_to(0., 0.);
-        canvas.arc(0., 0., 0.7 * u.dt, 0., 2.0 * PI);
-        canvas.set_line_width(3. * u.sp);
-        canvas.set_operator(cairo::Operator::Clear);
-        canvas.stroke()?;
-        canvas.set_operator(cairo::Operator::Over);
-        Ok(())
-    }),
-    ("dot.filled.casing", &|canvas, u| {
-        canvas.move_to(0., 0.);
-        canvas.arc(0., 0., 0.7 * u.dt, 0., 2.0 * PI);
-        canvas.set_line_width(3. * u.sp);
-        canvas.set_operator(cairo::Operator::Clear);
-        canvas.stroke()?;
-        canvas.set_operator(cairo::Operator::Over);
-        canvas.move_to(0., 0.);
-        canvas.arc(0., 0., 0.7 * u.dt + 0.5 * u.sp, 0., 2.0 * PI);
-        canvas.fill()
-    }),
-    ("dot.open.casing", &|canvas, u| {
-        canvas.move_to(0., 0.);
-        canvas.arc(0., 0., 0.7 * u.dt, 0., 2.0 * PI);
-        canvas.set_line_width(2. * u.sp);
-        canvas.set_operator(cairo::Operator::Clear);
-        canvas.stroke()?;
-        canvas.set_operator(cairo::Operator::Over);
-        canvas.move_to(0.7 * u.dt, 0.);
-        canvas.arc(0., 0., 0.7 * u.dt, 0., 2.0 * PI);
-        canvas.set_line_width(u.sp);
-        canvas.stroke()
-    }),
+//------------ Actual Markers ------------------------------------------------
 
-    ("sdot", &|canvas, u| {
-        canvas.move_to(0., 0.);
-        canvas.arc(0., 0., 0.5 * u.dt, 0., 2.0 * PI);
-        canvas.set_line_width(2. * u.sp);
-        canvas.set_operator(cairo::Operator::Clear);
-        canvas.stroke()?;
-        canvas.set_operator(cairo::Operator::Over);
-        canvas.move_to(0., 0.);
-        canvas.arc(0., 0., 0.5 * u.dt, 0., 2.0 * PI);
-        canvas.fill()
-    }),
-    ("sdot.filled", &|canvas, u| {
-        canvas.move_to(0., 0.);
-        canvas.arc(0., 0., 0.5 * u.dt, 0., 2.0 * PI);
-        canvas.fill()
-    }),
-    ("sdot.casing", &|canvas, u| {
-        canvas.move_to(0., 0.);
-        canvas.arc(0., 0., 0.5 * u.dt, 0., 2.0 * PI);
-        canvas.set_line_width(2. * u.sp);
-        canvas.set_operator(cairo::Operator::Clear);
-        canvas.stroke()?;
-        canvas.set_operator(cairo::Operator::Over);
-        Ok(())
-    }),
-];
+markers! {
+    ("de.abzw", "junction") => (
+        |canvas: &Canvas, u: Dimensions| {
+            chevron(canvas,
+                0.5 * u.sw - 0.5 * u.sp,
+                0.25 * u.sh + 0.5 * u.sp, 0.75 * u.sh - 0.5 * u.sp
+            );
+            chevron(canvas,
+                0.5 * u.sw - 0.5 * u.sp,
+                0.5 * u.sh + 0.5 * u.sp, 1.0 * u.sh - 0.5 * u.sp
+            );
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., 0.25 * u.sh);
+            canvas.move_to(0., 0.5 * u.sh + u.sp);
+            canvas.line_to(0., u.sh - 0.5 * u.sp);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            chevron(canvas, 0.4 * u.sw, 0., u.sh);
+            canvas.fill()
+        }
+    ),
+    ("de.abzw.casing", "junction.casing") => (
+        |canvas: &Canvas, u: Dimensions| {
+            chevron(canvas,
+                0.5 * u.sw - 0.5 * u.sp,
+                0.25 * u.sh + 0.5 * u.sp, 0.75 * u.sh - 0.5 * u.sp
+            );
+            chevron(canvas,
+                0.5 * u.sw - 0.5 * u.sp,
+                0.5 * u.sh + 0.5 * u.sp, 1.0 * u.sh - 0.5 * u.sp
+            );
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., 0.25 * u.sh);
+            canvas.move_to(0., 0.5 * u.sh + u.sp);
+            canvas.line_to(0., u.sh - 0.5 * u.sp);
+            canvas.set_line_width(u.csp);
+            stroke_round(canvas)
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            junction_small_casing(canvas, u)
+        }
+    ),
+    ("de.abzw.first", "junction.first") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.75 * u.sh - 0.5 * u.sp);
+            canvas.line_to(0., 0.25 * u.sh + 0.5 * u.sp);
+            canvas.line_to(0., 0.);
+            canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 1.0 * u.sh - 0.5 * u.sp);
+            canvas.line_to(0., 0.5 * u.sh + 0.5 * u.sp);
+            canvas.line_to(0., 1.0 * u.sh - 0.5 * u.sp);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)
+        }
+    ),
+    ("de.abzw.second", "junction.second") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.move_to(0.5 * u.sw - 0.5 * u.sp, 0.75 * u.sh - 0.5 * u.sp);
+            canvas.line_to(0., 0.25 * u.sh + 0.5 * u.sp);
+            canvas.line_to(0., 0.);
+            canvas.move_to(0.5 * u.sw - 0.5 * u.sp, 1.0 * u.sh - 0.5 * u.sp);
+            canvas.line_to(0., 0.5 * u.sh + 0.5 * u.sp);
+            canvas.line_to(0., 1.0 * u.sh - 0.5 * u.sp);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)
+        }
+    ),
+
+    ("de.anst") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., u.sh - 0.5 * u.sp);
+            canvas.move_to(-0.3 * u.sw, u.sh - 0.5 * u.sp);
+            canvas.line_to(0.3 * u.sw, u.sh - 0.5 * u.sp);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., u.sh - 0.75 * u.sp);
+            canvas.move_to(-0.3 * u.sw, u.sh - 0.75 * u.sp);
+            canvas.line_to(0.3 * u.sw, u.sh - 0.75 * u.sp);
+            canvas.set_line_width(1.5 * u.sp);
+            stroke_round(canvas)
+        }
+    ),
+
+    ("de.aw") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.set_line_width(2. * u.sp);
+            canvas.new_path();
+            canvas.arc(0., 0.5 * u.sh, 0.5 * u.sh - u.sp, 0., 2. * PI);
+            let seg = PI * (0.5 * u.sh - u.sp) / 6.;
+            canvas.set_dash(&[seg, seg], 0.);
+            canvas.stroke()?;
+            canvas.set_dash(&[], 0.);
+            canvas.set_line_width(u.sp);
+            canvas.new_path();
+            canvas.arc(0., 0.5 * u.sh, 0.5 * u.sh - u.sp, 0., 2. * PI);
+            canvas.fill()
+        }
+    ),
+
+    ("de.awanst") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., u.sh - 0.5 * u.sp);
+
+            canvas.move_to(-0.3 * u.sw, 0.7 * u.sh - 0.5 * u.sp);
+            canvas.line_to(0.3 * u.sw, 0.7 * u.sh - 0.5 * u.sp);
+            canvas.move_to(-0.3 * u.sw, u.sh - 0.5 * u.sp);
+            canvas.line_to(0.3 * u.sw, u.sh - 0.5 * u.sp);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., u.sh - 0.75 * u.sp);
+            canvas.move_to(-0.3 * u.sw, u.sh - 0.75 * u.sp);
+            canvas.line_to(0.3 * u.sw, u.sh - 0.75 * u.sp);
+            canvas.set_line_width(1.5 * u.sp);
+            stroke_round(canvas)
+        }
+    ),
+
+    ("de.bbf", "servicestation") => (
+        |canvas: &Canvas, u: Dimensions| {
+            let hsp = 0.5 * u.sp;
+            canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
+            canvas.line_to(-0.5 * u.sw + hsp, u.sh - 0.5 * u.sp);
+            canvas.line_to(0.5 * u.sw - hsp, u.sh - 0.5 * u.sp);
+            canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.sp);
+            canvas.close_path();
+            canvas.set_line_width(u.sp);
+            canvas.stroke()?;
+
+            canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
+            canvas.line_to(-0.5 * u.sw + hsp, u.sh - 0.5 * u.sp);
+            canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.sp);
+            canvas.close_path();
+            canvas.fill()
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            stop_small(canvas, u)?;
+
+            let hsp = 0.5 * u.sp;
+            canvas.move_to(-0.5 * u.sw + hsp, 0.);
+            canvas.line_to(-0.5 * u.sw + hsp, u.sh - hsp);
+            canvas.line_to(0.5 * u.sw, 0.);
+            canvas.close_path();
+            canvas.fill()
+        }
+    ),
+
+    ("de.bf", "de.kbf", "station") => (
+        |canvas: &Canvas, u: Dimensions| {
+            let hsp = 0.5 * u.sp;
+            canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
+            canvas.line_to(-0.5 * u.sw + hsp, u.sh - hsp);
+            canvas.line_to(0.5 * u.sw - hsp, u.sh - hsp);
+            canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.sp);
+            canvas.close_path();
+            canvas.set_line_width(u.sp);
+            canvas.stroke()?;
+
+            let hsp = 2. * u.sp;
+            canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
+            canvas.line_to(-0.5 * u.sw + hsp, u.sh - hsp);
+            canvas.line_to(0.5 * u.sw - hsp, u.sh - hsp);
+            canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.sp);
+            canvas.close_path();
+            canvas.fill()
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            station_small(canvas, u)
+        }
+    ),
+    ("de.bf.casing", "station.casing") => (
+        |canvas: &Canvas, u: Dimensions| {
+            station_casing(canvas, u)
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            station_small_casing(canvas, u)
+        }
+    ),
+    ("de.bf.first", "station.first") => (
+        |canvas: &Canvas, u: Dimensions| {
+            let hsp = 0.5 * u.sp;
+            canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
+            canvas.line_to(-0.5 * u.sw + hsp, u.sh - hsp);
+            canvas.line_to(0., u.sh - hsp);
+            canvas.line_to(0., 2.5 * u.sp);
+            canvas.close_path();
+            canvas.set_line_width(u.sp);
+            canvas.stroke()?;
+
+            let hsp = 2. * u.sp;
+            canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
+            canvas.line_to(-0.5 * u.sw + hsp, u.sh - hsp);
+            canvas.line_to(0., u.sh - hsp);
+            canvas.line_to(0., 2.5 * u.sp);
+            canvas.close_path();
+            canvas.fill()
+        }
+    ),
+    ("de.bf.second", "station.second") => (
+        |canvas: &Canvas, u: Dimensions| {
+            let hsp = 0.5 * u.sp;
+            canvas.move_to(0.5 * u.sw - hsp, 2.5 * u.sp);
+            canvas.line_to(0.5 * u.sw - hsp, u.sh - hsp);
+            canvas.line_to(0., u.sh - hsp);
+            canvas.line_to(0., 2.5 * u.sp);
+            canvas.close_path();
+            canvas.set_line_width(u.sp);
+            canvas.stroke()?;
+
+            let hsp = 2. * u.sp;
+            canvas.move_to(0.5 * u.sw - hsp, 2.5 * u.sp);
+            canvas.line_to(0.5 * u.sw - hsp, u.sh - hsp);
+            canvas.line_to(0., u.sh - hsp);
+            canvas.line_to(0., 2.5 * u.sp);
+            canvas.close_path();
+            canvas.fill()
+        }
+    ),
+
+    ("de.bft") => (
+        |canvas: &Canvas, u: Dimensions| {
+            chevron(canvas,
+                0.5 * u.sw - 0.5 * u.sp,
+                0.25 * u.sh + 0.5 * u.sp, 0.75 * u.sh - 0.5 * u.sp
+            );
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., 0.25 * u.sh);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)?;
+            chevron(canvas,
+                0.5 * u.sw,
+                0.5 * u.sh, 1.0 * u.sh
+            );
+            canvas.close_path();
+            canvas.fill()
+        }
+    ),
+    ("de.bft.casing") => (
+        |canvas: &Canvas, u: Dimensions| {
+            chevron(canvas,
+                0.5 * u.sw - 0.5 * u.sp,
+                0.25 * u.sh + 0.5 * u.sp, 0.75 * u.sh - 0.5 * u.sp
+            );
+            chevron(canvas,
+                0.5 * u.sw - 0.5 * u.sp,
+                0.5 * u.sh + 0.5 * u.sp, 1.0 * u.sh - 0.5 * u.sp
+            );
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., 0.25 * u.sh);
+            canvas.move_to(0., 0.5 * u.sh + u.sp);
+            canvas.line_to(0., u.sh - 0.5 * u.sp);
+            canvas.set_line_width(u.csp);
+            stroke_round(canvas)
+        }
+    ),
+    ("de.bft.first") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., 0.25 * u.sh);
+            canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, 0.75 * u.sh - 0.5 * u.sp);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)?;
+
+            canvas.move_to(0., 0.5 * u.sh);
+            canvas.line_to(0., 1.0 * u.sh);
+            canvas.line_to(-0.5 * u.sw, 1.0 * u.sh);
+            canvas.close_path();
+            canvas.fill()
+        }
+    ),
+    ("de.bft.second") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., 0.25 * u.sh);
+            canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.75 * u.sh - 0.5 * u.sp);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)?;
+
+            canvas.move_to(0., 0.5 * u.sh);
+            canvas.line_to(0., 1.0 * u.sh);
+            canvas.line_to(0.5 * u.sw, 1.0 * u.sh);
+            canvas.close_path();
+            canvas.fill()
+        }
+    ),
+
+    ("de.bk", "block") => (
+        |canvas: &Canvas, u: Dimensions| {
+            chevron(canvas,
+                0.5 * u.sw - 0.5 * u.sp,
+                0.3 * u.sh + 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp
+            );
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., 0.3 * u.sh);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            chevron(canvas,
+                0.4 * u.sw - 0.5 * u.sp, 0.5 * u.sp, u.sh - 0.5 * u.sp,
+            );
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)
+        }
+    ),
+    ("de.bk.casing", "block.casing") => (
+        |canvas: &Canvas, u: Dimensions| {
+            chevron(canvas,
+                0.5 * u.sw - 0.5 * u.sp,
+                0.3 * u.sh + 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp
+            );
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., 0.3 * u.sh);
+            canvas.set_line_width(u.csp);
+            stroke_round(canvas)
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            chevron(canvas,
+                0.4 * u.sw - 0.5 * u.sp, 0.5 * u.sp, u.sh - 0.5 * u.sp,
+            );
+            canvas.set_line_width(u.csp);
+            stroke_round(canvas)
+        }
+    ),
+    ("de.bk.first", "block.first") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., 0.3 * u.sh);
+            canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)
+        }
+    ),
+    ("de.bk.second", "block.second") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., 0.3 * u.sh);
+            canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)
+        }
+    ),
+
+    ("de.bw") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.set_line_width(2. * u.sp);
+            canvas.new_path();
+            canvas.arc(0., 0.5 * u.sh, 0.5 * u.sh - u.sp, 0., 2. * PI);
+            let seg = PI * (0.5 * u.sh - u.sp) / 6.;
+            canvas.set_dash(&[seg, seg], 0.);
+            canvas.stroke()?;
+            canvas.set_dash(&[], 0.);
+            canvas.set_line_width(u.sp);
+            canvas.new_path();
+            canvas.arc(0., 0.5 * u.sh, 0.5 * u.sh - 1.5 * u.sp, 0., 2. * PI);
+            canvas.stroke()?;
+            canvas.arc(0., 0.5 * u.sh, 0.15 * u.sh, 0., 2. * PI);
+            canvas.fill()
+        }
+    ),
+
+    ("de.dirgr") => (
+        |canvas: &Canvas, u: Dimensions| {
+            let r = 0.8 * u.dt;
+            canvas.set_line_width(u.bp);
+            canvas.move_to(0., -0.5 * u.dt);
+            canvas.line_to(0., 2. * r);
+            canvas.stroke()?;
+            canvas.arc(0., 3. * r, r, 0., 2. * PI);
+            canvas.stroke()?;
+            canvas.arc(0., 3. * r, 0.5 * r, 0., 2. * PI);
+            canvas.fill()
+        }
+    ),
+
+    ("de.dkst") => (
+        |canvas: &Canvas, u: Dimensions| {
+            chevron(canvas,
+                0.5 * u.sw - 0.5 * u.sp,
+                0.3 * u.sh + 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp
+            );
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., u.sh);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)
+        }
+    ),
+
+    ("de.est") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.set_line_width(2. * u.sp);
+            canvas.new_path();
+            canvas.arc(0., 0.5 * u.sh, 0.5 * u.sh - u.sp, 0., 2. * PI);
+            let seg = PI * (0.5 * u.sh - u.sp) / 6.;
+            canvas.set_dash(&[seg, seg], 0.);
+            canvas.stroke()?;
+            canvas.set_dash(&[], 0.);
+            canvas.set_line_width(u.sp);
+            canvas.new_path();
+            canvas.arc(0., 0.5 * u.sh, 0.5 * u.sh - 1.5 * u.sp, 0., 2. * PI);
+            canvas.stroke()
+        }
+    ),
+
+    ("de.exbf") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, u.sh + 1.5 * u.sp);
+            canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh + 1.5 * u.sp);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)
+        }
+    ),
+
+    ("de.gbf", "goodsstation") => (
+        |canvas: &Canvas, u: Dimensions| {
+            let hsp = 0.5 * u.sp;
+            canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
+            canvas.line_to(-0.5 * u.sw + hsp, 0.7 * u.sh);
+            canvas.line_to(0., u.sh - hsp);
+            canvas.line_to(0.5 * u.sw - hsp, 0.7 * u.sh);
+            canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.sp);
+            canvas.close_path();
+            canvas.set_line_width(u.sp);
+            canvas.stroke()?;
+
+            let hsp = 2. * u.sp;
+            canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
+            canvas.line_to(-0.5 * u.sw + hsp, 0.8 * u.sh - 1.5 * u.sp);
+            canvas.line_to(0., u.sh - 2. * u.sp);
+            canvas.line_to(0.5 * u.sw - hsp, 0.8 * u.sh -  1.5 * u.sp);
+            canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.sp);
+            canvas.close_path();
+            canvas.fill()
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.move_to(-0.5 * u.sw, 0.);
+            canvas.line_to(-0.5 * u.sw, 0.5 * u.sh);
+            canvas.line_to(0., u.sh);
+            canvas.line_to(0.5 * u.sw, 0.5 * u.sh);
+            canvas.line_to(0.5 * u.sw, 0.);
+            canvas.close_path();
+            canvas.fill()
+        }
+    ),
+
+    ("de.hp", "de.khp", "stop") => (
+        |canvas: &Canvas, u: Dimensions| {
+            stop(canvas, u)
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            stop_small(canvas, u)
+        }
+    ),
+    ("de.hp.casing", "stop.casing") => (
+        |canvas: &Canvas, u: Dimensions| {
+            station_casing(canvas, u)
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            station_small_casing(canvas, u)
+        }
+    ),
+    ("de.hp.first", "stop.first") => (
+        |canvas: &Canvas, u: Dimensions| {
+            let hsp = 0.5 * u.sp;
+            canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
+            canvas.line_to(-0.5 * u.sw + hsp, u.sh - 0.5 * u.sp);
+            canvas.line_to(0., u.sh - 0.5 * u.sp);
+            canvas.line_to(0., 2.5 * u.sp);
+            canvas.close_path();
+            canvas.set_line_width(u.sp);
+            canvas.stroke()
+        }
+    ),
+    ("de.hp.second", "stop.second") => (
+        |canvas: &Canvas, u: Dimensions| {
+            let hsp = 0.5 * u.sp;
+            canvas.move_to(0.5 * u.sw - hsp, 2.5 * u.sp);
+            canvas.line_to(0.5 * u.sw - hsp, u.sh - 0.5 * u.sp);
+            canvas.line_to(0., u.sh - 0.5 * u.sp);
+            canvas.line_to(0., 2.5 * u.sp);
+            canvas.close_path();
+            canvas.set_line_width(u.sp);
+            canvas.stroke()
+         }
+    ),
+
+    ("de.hst") => (
+        |canvas: &Canvas, u: Dimensions| {
+            let hsp = 0.5 * u.sp;
+            canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
+            canvas.line_to(-0.5 * u.sw + hsp, u.sh - 0.5 * u.sp);
+            canvas.line_to(0.5 * u.sw - hsp, u.sh - 0.5 * u.sp);
+            canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.sp);
+            canvas.move_to(0., 2.5 * u.sp);
+            canvas.line_to(0., u.sh - 0.5 * u.sp);
+            canvas.close_path();
+            canvas.set_line_width(u.sp);
+            canvas.stroke()
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            top_ds_rect(canvas,
+                -0.5 * u.sw + 0.5 * u.sp,
+                0.5 * u.sw - 0.5 * u.sp,
+                0.,
+                u.sh - 0.5 * u.sp,
+                u.ds,
+            );
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., u.sh - 0.5 * u.sp);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)
+        }
+    ),
+
+    ("de.inbf") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.move_to(-0.5 * u.sw, 0.);
+            canvas.line_to(-0.5 * u.sw, u.sh);
+            canvas.line_to(0.5 * u.sw, u.sh);
+            canvas.line_to(0.5 * u.sh, 0.);
+            canvas.close_path();
+            canvas.fill()
+        }
+    ),
+
+    ("de.ldst") => (
+        |canvas: &Canvas, u: Dimensions| {
+            let hsp = 0.5 * u.sp;
+            canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
+            canvas.line_to(-0.5 * u.sw + hsp, 0.7 * u.sh);
+            canvas.line_to(0., u.sh - hsp);
+            canvas.line_to(0.5 * u.sw + hsp, 0.7 * u.sh);
+            canvas.line_to(0.5 * u.sw + hsp, 2.5 * u.sp);
+            canvas.close_path();
+            canvas.set_line_width(u.sp);
+            canvas.stroke()
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            let hsp = 0.5 * u.sp;
+            canvas.move_to(-0.5 * u.sw + hsp, 0.);
+            canvas.line_to(-0.5 * u.sw + hsp, 0.6 * u.sh - hsp);
+            canvas.line_to(0., u.sh - hsp);
+            canvas.line_to(0.5 * u.sw - hsp, 0.6 * u.sh - hsp);
+            canvas.line_to(0.5 * u.sw - hsp, 0.);
+            canvas.set_line_width(u.sp);
+            canvas.stroke()
+        }
+    ),
+
+    ("de.lgr") => (
+        |canvas: &Canvas, u: Dimensions| {
+            let r = 0.8 * u.dt;
+            canvas.set_line_width(u.bp);
+            canvas.move_to(0., -0.5 * u.dt);
+            canvas.line_to(0., 2. * r);
+            canvas.stroke()?;
+            canvas.arc(0., 3. * r, r, 0., 2. * PI);
+            canvas.fill()
+        }
+    ),
+
+    ("de.stw", "signalbox") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.set_line_width(u.sp);
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., 2. * u.dt);
+            canvas.move_to(-u.dt, u.dt);
+            canvas.line_to(u.dt, u.dt);
+            canvas.stroke()
+        }
+    ),
+
+    ("de.stw.casing", "signalbox.casing") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.set_line_width(1.5 * u.sp);
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., 2. * u.dt);
+            canvas.move_to(-u.dt, u.dt);
+            canvas.line_to(u.dt, u.dt);
+            canvas.set_operator(cairo::Operator::Clear);
+            canvas.stroke()?;
+            canvas.set_operator(cairo::Operator::Over);
+            Ok(())
+        }
+    ),
+
+    ("de.uest", "crossover") => (
+        |canvas: &Canvas, u: Dimensions| {
+            chevron(canvas,
+                0.5 * u.sw - 0.5 * u.sp,
+                0.3 * u.sh + 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp
+            );
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., u.sh - u.sp);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            chevron(canvas,
+                0.4 * u.sw - 0.5 * u.sp, 0.5 * u.sp, u.sh - 0.5 * u.sp,
+            );
+            canvas.line_to(-0.4 * u.sw + 0.5 * u.sp, u.sh - 0.5 * u.sp);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)
+        }
+    ),
+    ("de.uest.casing", "crossover.casing") => (
+        |canvas: &Canvas, u: Dimensions| {
+            chevron(canvas,
+                0.5 * u.sw - 0.5 * u.sp,
+                0.3 * u.sh + 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp
+            );
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., u.sh - u.sp);
+            canvas.set_line_width(u.csp);
+            stroke_round(canvas)
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            junction_small_casing(canvas, u)
+        }
+    ),
+    ("de.uest.first", "crossover.first") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.move_to(
+                -0.5 * u.sw + 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp
+            );
+            canvas.line_to(0., 0.3 * u.sh + 0.5 * u.sp);
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., u.sh - u.sp);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)
+        }
+    ),
+    ("de.uest.second", "crossover.second") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.move_to(
+                0.5 * u.sw - 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp
+            );
+            canvas.line_to(0., 0.3 * u.sh + 0.5 * u.sp);
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., u.sh - u.sp);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)
+        }
+    ),
+
+    ("de.zst", "de.kzst") => (
+        |canvas: &Canvas, u: Dimensions| {
+            stop(canvas, u)?;
+            canvas.arc(
+                0., u.sh - 0.5 * (u.sh - 2. * u.sp),
+                0.5 * (u.sh - 5. * u.sp),
+                0., 2. * PI,
+            );
+            canvas.fill()
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            stop_small(canvas, u)?;
+            canvas.arc(
+                0., 0.5 * u.sh,
+                0.5 * (u.sh - 2.5 * u.sp),
+                0., 2. * PI,
+            );
+            canvas.fill()
+        }
+    ),
+
+    ("ref") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.set_line_width(u.bp);
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., 0.5 * u.sh);
+            canvas.stroke()
+        }
+    ),
+    ("refdt") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.set_line_width(u.bp);
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., u.dt);
+            canvas.stroke()
+        }
+    ),
+    ("statdt") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.set_line_width(u.sp);
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., u.dt);
+            canvas.stroke()
+        }
+    ),
+
+    ("tunnel.l") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.move_to(0., 0.);
+            canvas.move_to(0., 0.);
+            canvas.line_to(1.0 * u.dt, 0.0);
+            canvas.line_to(1.75 * u.dt, -0.75 * u.dt);
+            canvas.set_line_width(u.bp);
+            canvas.stroke()
+        }
+    ),
+    ("tunnel.r") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.move_to(0., 0.);
+            canvas.line_to(-1.0 * u.dt, 0.0);
+            canvas.line_to(-1.75 * u.dt, -0.75 * u.dt);
+            canvas.set_line_width(u.bp);
+            canvas.stroke()
+        }
+    ),
+    ("tunnel.dt") => (
+        |canvas: &Canvas, u: Dimensions| {
+            canvas.set_line_width(u.bp);
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., u.dt);
+            canvas.stroke()
+        }
+    )
+}
+
+
+//------------ Component Functions -------------------------------------------
+
+fn station_small(
+    canvas: &Canvas, u: Dimensions
+) -> Result<(), cairo::Error> {
+    top_ds_rect(
+        canvas, -0.5 * u.sw, 0.5 * u.sw, 0., u.sh, u.ds,
+    );
+    canvas.fill()
+}
+
+fn station_casing(
+    canvas: &Canvas, u: Dimensions
+) -> Result<(), cairo::Error> {
+    let hsp = 0.5 * u.sp;
+    canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
+    canvas.line_to(-0.5 * u.sw + hsp, u.sh - 0.5 * u.sp);
+    canvas.line_to(0.5 * u.sw - hsp, u.sh - 0.5 * u.sp);
+    canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.sp);
+    canvas.close_path();
+    canvas.set_line_width(u.csp);
+    canvas.stroke()
+}
+
+fn station_small_casing(
+    canvas: &Canvas, u: Dimensions
+) -> Result<(), cairo::Error> {
+    top_ds_rect(canvas,
+        -0.5 * u.sw + 0.5 * u.sp,
+        0.5 * u.sw - 0.5 * u.sp,
+        0.,
+        u.sh - 0.5 * u.sp,
+        u.ds,
+    );
+    canvas.set_line_width(u.csp);
+    stroke_round(canvas)
+}
+
+fn stop(
+    canvas: &Canvas, u: Dimensions
+) -> Result<(), cairo::Error> {
+    let hsp = 0.5 * u.sp;
+    canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
+    canvas.line_to(-0.5 * u.sw + hsp, u.sh - 0.5 * u.sp);
+    canvas.line_to(0.5 * u.sw - hsp, u.sh - 0.5 * u.sp);
+    canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.sp);
+    canvas.close_path();
+    canvas.set_line_width(u.sp);
+    canvas.stroke()
+}
+
+fn stop_small(
+    canvas: &Canvas, u: Dimensions
+) -> Result<(), cairo::Error> {
+    top_ds_rect(canvas,
+        -0.5 * u.sw + 0.5 * u.sp,
+        0.5 * u.sw - 0.5 * u.sp,
+        0.,
+        u.sh - 0.5 * u.sp,
+        u.ds,
+    );
+    canvas.set_line_width(u.sp);
+    stroke_round(canvas)
+}
+
+fn junction_small_casing(
+    canvas: &Canvas, u: Dimensions
+) -> Result<(), cairo::Error> {
+    chevron(canvas, 0.4 * u.sw - 0.5 * u.sp, 0., u.sh - 0.5 * u.sp);
+    canvas.set_line_width(u.csp);
+    canvas.stroke()
+}
+
+
+//------------ Helper Functions ----------------------------------------------
+
+fn chevron(canvas: &Canvas, x: f64, y0: f64, y1: f64) {
+    canvas.move_to(-x, y1);
+    canvas.line_to(0., y0);
+    canvas.line_to(x, y1);
+}
+
+fn stroke_round(canvas: &Canvas) -> Result<(), cairo::Error> {
+    canvas.set_line_cap(cairo::LineCap::Round);
+    canvas.stroke()?;
+    canvas.set_line_cap(cairo::LineCap::Butt);
+    Ok(())
+}
+
+fn top_ds_rect(canvas: &Canvas, x0: f64, x1: f64, y0: f64, y1: f64, ds: f64) {
+    let hds = 0.5 * ds; // half ds
+
+    canvas.move_to(x0, y0);
+    canvas.line_to(x0, y1 - ds);
+    canvas.curve_to(x0, y1 - hds,   x0 + hds, y1,   x0 + ds, y1);
+    canvas.line_to(x1 - ds, y1);
+    canvas.curve_to(x1 - hds, y1,   x1, y1 - hds,   x1, y1 - ds);
+    canvas.line_to(x1, y0);
+}
 

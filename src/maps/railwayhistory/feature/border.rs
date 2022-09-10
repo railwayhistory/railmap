@@ -2,7 +2,7 @@
 
 use kurbo::Rect;
 use crate::import::Failed;
-use crate::import::{ast, eval};
+use crate::import::eval;
 use crate::render::canvas::Canvas;
 use crate::render::color::Color;
 use crate::render::path::Trace;
@@ -76,8 +76,8 @@ impl BorderContour {
         trace: Trace,
         err: &mut eval::Error,
     ) -> Result<Self, Failed> {
-        let (mut symbols, pos) = arg.into_symbol_set(err)?;
-        let category = Category::from_symbols(&mut symbols, pos, err)?;
+        let mut symbols = arg.into_symbol_set(err)?;
+        let category = Category::from_symbols(&mut symbols, err)?;
         let former = symbols.take("former");
         symbols.check_exhausted(err)?;
         Ok(BorderContour { category, former, trace })
@@ -144,7 +144,6 @@ enum Category {
 impl Category {
     fn from_symbols(
         symbols: &mut eval::SymbolSet,
-        pos: ast::Pos,
         err: &mut eval::Error
     ) -> Result<Self, Failed> {
         if symbols.take("national") {
@@ -154,7 +153,7 @@ impl Category {
             Ok(Category::State)
         }
         else {
-            err.add(pos, "missing border category");
+            err.add(symbols.pos(), "missing border category");
             Err(Failed)
         }
     }

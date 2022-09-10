@@ -26,7 +26,7 @@ impl Class {
         arg: Expression<Overnight>,
         err: &mut eval::Error,
     ) -> Result<Self, Failed> {
-        let mut symbols = arg.into_symbol_set(err)?.0;
+        let mut symbols = arg.into_symbol_set(err)?;
         let class = Self::from_symbols(&mut symbols);
         symbols.check_exhausted(err)?;
         Ok(class)

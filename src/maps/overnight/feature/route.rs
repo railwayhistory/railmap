@@ -27,7 +27,7 @@ impl RouteContour {
         let [symbols, trace] = args.into_positionals(err)?;
         let symbols = symbols.into_symbol_set(err);
         let trace = trace.into_path(err)?.0;
-        let mut symbols = symbols?.0;
+        let mut symbols = symbols?;
         let class = Class::from_symbols(&mut symbols);
         let combination = Combination::from_symbols(&mut symbols);
         symbols.check_exhausted(err)?;

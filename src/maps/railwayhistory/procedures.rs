@@ -9,6 +9,7 @@ use super::class::Class;
 use super::feature::Feature;
 use super::feature::area::{AreaContour, PlatformContour};
 use super::feature::border::BorderContour;
+use super::feature::dot::DotMarker;
 use super::feature::markers::StandardMarker;
 use super::feature::track::{TrackCasing, TrackClass, TrackContour};
 use super::feature::guide::GuideContour;
@@ -119,15 +120,29 @@ const PROCEDURES: &[(
     // ```
     ("marker", &|pos, args, scope, features, err| {
         let [class, position] = args.into_positionals(err)?;
+        let mut class = class.into_symbol_set(err)?;
         let position = position.into_position(err)?.0;
-        let marker = StandardMarker::from_arg(class, position, err)?;
-        let layer_offset = marker.class().layer_offset();
-        features.insert(
-            Feature::Marker(marker),
-            scope.params().detail(pos, err)?,
-            scope.params().layer() - 0.3 + layer_offset,
-            1,
-        );
+        match DotMarker::try_from_arg(&mut class, position.clone(), err)? {
+            Some(marker) => {
+                let layer_offset = marker.class().layer_offset();
+                features.insert(
+                    Feature::Dot(marker),
+                    scope.params().detail(pos, err)?,
+                    scope.params().layer() + layer_offset,
+                    1,
+                );
+            }
+            None => {
+                let marker = StandardMarker::from_arg(class, position, err)?;
+                let layer_offset = marker.class().layer_offset();
+                features.insert(
+                    Feature::Marker(marker),
+                    scope.params().detail(pos, err)?,
+                    scope.params().layer() - 0.3 + layer_offset,
+                    1,
+                );
+            }
+        }
         Ok(())
     }),
 
@@ -198,7 +213,7 @@ const PROCEDURES: &[(
     ("slabel", &|pos, args, scope, features, err| {
         let [class, position, layout] = args.into_positionals(err)?;
 
-        let mut class = class.into_symbol_set(err)?.0;
+        let mut class = class.into_symbol_set(err)?;
         let properties = label::PropertiesBuilder::from_symbols(&mut class);
         let (halign, valign) = if class.take("top") {
             (Align::Center, Align::End)
@@ -238,6 +253,26 @@ const PROCEDURES: &[(
         Ok(())
     }),
 
+    // Renders a station dot.
+    //
+    // ```text
+    // statdot(marker: symbol-set, position: position)
+    // ```
+    ("statdot", &|pos, args, scope, features, err| {
+        let [class, position] = args.into_positionals(err)?;
+        let class = class.into_symbol_set(err)?;
+        let position = position.into_position(err)?.0;
+        let marker = DotMarker::from_arg(class, position, err)?;
+        let layer_offset = marker.class().layer_offset();
+        features.insert(
+            Feature::Dot(marker),
+            scope.params().detail(pos, err)?,
+            scope.params().layer() + layer_offset,
+            1,
+        );
+        Ok(())
+    }),
+
     // Renders a station label.
     //
     // This procedure is deprecated. Use statlabel instead.
@@ -253,7 +288,7 @@ const PROCEDURES: &[(
         let name = label::LayoutBuilder::from_expr(name, err);
         let km = label::LayoutBuilder::from_expr(km, err);
 
-        let (mut symbols, pos) = symbols?;
+        let mut symbols = symbols?;
         let position = position?.0;
         let mut name = name?;
         let mut km = km?;
@@ -314,7 +349,7 @@ const PROCEDURES: &[(
             )
         }
         else {
-            err.add(pos, "missing attachment direction");
+            err.add(symbols.pos(), "missing attachment direction");
             return Err(Failed)
         };
         symbols.check_exhausted(err)?;
@@ -323,7 +358,7 @@ const PROCEDURES: &[(
             layout.into_feature(
                 Default::default(), position, false, properties,
             ),
-            scope.params().detail(pos, err)?,
+            scope.params().detail(symbols.pos(), err)?,
             scope.params().layer(), 1,
         );
         Ok(())

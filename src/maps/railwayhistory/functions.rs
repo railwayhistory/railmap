@@ -65,14 +65,14 @@ const FUNCTIONS: &[(
         })?;
         let mut args = args.into_iter();
 
-        let (mut align, pos) = args.next().unwrap().into_symbol_set(err)?;
+        let mut align = args.next().unwrap().into_symbol_set(err)?;
         let halign = Align::h_from_symbols(
             &mut align
         ).unwrap_or(Align::Start);
         let valign = match Align::v_from_symbols(&mut align) {
             Some(align) => align,
             None => {
-                err.add(pos, "vertical alignment required");
+                err.add(align.pos(), "vertical alignment required");
                 return Err(Err(Failed))
             }
         };
@@ -193,11 +193,11 @@ const FUNCTIONS: &[(
         })?;
         let mut args = args.into_iter();
 
-        let (mut align, pos) = args.next().unwrap().into_symbol_set(err)?;
+        let mut align = args.next().unwrap().into_symbol_set(err)?;
         let halign = match Align::h_from_symbols(&mut align) {
             Some(align) => align,
             None => {
-                err.add(pos, "horizonal alignment required");
+                err.add(align.pos(), "horizonal alignment required");
                 return Err(Err(Failed))
             }
         };

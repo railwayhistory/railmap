@@ -33,7 +33,7 @@ impl GuideContour {
         trace: Trace,
         err: &mut eval::Error,
     ) -> Result<Self, Failed> {
-        let mut symbols = arg.into_symbol_set(err)?.0;
+        let mut symbols = arg.into_symbol_set(err)?;
         let class = Class::from_symbols(&mut symbols);
         let linenum = symbols.take("linenum");
         let casing = symbols.take("casing");

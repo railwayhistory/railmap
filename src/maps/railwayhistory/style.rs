@@ -254,8 +254,14 @@ pub struct Dimensions {
     /// The line width of station symbols.
     pub sp: f64,
 
+    /// The line width of station symbols casing.
+    pub csp: f64,
+
     /// The line width of border symbols.
     pub bp: f64,
+
+    /// The line width of border symbols casing.
+    pub cbp: f64,
 }
 
 impl Dimensions {
@@ -273,7 +279,9 @@ impl Dimensions {
         ksh: 0.96 * units::SSW,
         ds: 0.05 * units::SSW,
         sp: 0.4,
+        csp: 4. * 0.4,
         bp: 0.4,
+        cbp: 4. * 0.4,
     };
 
     const D3: Self = Self {
@@ -284,6 +292,7 @@ impl Dimensions {
         sh: units::S3H,
         ds: 0.15 * units::S3W,
         sp: 0.8,
+        csp: 4. * 0.8,
         .. Self::D0
     };
 
@@ -296,7 +305,9 @@ impl Dimensions {
         ksh: 0.8 * units::SH,
         ds: 0.075 * units::SH,
         sp: 0.8,
+        csp: 4. * 0.8,
         bp: 0.6,
+        cbp: 4. * 0.6,
         .. Self::D0
     };
 

@@ -251,7 +251,7 @@ impl PropertiesBuilder {
         arg: eval::Expression<Railwayhistory>,
         err: &mut eval::Error,
     ) -> Result<Self, Failed> {
-        let mut symbols = arg.into_symbol_set(err)?.0;
+        let mut symbols = arg.into_symbol_set(err)?;
         let res = Self::from_symbols(&mut symbols);
         symbols.check_exhausted(err)?;
         Ok(res)
@@ -388,7 +388,7 @@ impl LabelProperties {
         arg: eval::Expression<Railwayhistory>,
         err: &mut eval::Error,
     ) -> Result<(Self, Properties), Failed> {
-        let mut symbols = arg.into_symbol_set(err)?.0;
+        let mut symbols = arg.into_symbol_set(err)?;
         let mut properties = PropertiesBuilder::from_symbols(&mut symbols);
         let label_properties = LabelProperties {
             linenum: symbols.take("linenum") || linenum,
@@ -443,7 +443,7 @@ impl Properties {
         arg: eval::Expression<Railwayhistory>,
         err: &mut eval::Error,
     ) -> Result<Self, Failed> {
-        let mut symbols = arg.into_symbol_set(err)?.0;
+        let mut symbols = arg.into_symbol_set(err)?;
         let res = PropertiesBuilder::from_symbols(&mut symbols);
         symbols.check_exhausted(err)?;
         Ok(Self::default().update(&res))

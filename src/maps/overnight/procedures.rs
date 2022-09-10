@@ -449,7 +449,7 @@ fn label_args(
     let three = args.len() > 2;
     let mut args = args.into_iter();
     let properties = if three {
-        let mut symbols = args.next().unwrap().into_symbol_set(err)?.0;
+        let mut symbols = args.next().unwrap().into_symbol_set(err)?;
         let properties = label::PropertiesBuilder::from_symbols(&mut symbols);
         symbols.check_exhausted(err)?;
         base_properties.update(&properties)

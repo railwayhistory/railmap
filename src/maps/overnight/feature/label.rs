@@ -250,7 +250,7 @@ impl PropertiesBuilder {
         arg: eval::Expression<Overnight>,
         err: &mut eval::Error,
     ) -> Result<Self, Failed> {
-        let mut symbols = arg.into_symbol_set(err)?.0;
+        let mut symbols = arg.into_symbol_set(err)?;
         let res = Self::from_symbols(&mut symbols);
         symbols.check_exhausted(err)?;
         Ok(res)
@@ -391,7 +391,7 @@ impl Properties {
         arg: eval::Expression<Overnight>,
         err: &mut eval::Error,
     ) -> Result<Self, Failed> {
-        let mut symbols = arg.into_symbol_set(err)?.0;
+        let mut symbols = arg.into_symbol_set(err)?;
         let res = PropertiesBuilder::from_symbols(&mut symbols);
         symbols.check_exhausted(err)?;
         Ok(Self::default().update(&res))
