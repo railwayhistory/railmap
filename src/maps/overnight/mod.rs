@@ -1,3 +1,5 @@
+#![cfg(feature = "overnight")]
+
 mod class;
 mod feature;
 mod functions;

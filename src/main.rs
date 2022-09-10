@@ -4,9 +4,8 @@ use std::time::Instant;
 use clap::{Arg, ArgMatches, Command, crate_version, crate_authors};
 use railmap::{Config, LoadFeatures, Server};
 use railmap::theme::Theme;
-use railmap::maps::overnight::Overnight;
-use railmap::maps::railwayhistory::Railwayhistory;
 
+#[allow(dead_code)]
 async fn run<T: Theme>(config: Config, matches: ArgMatches, mut theme: T) {
     let start = Instant::now();
     theme.config(&config);
@@ -102,11 +101,21 @@ async fn main() {
         }
     };
 
-    match config.theme.as_ref() {
+    match config.theme.as_str() {
+        #[cfg(feature = "railwayhistory")]
         "railwayhistory" => {
-            run(config, matches, Railwayhistory::default()).await
+            run(
+                config, matches,
+                railmap::maps::railwayhistory::Railwayhistory::default()
+            ).await
         }
-        "overnight" => run(config, matches, Overnight).await,
+        #[cfg(feature = "overnight")]
+        "overnight" => {
+            run(
+                config, matches,
+                railmap::maps::railwayhistory::Overnight
+            ).await
+        }
         theme => {
             eprintln!("Unknown theme '{}' in config.", theme);
             std::process::exit(1)

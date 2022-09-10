@@ -23,6 +23,11 @@ smallvec = { version = "1.8", features = [ "const_generics" ] }
 tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread"] }
 toml = "0.5.8"
 
+[features]
+default = [ "railwayhistory" ]
+railwayhistory = [ ]
+overnight = [ ]
+
 [[bin]]
 name = "railmap"
 doc = false
