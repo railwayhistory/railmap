@@ -113,7 +113,7 @@ async fn main() {
         "overnight" => {
             run(
                 config, matches,
-                railmap::maps::railwayhistory::Overnight
+                railmap::maps::overnight::Overnight
             ).await
         }
         theme => {

@@ -9,4 +9,5 @@ pub mod render;
 pub mod server;
 pub mod tile;
 pub mod theme;
+pub mod transform;
 

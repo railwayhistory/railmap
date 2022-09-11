@@ -4,9 +4,11 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::ops::MulAssign;
 use std::sync::Arc;
+use crate::theme;
 use crate::render::color::Color;
 use crate::render::path::MapDistance;
-use crate::theme;
+use crate::tile::TileId;
+use crate::transform::Transform;
 use super::class::{
     Category, Class, ElectricStatus, ElectricSystem, Pax, Status,
     VoltageGroup
@@ -78,6 +80,7 @@ pub struct Style {
     mag: f64,
     dimensions: Dimensions,
     colors: Arc<ColorSet>,
+    transform: Transform,
 }
 
 impl theme::Style for Style {
@@ -103,12 +106,22 @@ impl theme::Style for Style {
         distance.value()
         * units::MAP_DISTANCES[distance.unit()].1[self.detail as usize]
     }
+
+    fn transform(&self) -> Transform {
+        self.transform
+    }
 }
 
 impl Style {
-    pub fn new(id: StyleId, zoom: u8, colors: Arc<ColorSet>) -> Self {
-        let detail = id.detail(zoom);
-        let dimensions = if detail < 3 {
+    pub fn new(
+        id: &TileId<StyleId>,
+        colors: Arc<ColorSet>,
+    ) -> Self {
+        let detail = id.style.detail(id.zoom);
+        let mag = id.style.mag(id.zoom);
+        let canvas_bp = id.format.canvas_bp() * mag;
+        let scale = id.format.size() * id.n();
+        let mut dimensions = if detail < 3 {
             Dimensions::D0
         }
         else if detail < 4 {
@@ -117,12 +130,14 @@ impl Style {
         else {
             Dimensions::D4
         };
+        dimensions *= canvas_bp;
         Style {
-            id,
+            id: id.style,
             detail,
-            mag: id.mag(zoom),
+            mag,
             dimensions,
             colors,
+            transform: Transform::new( canvas_bp, id.nw(), scale),
         }
     }
 
@@ -139,6 +154,10 @@ impl Style {
 
     pub fn include_line_labels(&self) -> bool {
         self.palette().show_linenum()
+    }
+
+    pub fn canvas_bp(&self) -> f64 {
+        self.transform.canvas_bp()
     }
 }
 

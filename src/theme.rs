@@ -9,6 +9,7 @@ use crate::render::feature::{Feature, FeatureSet};
 use crate::render::label::Span;
 use crate::render::path::{Distance, MapDistance};
 use crate::tile::TileId;
+use crate::transform::Transform;
 
 
 //------------ Theme ---------------------------------------------------------
@@ -59,7 +60,8 @@ pub trait Theme: Sized + Clone + Send + Sync + 'static {
     ) -> Result<(), Failed>;
 
     fn style(
-        &self, tile_id: &TileId<<Self::Style as Style>::StyleId>,
+        &self,
+        tile_id: &TileId<<Self::Style as Style>::StyleId>,
     ) -> Self::Style;
 
     fn index_page(&self) -> &'static [u8];
@@ -90,5 +92,7 @@ pub trait Style {
     ///
     /// The returned value is a in _bp._
     fn resolve_distance(&self, distance: MapDistance) -> f64;
+
+    fn transform(&self) -> Transform;
 }
 

@@ -89,7 +89,7 @@ impl DotMarker {
     }
 
     pub fn render(&self, style: &Style, canvas: &Canvas) {
-        let (point, _) = self.position.resolve(canvas, style);
+        let (point, _) = self.position.resolve(style);
         canvas.translate(point.x, point.y);
         style.primary_marker_color(&self.class).apply(canvas);
         let u = style.dimensions();

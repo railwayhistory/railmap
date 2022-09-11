@@ -89,9 +89,10 @@ impl theme::Theme for Railwayhistory {
     }
 
     fn style(
-        &self, tile_id: &TileId<<Self::Style as theme::Style>::StyleId>,
+        &self,
+        tile_id: &TileId<<Self::Style as theme::Style>::StyleId>,
     ) -> Self::Style {
-        Style::new(tile_id.style, tile_id.zoom, self.colors.clone())
+        Style::new(tile_id, self.colors.clone())
     }
 
     fn index_page(&self) -> &'static [u8] {

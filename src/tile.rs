@@ -1,6 +1,6 @@
 use std::{fmt, ops};
 use std::str::FromStr;
-use kurbo::Point;
+use kurbo::{Point, Rect};
 use crate::render::canvas::Canvas;
 use crate::render::feature::FeatureSet;
 use crate::theme::{Style, Theme};
@@ -13,15 +13,17 @@ const MAX_ZOOM: u8 = 20;
 
 //------------ Tile ----------------------------------------------------------
 
-pub struct Tile<T: Theme> {
-    style: T::Style,
+pub struct Tile<'a, T: Theme> {
+    theme: &'a T,
     id: TileId<<T::Style as Style>::StyleId>,
 }
 
-impl<T: Theme> Tile<T> {
-    pub fn new(theme: &T, id: TileId<<T::Style as Style>::StyleId>) -> Self {
-        let style = theme.style(&id);
-        Tile { style, id }
+impl<'a, T: Theme> Tile<'a, T> {
+    pub fn new(
+        theme: &'a T,
+        id: TileId<<T::Style as Style>::StyleId>
+    ) -> Self {
+        Tile { theme, id }
     }
 
     pub fn content_type(&self) -> &'static str {
@@ -37,16 +39,31 @@ impl<T: Theme> Tile<T> {
     fn render_surface(
         &mut self, surface: &Surface, features: &FeatureSet<T>,
     ) {
-        let size = surface.size();
-        let canvas = Canvas::new(
-            surface,
-            Point::new(size, size),
-            surface.canvas_bp(),
-            self.id.nw(),
-            size * self.id.n(),
-            &mut self.style,
+        let style = self.theme.style(&self.id);
+        let canvas = Canvas::new(surface);
+        let size = self.id.format.size();
+        canvas.set_clip(Rect::new(0., 0., size, size));
+        features.render(&style, &canvas, self.feature_bounds(&style));
+    }
+
+    fn feature_bounds(&self, style: &T::Style) -> Rect {
+        let size = self.id.format.size();
+        let scale = size * self.id.n();
+        let feature_size = Point::new(size / scale, size / scale);
+        let nw = self.id.nw();
+
+        let correct = style.bounds_correction();
+        let correct = Point::new(
+            feature_size.x * correct,
+            feature_size.y * correct,
         );
-        features.render(&self.style, &canvas);
+
+        Rect::new(
+            nw.x - correct.x,
+            nw.y - correct.y,
+            nw.x + feature_size.x + correct.x,
+            nw.y + feature_size.y + correct.y,
+        )
     }
 }
 
@@ -164,6 +181,22 @@ pub enum TileFormat {
     Svg,
 }
 
+impl TileFormat {
+    pub fn size(self) -> f64 {
+        match self {
+            TileFormat::Png => 512.,
+            TileFormat::Svg => 192.,
+        }
+    }
+    
+    pub fn canvas_bp(self) -> f64 {
+        match self {
+            TileFormat::Png => 192./72.,
+            TileFormat::Svg => 1.,
+        }
+    }
+}
+
 impl FromStr for TileFormat {
     type Err = TileIdError;
 
@@ -212,6 +245,7 @@ impl Surface {
         }
     }
 
+    /*
     fn size(&self) -> f64 {
         match *self {
             Surface::Png(_) => 512.,
@@ -225,6 +259,7 @@ impl Surface {
             Surface::Svg(_) => 1.,
         }
     }
+    */
 
     fn finalize(self) -> Vec<u8> {
         match self {

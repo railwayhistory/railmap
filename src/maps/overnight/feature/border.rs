@@ -97,7 +97,7 @@ impl BorderContour {
     }
 
     fn render_low(&self, style: &Style, canvas: &Canvas) {
-        canvas.set_line_width(LOW_BORDER_WIDTH * canvas.canvas_bp());
+        canvas.set_line_width(LOW_BORDER_WIDTH * style.canvas_bp());
         if self.former {
             LOW_FORMER_BORDER_COLOR.apply(canvas);
         }
@@ -109,7 +109,7 @@ impl BorderContour {
     }
 
     fn render_high(&self, style: &Style, canvas: &Canvas) {
-        self.category.apply_casing_width_high(canvas);
+        self.category.apply_casing_width_high(style, canvas);
         if self.former {
             FORMER_CASING_COLOR.apply(canvas);
         }
@@ -118,14 +118,14 @@ impl BorderContour {
         }
         self.trace.apply(canvas, style);
         canvas.stroke_preserve().unwrap();
-        canvas.set_line_width(BORDER_WIDTH * canvas.canvas_bp());
+        canvas.set_line_width(BORDER_WIDTH * style.canvas_bp());
         if self.former {
             FORMER_BORDER_COLOR.apply(canvas);
         }
         else {
             BORDER_COLOR.apply(canvas);
         }
-        self.category.apply_dash_high(canvas);
+        self.category.apply_dash_high(style, canvas);
         canvas.stroke().unwrap();
         canvas.set_dash(&[], 0.);
     }
@@ -158,37 +158,37 @@ impl Category {
         }
     }
 
-    fn apply_casing_width_high(self, canvas: &Canvas) {
+    fn apply_casing_width_high(self, style: &Style, canvas: &Canvas) {
         match self {
             Category::National => {
-                canvas.set_line_width(CASING_WIDTH * canvas.canvas_bp());
+                canvas.set_line_width(CASING_WIDTH * style.canvas_bp());
             }
             Category::State => {
-                canvas.set_line_width(0.5 * CASING_WIDTH * canvas.canvas_bp());
+                canvas.set_line_width(0.5 * CASING_WIDTH * style.canvas_bp());
             }
         }
     }
 
-    fn apply_dash_high(self, canvas: &Canvas) {
+    fn apply_dash_high(self, style: &Style, canvas: &Canvas) {
         match self {
             Category::National => {
                 canvas.set_dash(
                     &[
-                        DASH_BASE * canvas.canvas_bp(),
-                        0.4 * DASH_BASE * canvas.canvas_bp(),
-                        0.1 * DASH_BASE * canvas.canvas_bp(),
-                        0.4 * DASH_BASE * canvas.canvas_bp(),
+                        DASH_BASE * style.canvas_bp(),
+                        0.4 * DASH_BASE * style.canvas_bp(),
+                        0.1 * DASH_BASE * style.canvas_bp(),
+                        0.4 * DASH_BASE * style.canvas_bp(),
                     ],
-                    (DASH_BASE * 1.45 * DASH_BASE) * canvas.canvas_bp()
+                    (DASH_BASE * 1.45 * DASH_BASE) * style.canvas_bp()
                 );
             }
             Category::State => {
                 canvas.set_dash(
                     &[
-                        DASH_BASE * canvas.canvas_bp(),
-                        0.6 * DASH_BASE * canvas.canvas_bp(),
+                        DASH_BASE * style.canvas_bp(),
+                        0.6 * DASH_BASE * style.canvas_bp(),
                     ],
-                    (DASH_BASE * 0.3 * DASH_BASE) * canvas.canvas_bp()
+                    (DASH_BASE * 0.3 * DASH_BASE) * style.canvas_bp()
                 );
             }
         }

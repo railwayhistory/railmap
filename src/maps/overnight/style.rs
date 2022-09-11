@@ -3,9 +3,11 @@
 use std::str::FromStr;
 use std::ops::MulAssign;
 use lazy_static::lazy_static;
+use crate::theme;
 use crate::render::color::Color;
 use crate::render::path::MapDistance;
-use crate::theme;
+use crate::tile::TileId;
+use crate::transform::Transform;
 use super::class::{RouteColor, Class};
 use super::units;
 
@@ -56,6 +58,7 @@ pub struct Style {
     detail: u8,
     mag: f64,
     dimensions: Dimensions,
+    transform: Transform,
 }
 
 impl theme::Style for Style {
@@ -80,12 +83,19 @@ impl theme::Style for Style {
     fn resolve_distance(&self, distance: MapDistance) -> f64  {
         distance.value()
     }
+
+    fn transform(&self) -> Transform {
+        self.transform
+    }
 }
 
 impl Style {
-    pub fn new(id: StyleId, zoom: u8) -> Self {
-        let detail = id.detail(zoom);
-        let dimensions = if detail < 3 {
+    pub fn new(id: &TileId<StyleId>) -> Self {
+        let detail = id.style.detail(id.zoom);
+        let mag = id.style.mag(id.zoom);
+        let canvas_bp = id.format.canvas_bp() * mag;
+        let scale = id.format.size() * id.n();
+        let mut dimensions = if detail < 3 {
             Dimensions::D0
         }
         else if detail < 4 {
@@ -94,10 +104,12 @@ impl Style {
         else {
             Dimensions::D4
         };
+        dimensions *= canvas_bp;
         Style {
             detail,
-            mag: id.mag(zoom),
+            mag,
             dimensions,
+            transform: Transform::new(canvas_bp, id.nw(), scale),
         }
     }
 
@@ -123,6 +135,10 @@ impl Style {
     /// Returns the color for a route label.
     pub fn route_color(&self, class: &Class) -> Color {
         COLORS.color(class)
+    }
+
+    pub fn canvas_bp(&self) -> f64 {
+        self.transform.canvas_bp()
     }
 }
 

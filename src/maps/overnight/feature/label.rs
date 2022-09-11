@@ -405,8 +405,8 @@ impl Properties {
         }
     }
 
-    pub fn apply_font(&self, canvas: &Canvas) {
-        canvas.apply_font(self.face, self.size.size());
+    pub fn apply_font(&self, style: &Style, canvas: &Canvas) {
+        canvas.apply_font(self.face, self.size.size() * style.canvas_bp());
     }
 
     pub fn apply_color(&self, style: &Style, canvas: &Canvas) {
@@ -526,8 +526,8 @@ impl TextSpan {
         TextSpan { text, properties }
     }
 
-    fn extent(&self, _: &Style, canvas: &Canvas) -> (Rect, usize) {
-        self.properties.apply_font(canvas);
+    fn extent(&self, style: &Style, canvas: &Canvas) -> (Rect, usize) {
+        self.properties.apply_font(style, canvas);
 
         // We take the width from the text extents and the height from the
         // font extents. This assumes that the text is one line exactly.
@@ -555,7 +555,7 @@ impl TextSpan {
             1 =>  {
                 let cap = canvas.line_cap();
                 let join = canvas.line_join();
-                self.properties.apply_font(canvas);
+                self.properties.apply_font(style, canvas);
                 Color::WHITE.apply(canvas);
                 canvas.set_line_width(self.properties.size.size());
                 canvas.set_line_cap(cairo::LineCap::Butt);
@@ -567,7 +567,7 @@ impl TextSpan {
                 canvas.set_line_cap(cap);
             }
             0 => {
-                self.properties.apply_font(canvas);
+                self.properties.apply_font(style, canvas);
                 self.properties.apply_color(style, canvas);
                 canvas.move_to(point.x, point.y);
                 canvas.show_text(&self.text).unwrap();

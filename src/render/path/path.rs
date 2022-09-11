@@ -5,7 +5,6 @@ use std::f64::consts::PI;
 use std::sync::Arc;
 use kurbo::{CubicBez, Line, ParamCurveArclen, Point};
 use crate::theme::Style;
-use super::super::canvas::Canvas;
 use super::trace::{STORAGE_ACCURACY, Segment};
 
 
@@ -182,21 +181,21 @@ impl Path {
         }
     }
 
-    /// Returns the time value for a location on a given canvas.
+    /// Returns the time value for a location in a given style.
     pub fn location_time(
-        &self, location: &Location, canvas: &Canvas, style: &impl Style,
+        &self, location: &Location, style: &impl Style,
     ) -> SegTime {
         self._location_time(
             location.world,
             location.map.iter().map(
                 |canv| style.resolve_distance(*canv)
-            ).sum::<f64>() * canvas.canvas_bp(),
-            canvas
+            ).sum::<f64>() * style.transform().canvas_bp(),
+            style
         )
     }
 
     fn _location_time(
-        &self, world: SegTime, map: f64, canvas: &Canvas
+        &self, world: SegTime, map: f64, style: &impl Style,
     ) -> SegTime {
         if map == 0. {
             world
@@ -205,7 +204,7 @@ impl Path {
             let offset = -map;
             let seg = self.segment(
                 world.seg
-            ).unwrap().transform(canvas);
+            ).unwrap().transform(style);
             let before = seg.sub(0., world.time);
             let arclen = before.arclen();
             if arclen >= offset {
@@ -219,7 +218,7 @@ impl Path {
                 self._location_time(
                     SegTime::new(world.seg - 1, 1.),
                     -(offset - arclen),
-                    canvas
+                    style
                 )
             }
             else {
@@ -230,7 +229,7 @@ impl Path {
             let offset = map;
             let seg = self.segment(
                 world.seg
-            ).unwrap().transform(canvas);
+            ).unwrap().transform(style);
             let after = seg.sub(world.time, 1.);
             let arclen = after.arclen();
             if arclen > offset {
@@ -246,7 +245,7 @@ impl Path {
                 self._location_time(
                     SegTime::new(world.seg + 1, 0.),
                     offset - arclen,
-                    canvas
+                    style
                 )
             }
         }
@@ -428,14 +427,15 @@ impl Distance {
 
     /// Resolves the distance at the given point in storage coordinates.
     pub fn resolve(
-        &self, point: Point, canvas: &Canvas, style: &impl Style,
+        &self, point: Point, style: &impl Style,
     ) -> f64 {
         let mut res = self.world.map(|world| {
-            to_storage_distance(world, point) * canvas.equator_scale()
+            to_storage_distance(world, point)
+                * style.transform().equator_scale()
         }).unwrap_or(0.);
 
         for item in &self.map {
-            res += item.resolve(style) * canvas.canvas_bp()
+            res += item.resolve(style) * style.transform().canvas_bp()
         }
 
         res

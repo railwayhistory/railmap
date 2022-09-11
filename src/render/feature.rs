@@ -44,8 +44,10 @@ impl<T: Theme> FeatureSet<T> {
         self.features.insert(feature);
     }
 
-    pub fn render(&self, style: &T::Style, canvas: &Canvas) {
-        let features = self.locate(style.detail(), canvas.feature_bounds());
+    pub fn render(
+        &self, style: &T::Style, canvas: &Canvas, bounds: Rect,
+    ) {
+        let features = self.locate(style.detail(), bounds);
         let mut features = features.as_slice();
         while let Some(layer) = features.first().map(|item| item.layer) {
             let mut max_depth = 1;

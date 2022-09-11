@@ -82,7 +82,7 @@ impl theme::Theme for Overnight {
     fn style(
         &self, tile_id: &TileId<<Self::Style as theme::Style>::StyleId>,
     ) -> Self::Style {
-        Style::new(tile_id.style, tile_id.zoom)
+        Style::new(tile_id)
     }
 
     fn index_page(&self) -> &'static [u8] {

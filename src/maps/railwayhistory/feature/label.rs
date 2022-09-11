@@ -458,8 +458,8 @@ impl Properties {
         }
     }
 
-    pub fn apply_font(&self, canvas: &Canvas) {
-        canvas.apply_font(self.face, self.size.size());
+    pub fn apply_font(&self, style: &Style, canvas: &Canvas) {
+        canvas.apply_font(self.face, self.size.size() * style.canvas_bp());
     }
 
     pub fn apply_color(&self, style: &Style, canvas: &Canvas) {
@@ -596,8 +596,8 @@ impl TextSpan {
         TextSpan { text, properties }
     }
 
-    fn extent(&self, _: &Style, canvas: &Canvas) -> (Rect, usize) {
-        self.properties.apply_font(canvas);
+    fn extent(&self, style: &Style, canvas: &Canvas) -> (Rect, usize) {
+        self.properties.apply_font(style, canvas);
 
         // We take the width from the text extents and the height from the
         // font extents. This assumes that the text is one line exactly.
@@ -634,7 +634,7 @@ impl TextSpan {
             1 =>  {
                 let cap = canvas.line_cap();
                 let join = canvas.line_join();
-                self.properties.apply_font(canvas);
+                self.properties.apply_font(style, canvas);
                 Color::WHITE.apply(canvas);
                 canvas.set_line_width(self.properties.size.size());
                 canvas.set_line_cap(cairo::LineCap::Butt);
@@ -646,7 +646,7 @@ impl TextSpan {
                 canvas.set_line_cap(cap);
             }
             0 => {
-                self.properties.apply_font(canvas);
+                self.properties.apply_font(style, canvas);
                 self.properties.apply_color(style, canvas);
                 canvas.move_to(point.x, point.y);
                 canvas.show_text(&self.text).unwrap();
@@ -670,12 +670,12 @@ impl HruleSpan {
         HruleSpan { width, class }
     }
 
-    fn resolved_width(&self, style: &Style, canvas: &Canvas) -> f64 {
-        self.width.resolve(Default::default(), canvas, style)
+    fn resolved_width(&self, style: &Style) -> f64 {
+        self.width.resolve(Default::default(), style)
     }
 
-    fn extent(&self, style: &Style, canvas: &Canvas) -> (Rect, usize) {
-        let height = self.resolved_width(style, canvas) / 2.;
+    fn extent(&self, style: &Style, _canvas: &Canvas) -> (Rect, usize) {
+        let height = self.resolved_width(style) / 2.;
         (Rect::new(0., -height, 0., height), 1)
     }
 
@@ -684,7 +684,7 @@ impl HruleSpan {
         _extent: Rect, outer: Rect,
     ) {
         if depth == 0 {
-            canvas.set_line_width(self.resolved_width(style, canvas));
+            canvas.set_line_width(self.resolved_width(style));
             canvas.move_to(point.x + outer.x0, point.y);
             canvas.line_to(point.x + outer.x1, point.y);
             style.label_color(&self.class).apply(canvas);

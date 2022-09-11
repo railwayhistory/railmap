@@ -106,7 +106,7 @@ impl StandardMarker {
     }
 
     pub fn render(&self, style: &Style, canvas: &Canvas) {
-        let (point, angle) = self.position.resolve(canvas, style);
+        let (point, angle) = self.position.resolve(style);
         canvas.translate(point.x, point.y);
         canvas.rotate(angle + self.orientation);
         style.primary_marker_color(&self.class).apply(canvas);

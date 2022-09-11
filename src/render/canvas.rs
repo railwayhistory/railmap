@@ -5,19 +5,8 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use kurbo::{
     BezPath, PathEl, ParamCurve, ParamCurveArclen, PathSeg, Point, Rect,
-    TranslateScale, Vec2
 };
-use crate::theme::Style;
 use super::path::{CANVAS_ACCURACY, SegTime};
-
-
-//------------ Configurable Constants ----------------------------------------
-
-/// Size correction for feature bounds.
-///
-/// This value will be multiplied with detail level, then length and height of
-/// the bounding box and then added on each side.
-const BOUNDS_CORRECTION: f64 = 0.3;
 
 
 //------------ Canvas --------------------------------------------------------
@@ -43,35 +32,20 @@ pub struct Canvas {
     /// The Cairo context for actual rendering.
     context: cairo::Context,
 
-    /// The feature bounding box.
-    ///
-    /// This is in storage coordinates and should be big enough that all
-    /// features with approximate bounds are covered, too.
-    feature_bounds: Rect,
-
-    /// The transformation from storage to canvas coordinates.
-    ///
-    /// Storage coordinates are Spherical Mercator with a range of `0. .. 1.`
-    /// for both x and y. Because we are only supporting Spherical Mercator
-    /// for output, too, we can use scaling and translation for this.
-    ///
-    /// Note that in a `TranslateScale` the scaling happens first and the
-    /// translation needs to be in scaled up coordinates.
-    transform: TranslateScale,
-
-    /// The size of a bp in storage coordinates.
-    equator_scale: f64,
-
-    /// The size of a bp in canvas coordinates.
-    canvas_bp: f64,
-
     /// The font table.
     fonts: RefCell<FontTable>,
 }
 
 impl Canvas {
     /// Creates a new canvas.
-    ///
+    pub fn new(surface: &cairo::Surface) -> Self {
+        Canvas {
+            context: cairo::Context::new(surface).unwrap(),
+            fonts: RefCell::new(FontTable::new()),
+        }
+    }
+
+    /*
     /// The canvas will have a size of `size` units in canvas coordinates.
     /// One _bp_ will be `canvas_bp` units in canvas coordinates.
     ///
@@ -123,7 +97,19 @@ impl Canvas {
             fonts: RefCell::new(FontTable::new()),
         }
     }
+    */
 
+    /// Sets the clipping ara.
+    pub fn set_clip(&self, rect: Rect) {
+        self.context.move_to(rect.x0, rect.y0);
+        self.context.line_to(rect.x0, rect.y1);
+        self.context.line_to(rect.x1, rect.y1);
+        self.context.line_to(rect.x1, rect.y0);
+        self.context.close_path();
+        self.context.clip();
+    }
+
+    /*
     /// Returns the feature bounds for the given parameters.
     pub fn calc_feature_bounds(
         size: Point, nw: Point, scale: f64
@@ -144,12 +130,14 @@ impl Canvas {
             nw.y + feature_size.y + correct.y,
         )
     }
+    */
 
     /// Returns a reference to the Cairo rendering context.
     pub fn context(&self) -> &cairo::Context {
         &self.context
     }
 
+    /*
     /// Returns the feature bounding box.
     ///
     /// This is the bounding box of the canvase in storage coordinates and
@@ -177,20 +165,11 @@ impl Canvas {
     pub fn canvas_bp(&self) -> f64 {
         self.canvas_bp
     }
+    */
 
     pub fn apply_font(&self, face: FontFace, size: f64) {
         self.context.set_font_face(self.fonts.borrow_mut().get(face));
-        self.set_font_size(size * self.canvas_bp());
-    }
-
-    pub fn mark_point(&self, point: Point) {
-        self.set_source_rgb(1., 0., 0.);
-        self.set_line_width(0.4 * self.canvas_bp());
-        self.new_path();
-        self.arc(
-            point.x, point.y, self.canvas_bp(), 0., 2. * std::f64::consts::PI
-        );
-        self.stroke().unwrap();
+        self.set_font_size(size);
     }
 }
 
@@ -216,16 +195,14 @@ impl ops::Deref for Canvas {
 /// All the path’s points are in canvas coordinates. All lengths are canvas
 /// lengths in _bp_.
 #[derive(Clone, Debug)]
-pub struct Path<'a> {
+pub struct Path {
     path: BezPath,
-    canvas: &'a Canvas,
 }
 
-impl<'a> Path<'a> {
-    pub fn new(canvas: &'a Canvas) -> Self {
+impl Path {
+    pub fn new() -> Self {
         Path {
             path: BezPath::new(),
-            canvas
         }
     }
 
@@ -263,20 +240,20 @@ impl<'a> Path<'a> {
         }
     }
 
-    pub fn apply(&self) {
+    pub fn apply(&self, canvas: &Canvas) {
         self.path.iter().for_each(|el| match el {
-            PathEl::MoveTo(p) => self.canvas.move_to(p.x, p.y),
-            PathEl::LineTo(p) => self.canvas.line_to(p.x, p.y),
+            PathEl::MoveTo(p) => canvas.move_to(p.x, p.y),
+            PathEl::LineTo(p) => canvas.line_to(p.x, p.y),
             PathEl::QuadTo(..) => unreachable!(),
             PathEl::CurveTo(u, v, s) => {
-                self.canvas.curve_to(u.x, u.y, v.x, v.y, s.x, s.y)
+                canvas.curve_to(u.x, u.y, v.x, v.y, s.x, s.y)
             }
-            PathEl::ClosePath => self.canvas.close_path(),
+            PathEl::ClosePath => canvas.close_path(),
         })
     }
 }
 
-impl<'a> Path<'a> {
+impl Path {
     /// Returns the number of nodes in the path.
     pub fn node_len(&self) -> u32 {
         self.path.elements().len().try_into().unwrap()
@@ -289,6 +266,7 @@ impl<'a> Path<'a> {
         })
     }
 
+    /*
     /// Returns the path time where the arc length reaches the given value.
     ///
     /// If `arclen` is greater than the path’s arc length, returns the time
@@ -307,12 +285,13 @@ impl<'a> Path<'a> {
         }
         i
     }
+    */
 
     /// Returns the subpath between the two given path times.
     pub fn subpath(&self, start_time: f64, end_time: f64) -> Self {
         let mut start = self.resolve_time(start_time);
         let end = self.resolve_time(end_time);
-        let mut res = Path::new(self.canvas);
+        let mut res = Path::new();
         if start.seg == end.seg {
             let seg = self.get_seg(start).subsegment(start.time..end.time);
             res.move_to_seg(seg);
@@ -350,7 +329,7 @@ impl<'a> Path<'a> {
 
 /// # Internal Helpers
 ///
-impl<'a> Path<'a> {
+impl Path {
     /// Resolves path time into a location.
     ///
     /// The integer part of the path time denotes the segment as one less the
