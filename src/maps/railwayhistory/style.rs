@@ -305,9 +305,9 @@ impl Dimensions {
         ksh: 0.8 * units::SH,
         ds: 0.075 * units::SH,
         sp: 0.8,
-        csp: 4. * 0.8,
+        csp: 8. * 0.8,
         bp: 0.6,
-        cbp: 4. * 0.6,
+        cbp: 8. * 0.6,
         .. Self::D0
     };
 

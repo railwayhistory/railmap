@@ -206,7 +206,10 @@ markers! {
             canvas.move_to(0., 0.5 * u.sh + u.sp);
             canvas.line_to(0., u.sh - 0.5 * u.sp);
             canvas.set_line_width(u.csp);
-            stroke_round(canvas)
+            canvas.set_operator(cairo::Operator::Clear);
+            stroke_round(canvas)?;
+            canvas.set_operator(cairo::Operator::Over);
+            Ok(())
         },
         |canvas: &Canvas, u: Dimensions| {
             junction_small_casing(canvas, u)
@@ -669,6 +672,7 @@ markers! {
             canvas.line_to(-0.5 * u.sw + hsp, u.sh - 0.5 * u.sp);
             canvas.line_to(0.5 * u.sw - hsp, u.sh - 0.5 * u.sp);
             canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.sp);
+            canvas.close_path();
             canvas.move_to(0., 2.5 * u.sp);
             canvas.line_to(0., u.sh - 0.5 * u.sp);
             canvas.close_path();
@@ -791,7 +795,10 @@ markers! {
             canvas.move_to(0., 0.);
             canvas.line_to(0., u.sh - u.sp);
             canvas.set_line_width(u.csp);
-            stroke_round(canvas)
+            canvas.set_operator(cairo::Operator::Clear);
+            stroke_round(canvas)?;
+            canvas.set_operator(cairo::Operator::Over);
+            Ok(())
         },
         |canvas: &Canvas, u: Dimensions| {
             junction_small_casing(canvas, u)
@@ -912,14 +919,16 @@ fn station_small(
 fn station_casing(
     canvas: &Canvas, u: Dimensions
 ) -> Result<(), cairo::Error> {
-    let hsp = 0.5 * u.sp;
-    canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
-    canvas.line_to(-0.5 * u.sw + hsp, u.sh - 0.5 * u.sp);
-    canvas.line_to(0.5 * u.sw - hsp, u.sh - 0.5 * u.sp);
-    canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.sp);
+    let hsp = 0.5 * (u.csp - u.sp);
+    canvas.move_to(-0.5 * u.sw - hsp, 2.5 * u.sp - hsp);
+    canvas.line_to(-0.5 * u.sw - hsp, u.sh + hsp);
+    canvas.line_to(0.5 * u.sw + hsp, u.sh + hsp);
+    canvas.line_to(0.5 * u.sw + hsp, 2.5 * u.sp - hsp);
     canvas.close_path();
-    canvas.set_line_width(u.csp);
-    canvas.stroke()
+    canvas.set_operator(cairo::Operator::Clear);
+    canvas.fill()?;
+    canvas.set_operator(cairo::Operator::Over);
+    Ok(())
 }
 
 fn station_small_casing(
