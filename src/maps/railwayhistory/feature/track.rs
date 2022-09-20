@@ -11,7 +11,7 @@ use crate::render::canvas::Canvas;
 //use crate::render::color::Color;
 use crate::render::path::Trace;
 use crate::theme::Style as _;
-use super::super::class::{Category, Class, Gauge, GaugeGroup};
+use super::super::class::{Category, Class, Gauge/*, GaugeGroup*/};
 use super::super::style::Style;
 use super::super::theme::Railwayhistory;
 
@@ -225,6 +225,11 @@ impl TrackContour {
             return;
         }
         let seg = style.dimensions().seg;
+        let stroke = if self.class.class.category().is_main() {
+            style.dimensions().line_width
+        } else {
+            style.dimensions().other_width
+        };
 
         if single {
             self.trace.apply_offset(
@@ -248,21 +253,37 @@ impl TrackContour {
         if let Some(cat_color) = cat_color {
             cat_color.apply(canvas);
             if rail_color.is_none() {
+                // We only have cat. This means one stroke in the center of
+                // the seg.
+                canvas.set_dash(
+                    &[stroke, seg - stroke],
+                    0.5 * (seg - stroke)
+                );
+                /*
                 // We only have cat. This means we have to draw 0.3seg in
                 // the center of each seg.
                 canvas.set_dash(
                     &[0.3 * seg, 0.7 * seg],
                     0.45 * seg
                 );
+                */
                 canvas.stroke().unwrap();
             }
             else {
+                // There also is rail. This means one stroke one third into
+                // the seg.
+                canvas.set_dash(
+                    &[stroke, seg - stroke],
+                    (1./3.) * (seg - stroke)
+                );
+                /*
                 // There also is rail. Which means we have to draw 0.3seg in
                 // the center of the first half of each double seg.
                 canvas.set_dash(
                     &[0.3 * seg, 1.7 * seg],
                     0.45 * seg
                 );
+                */
                 canvas.stroke_preserve().unwrap();
             }
         }
@@ -270,6 +291,17 @@ impl TrackContour {
         if let Some(rail_color) = rail_color {
             rail_color.apply(canvas);
             if cat_color.is_none() {
+                // We only have third rail. This means we have two strokes
+                // around the center of the seg. The strokes are 1 stroke wide
+                // and 1.5 strokes apart.
+                canvas.set_dash(
+                    &[
+                        stroke, stroke, stroke,
+                        seg - 3. * stroke
+                    ],
+                    0.5 * (seg - 3. * stroke)
+                );
+                /*
                 // We only have third rail. This means we have to draw a
                 // 0.3seg made from one 0.05seg and one 0.2seg segment in
                 // the center of each seg.
@@ -277,14 +309,26 @@ impl TrackContour {
                     &[0.05 * seg, 0.05 * seg, 0.2 * seg, 0.7 * seg],
                     0.45 * seg
                 );
+                */
             }
             else {
+                // We have both cat and rail. This means our two strokes
+                // around around the second third of the seg.
+                canvas.set_dash(
+                    &[
+                        stroke, stroke, stroke,
+                        seg - 3. * stroke
+                    ],
+                    (2./3.) * (seg - 3. * stroke)
+                );
+                /*
                 // We have both cat and rail. This means our bit goes in
                 // the center of the second half of the double seg.
                 canvas.set_dash(
                     &[0.05 * seg, 0.05 * seg, 0.2 * seg, 1.7 * seg],
                     1.45 * seg
                 );
+                */
             }
             canvas.stroke().unwrap();
         }
@@ -292,8 +336,9 @@ impl TrackContour {
     }
 
     fn render_full_property(
-        &self, single: bool, style: &Style, canvas: &Canvas
+        &self, _single: bool, _style: &Style, _canvas: &Canvas
     ) {
+        /*
         if self.class.station {
             return
         }
@@ -428,6 +473,7 @@ impl TrackContour {
             canvas.stroke().unwrap();
             canvas.set_line_cap(cairo::LineCap::Butt);
         }
+        */
     }
 
     fn render_full_base(

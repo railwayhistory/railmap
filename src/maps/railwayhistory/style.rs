@@ -305,7 +305,9 @@ impl Dimensions {
 
     const D3: Self = Self {
         line_width: 1.,
-        mark: 0.8 * units::DT,
+        dt: 0.8 * units::DT,
+        mark: 0.6 * units::DT,
+        tight_mark: 0.4 * units::DT,
         seg: 5. * units::DT,
         sw: units::S3W,
         sh: units::S3H,
@@ -324,9 +326,9 @@ impl Dimensions {
         ksh: 0.8 * units::SH,
         ds: 0.075 * units::SH,
         sp: 0.8,
-        csp: 4. * 0.8,
+        csp: 8. * 0.8,
         bp: 0.6,
-        cbp: 4. * 0.6,
+        cbp: 8. * 0.6,
         .. Self::D0
     };
 
