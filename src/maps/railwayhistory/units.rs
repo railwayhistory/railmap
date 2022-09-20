@@ -48,8 +48,8 @@ pub const MAP_DISTANCES: &[(&str, [f64; 6])] = &[
     ("cm", [CM; 6]),
 
     // Relative units.
-    ("dt",  [DT, DT, DT, DT, DT, DT]),
-    ("dl",  [DL, DL, DL, DL, DL, DL]),
+    ("dt",  [DT, DT, DT, 0.8 * DT, DT, DT]),
+    ("dl",  [DL, DL, DL, 0.8 * DL, DL, DL]),
     ("sw",  [SSW, SSW, SSW, S3W, SW, SW]),
     ("sh",  [SSH, SSH, SSH, S3H, SH, SH]),
     ("ssw", [SSW, SSW, SSW, S3W, SW, SW]), // deprecated!
