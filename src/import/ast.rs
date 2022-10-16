@@ -95,7 +95,8 @@ impl StatementList {
 /// This type enumerates all currently defined statements.
 ///
 /// ```text
-/// statement  ::=  (let | no-op | procedure | with)
+/// statement  ::=  (let | no-op | procedure | with | block)
+/// block      ::=  "{" *statement "}"
 /// ```
 #[derive(Clone, Debug)]
 pub enum Statement {
@@ -103,6 +104,7 @@ pub enum Statement {
     NoOp(NoOp),
     Procedure(Procedure),
     With(With),
+    Block(StatementList),
 }
 
 impl Statement {
@@ -112,6 +114,7 @@ impl Statement {
             map(NoOp::parse, Statement::NoOp),
             map(Procedure::parse, Statement::Procedure),
             map(With::parse, Statement::With),
+            map(StatementList::parse_curly, Statement::Block),
         ))(input)
     }
 }

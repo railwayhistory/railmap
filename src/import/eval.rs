@@ -705,6 +705,9 @@ impl ast::Statement {
                 let _ = stm.eval(scope, features, err);
             }
             ast::Statement::With(stm) => stm.eval(scope, features, err),
+            ast::Statement::Block(stm) => {
+                stm.eval(&mut scope.clone(), features, err)
+            }
         }
     }
 }
@@ -1308,7 +1311,8 @@ impl ast::UnitNumber {
         self, scope: &Scope<T>, err: &mut Error
     ) -> Result<Distance, Failed> {
         scope.theme.eval_distance(
-            self.number.eval_float(), self.unit.as_ref(), self.pos, err
+            self.number.eval_float(), self.unit.as_ref(), scope,
+            self.pos, err
         )
     }
 }
