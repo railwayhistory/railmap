@@ -526,6 +526,7 @@ impl ElectricRail {
 
     const SYSTEMS: &'static [(&'static str, u16)] = &[
         ("rc12", 1200),
+        ("rc85", 850),
         ("rc75", 750),
     ];
 
