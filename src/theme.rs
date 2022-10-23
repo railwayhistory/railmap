@@ -26,7 +26,8 @@ pub trait Theme: Sized + Clone + Send + Sync + 'static {
     fn config(&mut self, _config: &Config) { }
 
     fn eval_distance(
-        &self, number: f64, unit: &str, pos: ast::Pos, err: &mut eval::Error,
+        &self, number: f64, unit: &str, scope: &eval::Scope<Self>,
+        pos: ast::Pos, err: &mut eval::Error,
     ) -> Result<Distance, Failed>;
 
     fn lookup_function(&self, name: &str) -> Option<Self::Function>;

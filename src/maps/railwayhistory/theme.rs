@@ -35,7 +35,9 @@ impl theme::Theme for Railwayhistory {
     }
 
     fn eval_distance(
-        &self, number: f64, unit: &str, pos: ast::Pos, err: &mut eval::Error,
+        &self, number: f64, unit: &str,
+        _scope: &eval::Scope<Self>,
+        pos: ast::Pos, err: &mut eval::Error,
     ) -> Result<Distance, Failed> {
         super::units::resolve_unit(number, unit).ok_or_else(|| {
             err.add(pos, format!("unknown unit '{}'", unit));
