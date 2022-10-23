@@ -696,10 +696,18 @@ markers! {
 
     ("de.inbf") => (
         |canvas: &Canvas, u: Dimensions| {
-            canvas.move_to(-0.5 * u.sw, 0.);
-            canvas.line_to(-0.5 * u.sw, u.sh);
-            canvas.line_to(0.5 * u.sw, u.sh);
-            canvas.line_to(0.5 * u.sh, 0.);
+            let hsp = 0.5 * u.sp;
+            canvas.move_to(-0.5 * u.sw + hsp, 0.5 * u.dt + hsp);
+            canvas.line_to(-0.5 * u.sw + hsp, 2.5 * u.dt - hsp);
+            canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.dt - hsp);
+            canvas.line_to(0.5 * u.sw - hsp, 0.5 * u.dt + hsp);
+            canvas.close_path();
+            canvas.stroke()?;
+            let hsp = 2. * u.sp;
+            canvas.move_to(-0.5 * u.sw + hsp, 1.1 * u.dt);
+            canvas.line_to(-0.5 * u.sw + hsp, 1.9 * u.dt);
+            canvas.line_to(0.5 * u.sw - hsp, 1.9 * u.dt);
+            canvas.line_to(0.5 * u.sw - hsp, 1.1 * u.dt);
             canvas.close_path();
             canvas.fill()
         }
