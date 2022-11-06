@@ -127,7 +127,7 @@ impl TrackContour {
     }
 
     fn render_detail_0(&self, style: &Style, canvas: &Canvas) {
-        canvas.set_line_width(style.dimensions().line_width * 0.7);
+        canvas.set_line_width(style.dimensions().line_width);
         style.track_color(&self.class.class).apply(canvas);
         self.trace.apply(canvas, style);
         canvas.stroke().unwrap();

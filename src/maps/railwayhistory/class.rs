@@ -528,6 +528,7 @@ impl ElectricRail {
         ("rc12", 1200),
         ("rc85", 850),
         ("rc75", 750),
+        ("rc63", 630),
     ];
 
     pub fn voltage_group(self) -> VoltageGroup {
