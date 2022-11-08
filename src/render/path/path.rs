@@ -448,7 +448,6 @@ impl Default for Distance {
     }
 }
 
-/*
 impl ops::Add for Distance {
     type Output = Self;
 
@@ -457,7 +456,6 @@ impl ops::Add for Distance {
         self
     }
 }
-*/
 
 impl ops::AddAssign for Distance {
     fn add_assign(&mut self, other: Distance) {

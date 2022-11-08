@@ -284,6 +284,10 @@ impl PropertiesBuilder {
         }
     }
 
+    pub fn class(&self) -> &Class {
+        &self.class
+    }
+
     /// Injects `base` before this builder.
     ///
     /// Uses all changes in `base` for things not changed by `self`.
@@ -444,9 +448,13 @@ impl Properties {
         err: &mut eval::Error,
     ) -> Result<Self, Failed> {
         let mut symbols = arg.into_symbol_set(err)?;
-        let res = PropertiesBuilder::from_symbols(&mut symbols);
+        let res = Self::from_symbols(&mut symbols);
         symbols.check_exhausted(err)?;
-        Ok(Self::default().update(&res))
+        Ok(res)
+    }
+
+    pub fn from_symbols(symbols: &mut eval::SymbolSet) -> Self {
+        Self::default().update(&PropertiesBuilder::from_symbols(symbols))
     }
 
     pub fn update(&self, update: &PropertiesBuilder) -> Self {
@@ -456,6 +464,10 @@ impl Properties {
             class: self.class.update(&update.class),
             packed: update.packed.unwrap_or(self.packed),
         }
+    }
+
+    pub fn class(&self) -> &Class {
+        &self.class
     }
 
     pub fn apply_font(&self, style: &Style, canvas: &Canvas) {

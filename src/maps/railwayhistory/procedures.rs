@@ -3,8 +3,8 @@
 use crate::import::{ast, eval};
 use crate::import::Failed;
 use crate::render::feature::FeatureSet;
-use crate::render::label::Align;
-use crate::render::path::Position;
+use crate::render::label::{Align, Anchor};
+use crate::render::path::{Edge, Position, Trace};
 use super::class::Class;
 use super::feature::Feature;
 use super::feature::area::{AreaContour, PlatformContour};
@@ -15,6 +15,7 @@ use super::feature::track::{TrackCasing, TrackClass, TrackContour};
 use super::feature::guide::GuideContour;
 use super::feature::label;
 use super::theme::Railwayhistory;
+use super::units::resolve_unit;
 
 
 const PROCEDURES: &[(
@@ -113,39 +114,6 @@ const PROCEDURES: &[(
         Ok(())
     }),
 
-    // Draw a symbol onto the map.
-    //
-    // ```text
-    // marker(marker: symbol-set, position: position)
-    // ```
-    ("marker", &|pos, args, scope, features, err| {
-        let [class, position] = args.into_positionals(err)?;
-        let mut class = class.into_symbol_set(err)?;
-        let position = position.into_position(err)?.0;
-        match DotMarker::try_from_arg(&mut class, position.clone(), err)? {
-            Some(marker) => {
-                let layer_offset = marker.class().layer_offset();
-                features.insert(
-                    Feature::Dot(marker),
-                    scope.params().detail(pos, err)?,
-                    scope.params().layer() + layer_offset,
-                    1,
-                );
-            }
-            None => {
-                let marker = StandardMarker::from_arg(class, position, err)?;
-                let layer_offset = marker.class().layer_offset();
-                features.insert(
-                    Feature::Marker(marker),
-                    scope.params().detail(pos, err)?,
-                    scope.params().layer() - 0.3 + layer_offset,
-                    1,
-                );
-            }
-        }
-        Ok(())
-    }),
-
     // Draws a label.
     //
     // ```text
@@ -186,6 +154,168 @@ const PROCEDURES: &[(
             scope.params().detail(pos, err)?,
             scope.params().layer(), 1,
         );
+        Ok(())
+    }),
+
+    // Draws a line label connected with a guide.
+    //
+    // ```text
+    // line_label(
+    //     class: symbol-set, position: position,
+    //     [text-shift: distance,]
+    //     text: Text
+    // )
+    // ```
+    //
+    // Classes:
+    //
+    // * `:left`, `:right` for the direction of the guide.
+    // * `:n`, `:e`, `:s`, `:w`: the compass direction where the label is
+    //   anchored.
+    ("line_label", &|pos, args, scope, features, err| {
+        // Get the arguments.
+        let args = args.into_var_positionals(err,  |args, err| {
+            if args.positional().len() == 3 || args.positional().len() == 4 {
+                Ok(true)
+            }
+            else {
+                err.add(
+                    args.pos(),
+                    "expected 3 or 4 positional arguments"
+                );
+                Err(Failed)
+            }
+        }).map_err(|_| Failed)?;
+
+        let mut args = args.into_iter();
+        let mut symbols = args.next().unwrap().into_symbol_set(err)?;
+        let position = args.next().unwrap().into_position(err)?.0;
+        let shift = if args.len() > 3 {
+            Some(args.next().unwrap().into_vector(err)?.0)
+        }
+        else {
+            None
+        };
+        let layout = label::LayoutBuilder::from_expr(
+            args.next().unwrap(), err
+        )?;
+
+        // Tear symbols apart.
+        let left = if symbols.take("left") {
+            true
+        }
+        else if symbols.take("right") {
+            false
+        }
+        else {
+            err.add(symbols.pos(), "missing direction ':left' or ':right'");
+            return Err(Failed)
+        };
+        let anchor = match Anchor::from_symbols(&mut symbols) {
+            Some(anchor) => anchor,
+            None => {
+                err.add(symbols.pos(), "missing label anchor direction");
+                return Err(Failed)
+            }
+        };
+        let double = symbols.take("double");
+        let properties = label::PropertiesBuilder::from_symbols(&mut symbols);
+        symbols.check_exhausted(err)?;
+
+        // Get the positions for things.
+        let pos1 = position.sideways(
+            resolve_unit(
+                if left {
+                    if double { 1.0 } else { 0.8 }
+                } else {
+                    if double { -1.0 } else { -0.8 }
+                },
+                "dt"
+            ).unwrap()
+        );
+        let pos2 = position.sideways(
+            resolve_unit(if left { 3.0 } else { -3.0 }, "dt").unwrap()
+        );
+        let pos3 = {
+            use self::Anchor::*;
+
+            match anchor {
+                North | South => 3.0,
+                East | West => 3.5,
+                _ => 3.8,
+            }
+        };
+        let mut pos3 = position.sideways(
+            resolve_unit(if left { pos3 } else { -pos3 }, "dt").unwrap()
+        );
+        if let Some(shift) = shift {
+            pos3.shift_assign(shift)
+        }
+        let (halign, valign) = {
+            use self::Anchor::*;
+            use self::Align::*;
+
+            match anchor {
+                North => (Center, End),
+                NorthEast | East | SouthEast => (End, Center),
+                South => (Center, Start),
+                SouthWest | West | NorthWest => (Start, Center)
+            }
+        };
+
+        // Build the guide.
+        let mut trace = Trace::new();
+        trace.push_edge(1., 1., Edge::new(pos1, pos2));
+        features.insert(
+            Feature::Guide(GuideContour::new(
+                    properties.class().clone(), true, false, trace
+            )),
+            scope.params().detail(pos, err)?,
+            scope.params().layer(), 1,
+        );
+
+        // Build the label.
+        let (lprop, bprop) = label::LabelProperties::default_pair(true);
+        features.insert(
+            label::LayoutBuilder::hbox(
+                halign, valign, properties, vec![layout],
+            ).into_feature(lprop, pos3, false, bprop),
+            scope.params().detail(symbols.pos(), err)?,
+            scope.params().layer(), 1,
+        );
+        Ok(())
+    }),
+
+    // Draw a symbol onto the map.
+    //
+    // ```text
+    // marker(marker: symbol-set, position: position)
+    // ```
+    ("marker", &|pos, args, scope, features, err| {
+        let [class, position] = args.into_positionals(err)?;
+        let mut class = class.into_symbol_set(err)?;
+        let position = position.into_position(err)?.0;
+        match DotMarker::try_from_arg(&mut class, position.clone(), err)? {
+            Some(marker) => {
+                let layer_offset = marker.class().layer_offset();
+                features.insert(
+                    Feature::Dot(marker),
+                    scope.params().detail(pos, err)?,
+                    scope.params().layer() + layer_offset,
+                    1,
+                );
+            }
+            None => {
+                let marker = StandardMarker::from_arg(class, position, err)?;
+                let layer_offset = marker.class().layer_offset();
+                features.insert(
+                    Feature::Marker(marker),
+                    scope.params().detail(pos, err)?,
+                    scope.params().layer() - 0.3 + layer_offset,
+                    1,
+                );
+            }
+        }
         Ok(())
     }),
 

@@ -770,6 +770,27 @@ impl Position {
         Position::new(path, location, sideways, shift, rotation)
     }
 
+    pub fn shift_assign(&mut self, shift: (Distance, Distance)) {
+        if let Some(curr) = self.shift.as_mut() {
+            curr.0 += shift.0;
+            curr.1 += shift.1;
+        }
+        else {
+            self.shift = Some(shift)
+        }
+    }
+
+    pub fn sideways(&self, sideways: Distance) -> Self {
+        let mut res = self.clone();
+        if let Some(curr) = res.sideways {
+            res.sideways = Some(curr + sideways)
+        }
+        else {
+            res.sideways = Some(sideways)
+        }
+        res
+    }
+
     pub fn storage_bounds(&self) -> Rect {
         let p = self.path.segment_after(
             self.location.world

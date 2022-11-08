@@ -452,3 +452,68 @@ impl Align {
     }
 }
 
+
+//------------ Anchor --------------------------------------------------------
+
+/// The compas direction where to anchor a label.
+#[derive(Clone, Copy, Debug)]
+pub enum Anchor {
+    North,
+    NorthEast,
+    East,
+    SouthEast,
+    South,
+    SouthWest,
+    West,
+    NorthWest,
+}
+
+impl Anchor {
+    pub fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
+        if symbols.take("n") {
+            Some(Anchor::North)
+        }
+        else if symbols.take("ne") {
+            Some(Anchor::NorthEast)
+        }
+        else if symbols.take("e") {
+            Some(Anchor::East)
+        }
+        else if symbols.take("se") {
+            Some(Anchor::SouthEast)
+        }
+        else if symbols.take("s") {
+            Some(Anchor::South)
+        }
+        else if symbols.take("sw") {
+            Some(Anchor::SouthWest)
+        }
+        else if symbols.take("w") {
+            Some(Anchor::West)
+        }
+        else if symbols.take("nw") {
+            Some(Anchor::NorthWest)
+        }
+        else {
+            None
+        }
+    }
+
+    /// Converts the anchor into horizontal and vertical align.
+    pub fn into_align(self) -> (Align, Align) {
+        use self::Anchor::*;
+        use self::Align::*;
+
+        match self {
+            North => (Center, Start),
+            NorthEast => (End, Start),
+            East => (End, Center),
+            SouthEast => (End, End),
+            South => (Center, End),
+            SouthWest => (Start, End),
+            West => (Start, Center),
+            NorthWest => (Start, Start),
+        }
+    }
+}
+

@@ -28,6 +28,12 @@ pub struct GuideContour {
 }
 
 impl GuideContour {
+    pub fn new(
+        class: Class, linenum: bool, casing: bool, trace: Trace,
+    ) -> Self {
+        GuideContour { class, linenum, casing, trace }
+    }
+
     pub fn from_arg(
         arg: eval::Expression<Railwayhistory>,
         trace: Trace,

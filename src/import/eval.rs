@@ -192,6 +192,18 @@ impl<T: Theme> Expression<T> {
             }
         }
     }
+
+    pub fn into_vector(
+        self, err: &mut Error
+    ) -> Result<((Distance, Distance), ast::Pos), Failed> {
+        match self.value {
+            ExprVal::Vector(val) => Ok((val, self.pos)),
+            _ => {
+                err.add(self.pos, "expected a vector");
+                Err(Failed)
+            }
+        }
+    }
 }
 
 impl<T: Theme> Default for Expression<T> {
