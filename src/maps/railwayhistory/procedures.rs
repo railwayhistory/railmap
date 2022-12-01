@@ -187,10 +187,11 @@ const PROCEDURES: &[(
             }
         }).map_err(|_| Failed)?;
 
+        let four = args.len() > 3;
         let mut args = args.into_iter();
         let mut symbols = args.next().unwrap().into_symbol_set(err)?;
         let position = args.next().unwrap().into_position(err)?.0;
-        let shift = if args.len() > 3 {
+        let shift = if four {
             Some(args.next().unwrap().into_vector(err)?.0)
         }
         else {
@@ -256,9 +257,9 @@ const PROCEDURES: &[(
             use self::Align::*;
 
             match anchor {
-                North => (Center, End),
+                North => (Center, Start),
                 NorthEast | East | SouthEast => (End, Center),
-                South => (Center, Start),
+                South => (Center, End),
                 SouthWest | West | NorthWest => (Start, Center)
             }
         };
