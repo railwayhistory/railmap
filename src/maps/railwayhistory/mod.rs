@@ -3,6 +3,7 @@
 mod class;
 mod feature;
 mod functions;
+mod mapkey;
 mod procedures;
 mod style;
 mod theme;

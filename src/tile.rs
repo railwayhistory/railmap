@@ -195,6 +195,13 @@ impl TileFormat {
             TileFormat::Svg => 1.,
         }
     }
+
+    pub fn content_type(self) -> &'static str {
+        match self {
+            TileFormat::Png => "image/png",
+            TileFormat::Svg => "image/svg+xml",
+        }
+    }
 }
 
 impl FromStr for TileFormat {
@@ -221,7 +228,7 @@ impl fmt::Display for TileFormat {
 
 //------------ Surface -------------------------------------------------------
 
-enum Surface {
+pub enum Surface {
     Png(cairo::ImageSurface),
     Svg(cairo::SvgSurface)
 }
@@ -245,6 +252,28 @@ impl Surface {
         }
     }
 
+    pub fn new_map_key(format: TileFormat, size: Point) -> Self {
+        let size = Point::new(
+            size.x * format.canvas_bp(),
+            size.y * format.canvas_bp(),
+        );
+        match format {
+            TileFormat::Png => {
+                Surface::Png(cairo::ImageSurface::create(
+                    cairo::Format::ARgb32, size.x as i32, size.y as i32,
+                ).unwrap())
+            }
+            TileFormat::Svg => {
+                // We are assuming 192 dpi resolution at 512 px for now.
+                // (That’s .375 pt for each pixel, which means 192 pt for
+                // 512 px. I think.)
+                Surface::Svg(cairo::SvgSurface::for_stream(
+                    size.x, size.y, Vec::new()
+                ).unwrap())
+            }
+        }
+    }
+
     /*
     fn size(&self) -> f64 {
         match *self {
@@ -261,7 +290,7 @@ impl Surface {
     }
     */
 
-    fn finalize(self) -> Vec<u8> {
+    pub fn finalize(self) -> Vec<u8> {
         match self {
             Surface::Png(surface) => {
                 let mut data = Vec::new();

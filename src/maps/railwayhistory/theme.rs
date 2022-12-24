@@ -1,14 +1,16 @@
 
 use std::sync::Arc;
+use hyper::Body;
 use crate::config::Config;
 use crate::import::Failed;
 use crate::import::{ast, eval};
 use crate::render::feature::FeatureSet;
 use crate::render::path::Distance;
 use crate::theme;
-use crate::tile::TileId;
+use crate::tile::{TileId, TileFormat};
 use super::feature::Feature;
 use super::feature::label::Span;
+use super::mapkey::map_key;
 use super::style::{ColorSet, Style};
 
 
@@ -99,6 +101,17 @@ impl theme::Theme for Railwayhistory {
 
     fn index_page(&self) -> &'static [u8] {
         include_bytes!("../../../html/railwayhistory/index.html").as_ref()
+    }
+
+    fn map_key(
+        &self, zoom: u8,
+        style: <Self::Style as theme::Style>::StyleId,
+        format: TileFormat
+    ) -> Body {
+        map_key(
+            Style::new_map_key(zoom, style, format, self.colors.clone()),
+            format,
+        )
     }
 }
 

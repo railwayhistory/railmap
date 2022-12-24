@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::theme;
 use crate::render::color::Color;
 use crate::render::path::MapDistance;
-use crate::tile::TileId;
+use crate::tile::{TileId, TileFormat};
 use crate::transform::Transform;
 use super::class::{
     Category, Class, ElectricStatus, ElectricSystem, Pax, Status,
@@ -50,6 +50,13 @@ impl StyleId {
         match self {
             StyleId::Overview(_) => OVERVIEW_MAG[zoom as usize],
             StyleId::Detail(_) => DETAIL_MAG[zoom as usize],
+        }
+    }
+
+    pub fn palette(self) -> Palette {
+        match self {
+            StyleId::Overview(pal) => pal,
+            StyleId::Detail(pal) => pal,
         }
     }
 }
@@ -138,6 +145,35 @@ impl Style {
             dimensions,
             colors,
             transform: Transform::new( canvas_bp, id.nw(), scale),
+        }
+    }
+
+    pub fn new_map_key(
+        zoom: u8,
+        id: StyleId,
+        format: TileFormat,
+        colors: Arc<ColorSet>,
+    ) -> Self {
+        let canvas_bp = format.canvas_bp();
+        let detail = id.detail(zoom);
+        let mut dimensions = if detail < 3 {
+            Dimensions::D0
+        }
+        else if detail < 4 {
+            Dimensions::D3
+        }
+        else {
+            Dimensions::D4
+        };
+        dimensions *= canvas_bp;
+
+        Style {
+            id,
+            detail,
+            mag: 1.,
+            dimensions,
+            colors,
+            transform: Transform::new_map_key(canvas_bp)
         }
     }
 

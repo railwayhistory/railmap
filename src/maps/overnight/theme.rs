@@ -1,13 +1,14 @@
 
+use hyper::Body;
 use crate::import::Failed;
 use crate::import::{ast, eval};
 use crate::render::feature::FeatureSet;
 use crate::render::path::Distance;
 use crate::theme;
-use crate::tile::TileId;
+use crate::tile::{TileId, TileFormat};
 use super::feature::Feature;
 use super::feature::label::Span;
-use super::style::Style;
+use super::style::{Style, StyleId};
 
 
 //------------ Overnight -----------------------------------------------------
@@ -88,6 +89,14 @@ impl theme::Theme for Overnight {
 
     fn index_page(&self) -> &'static [u8] {
         include_bytes!("../../../html/railwayhistory/index.html").as_ref()
+    }
+
+    fn map_key(
+        &self, _zoom: u8,
+        _style: StyleId,
+        _format: TileFormat
+    ) -> Body {
+        Body::empty()
     }
 }
 

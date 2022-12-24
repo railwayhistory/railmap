@@ -2,13 +2,14 @@
 
 use std::hash::Hash;
 use std::str::FromStr;
+use hyper::Body;
 use crate::config::Config;
 use crate::import::{ast, eval};
 use crate::import::Failed;
 use crate::render::feature::{Feature, FeatureSet};
 use crate::render::label::Span;
 use crate::render::path::{Distance, MapDistance};
-use crate::tile::TileId;
+use crate::tile::{TileId, TileFormat};
 use crate::transform::Transform;
 
 
@@ -66,6 +67,12 @@ pub trait Theme: Sized + Clone + Send + Sync + 'static {
     ) -> Self::Style;
 
     fn index_page(&self) -> &'static [u8];
+
+    fn map_key(
+        &self, zoom: u8,
+        style: <Self::Style as Style>::StyleId,
+        format: TileFormat
+    ) -> Body;
 }
 
 

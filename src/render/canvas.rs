@@ -524,7 +524,7 @@ impl FontTable {
         const FIRA_NORMAL_COND: &str = "Fira Sans Condensed";
         const FIRA_BOLD_COND: &str = "Fira Sans Condensed";
         const FIRA_LIGHT_COND: &str = "Fira Sans Condensed Light";
-        const INTER_NORMAL: &str = "Noto Sans CJK JP";
+        const INTER_NORMAL: &str = "Source Sans Pro";
         const INTER_BOLD: &str = "Noto Sans CJK JP";
         const INTER_LIGHT: &str = "Noto Sans CJK JP";
         const INTER_NORMAL_COND: &str = "Noto Sans CJK JP";

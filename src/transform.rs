@@ -46,6 +46,14 @@ impl Transform {
         }
     }
 
+    pub fn new_map_key(canvas_bp: f64) -> Self {
+        Transform {
+            transform: Default::default(),
+            equator_scale: 1.,
+            canvas_bp
+        }
+    }
+
     pub fn transform(self) -> TranslateScale {
         self.transform
     }
