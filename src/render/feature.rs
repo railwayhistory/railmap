@@ -51,20 +51,23 @@ impl<T: Theme> FeatureSet<T> {
         let mut features = features.as_slice();
         while let Some(layer) = features.first().map(|item| item.layer) {
             let mut max_depth = 1;
-            let (now, next) = features.split_at(
-                features.partition_point(|item| {
+            let split = features.iter().enumerate().find_map(
+                |(idx, item)| {
                     if item.layer == layer {
                         if item.depth > max_depth {
                             max_depth = item.depth;
                         }
-                        true
+                        None
                     }
                     else {
-                        false
+                        Some(idx)
                     }
-                })
+                }
             );
-
+            let (now, next) = match split {
+                Some(split) => features.split_at(split),
+                None => (features, [].as_ref())
+            };
             for depth in (0..max_depth).rev() {
                 for feature in now {
                     feature.feature.render(style, canvas, depth)

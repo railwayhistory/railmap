@@ -501,16 +501,18 @@ const PROCEDURES: &[(
     // track(class: symbol-set, path: path)
     // ```
     ("track", &|pos, args, scope, features, err| {
-        let [class, trace] = args.into_positionals(err)?;
-        let class = TrackClass::from_arg(class, err)?;
-        //let is_tunnel = class.class().surface().is_tunnel();
+        let [class_symbols, trace] = args.into_positionals(err)?;
+        let mut class_symbols = class_symbols.into_symbol_set(err)?;
+        let class = TrackClass::from_symbols(&mut class_symbols);
+        let casing = class_symbols.take("casing");
+        class_symbols.check_exhausted(err)?;
         let layer_offset = class.class().layer_offset();
         let trace = trace.into_path(err)?.0;
         features.insert(
-            Feature::Track(TrackContour::new(class, trace)),
+            Feature::Track(TrackContour::new(class, casing, trace)),
             scope.params().detail(pos, err)?,
             scope.params().layer() - 0.1 + layer_offset,
-            1, //if is_tunnel { 2 } else { 1 },
+            if casing { 2 } else { 1 },
         );
         Ok(())
     }),

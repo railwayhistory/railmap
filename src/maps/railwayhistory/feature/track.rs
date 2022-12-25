@@ -93,19 +93,20 @@ impl TrackClass {
 /// The contour of the actual track.
 pub struct TrackContour {
     class: TrackClass,
+    casing: bool,
     trace: Trace,
 }
 
 impl TrackContour {
-    pub fn new(class: TrackClass, trace: Trace) -> Self {
-        TrackContour { class, trace }
+    pub fn new(class: TrackClass, casing: bool, trace: Trace) -> Self {
+        TrackContour { class, casing, trace }
     }
 
     pub fn storage_bounds(&self) -> Rect {
         self.trace.storage_bounds()
     }
 
-    pub fn render(&self, style: &Style, canvas: &Canvas, _depth: usize) {
+    pub fn render(&self, style: &Style, canvas: &Canvas, depth: usize) {
         /*
         if self.class.class().surface().is_tunnel() {
             if depth == 0 {
@@ -117,13 +118,30 @@ impl TrackContour {
         }
         */
 
-        match style.detail() {
-            0 => self.render_detail_0(style, canvas),
-            1 => self.render_detail_1(style, canvas),
-            2 => self.render_detail_2(style, canvas),
-            3 => self.render_detail_3(style, canvas),
-            _ => self.render_detail_full(style, canvas),
+        match depth {
+            1 =>  {
+                if self.casing {
+                    self.render_casing(style, canvas);
+                }
+            }
+            0 => {
+                match style.detail() {
+                    0 => self.render_detail_0(style, canvas),
+                    1 => self.render_detail_1(style, canvas),
+                    2 => self.render_detail_2(style, canvas),
+                    3 => self.render_detail_3(style, canvas),
+                    _ => self.render_detail_full(style, canvas),
+                }
+            }
+            _ => { }
         }
+    }
+
+    fn render_casing(&self, style: &Style, canvas: &Canvas) {
+        canvas.set_source_rgba(1., 1., 1., 0.7);
+        canvas.set_line_width(self.casing_width(style));
+        self.trace.apply(canvas, style);
+        canvas.stroke().unwrap();
     }
 
     fn render_detail_0(&self, style: &Style, canvas: &Canvas) {
@@ -551,6 +569,15 @@ impl TrackContour {
         canvas.stroke().unwrap();
     }
     */
+
+    fn casing_width(&self, style: &Style) -> f64 {
+        if self.class.double {
+            2.2 * style.dimensions().dt
+        }
+        else {
+            1.2 * style.dimensions().dt
+        }
+    }
 }
 
 
