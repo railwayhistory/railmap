@@ -154,12 +154,12 @@ impl TrackContour {
     fn render_detail_1(&self, style: &Style, canvas: &Canvas) {
         if self.class.double {
             canvas.set_line_width(
-                style.dimensions().line_width * 1.2
+                style.dimensions().line_width * 1.4
             );
         }
         else {
             canvas.set_line_width(
-                style.dimensions().line_width * 0.7
+                style.dimensions().line_width * 1.0
             );
         }
         style.track_color(&self.class.class).apply(canvas);

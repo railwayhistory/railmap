@@ -431,6 +431,7 @@ markers! {
             canvas.move_to(0., 0.5 * u.sh + u.sp);
             canvas.line_to(0., u.sh - 0.5 * u.sp);
             canvas.set_line_width(u.csp);
+            canvas.set_source_rgba(1., 1., 1., 0.7);
             stroke_round(canvas)
         }
     ),
@@ -663,6 +664,24 @@ markers! {
             canvas.set_line_width(u.sp);
             canvas.stroke()
          }
+    ),
+
+    ("de.hp.bft") => (
+        |canvas: &Canvas, u: Dimensions| {
+            stop(canvas, u)?;
+            chevron(canvas,
+                0.5 * u.sw - 0.5 * u.sp,
+                0.25 * u.sh + 0.5 * u.sp, 0.75 * u.sh - 0.5 * u.sp
+            );
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)?;
+            chevron(canvas,
+                0.5 * u.sw,
+                0.5 * u.sh, 1.0 * u.sh
+            );
+            canvas.close_path();
+            canvas.fill()
+        }
     ),
 
     ("de.hst") => (
@@ -933,9 +952,8 @@ fn station_casing(
     canvas.line_to(0.5 * u.sw + hsp, u.sh + hsp);
     canvas.line_to(0.5 * u.sw + hsp, 2.5 * u.sp - hsp);
     canvas.close_path();
-    canvas.set_operator(cairo::Operator::Clear);
+    canvas.set_source_rgba(1., 1., 1., 0.7);
     canvas.fill()?;
-    canvas.set_operator(cairo::Operator::Over);
     Ok(())
 }
 
