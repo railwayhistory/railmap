@@ -10,7 +10,7 @@ use super::canvas::Canvas;
 
 /// A color.
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
-#[serde(try_from = "&str")]
+#[serde(try_from = "String")]
 pub struct Color {
     red: f64,
     green: f64,
@@ -91,11 +91,11 @@ impl Color {
     pub const TRANSPARENT: Color = Color::rgba(0., 0., 0., 0.);
 }
 
-impl<'a> TryFrom<&'a str> for Color {
+impl TryFrom<String> for Color {
     type Error = InvalidHexColor;
 
-    fn try_from(src: &'a str) -> Result<Self, Self::Error> {
-        Self::hex(src)
+    fn try_from(src: String) -> Result<Self, Self::Error> {
+        Self::hex(&src)
     }
 }
 
