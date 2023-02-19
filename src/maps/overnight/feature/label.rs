@@ -536,13 +536,13 @@ impl TextSpan {
  
         // The font height may be bigger than ascent plus descent so we correct
         // the descent for this.
-        let top = -font.ascent;
-        let bottom = top + font.height;
+        let top = -font.ascent();
+        let bottom = top + font.height();
 
         // For the width, we use the text’s x_advance. This should consider the
         // intended width instead of the inked width.
         let left = 0.;
-        let right = text.x_advance;
+        let right = text.x_advance();
 
         (Rect::new(left, top, right, bottom), 2)
     }

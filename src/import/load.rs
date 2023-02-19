@@ -8,6 +8,8 @@ use super::features::FeatureSetError;
 use super::path::{PathSet, PathSetError};
 
 
+//------------ LoadFeatures --------------------------------------------------
+
 pub struct LoadFeatures<'a, T: Theme> {
     theme: &'a T,
     features: FeatureSet<T>,

@@ -10,7 +10,7 @@ pub const MM: f64 = 72./25.4;
 pub const PT: f64 = 1.;
 
 pub const DL: f64 = 0.66 * DT;
-pub const DT: f64 = 0.75 * MM;
+pub const DT: f64 = 1.00 * MM;
 pub const SW: f64 = 3.2 * DT;
 pub const SH: f64 = 3. * DT;
 pub const SSW: f64 = 1.6 * DT;

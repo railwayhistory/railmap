@@ -55,7 +55,7 @@ impl Statdot {
         let (point, angle) = self.position.resolve(style);
         let left = self.left.resolve(point, style);
         let right = self.right.resolve(point, style);
-        let dt = style.dimensions().dt;
+        let dt = 0.75 * style.dimensions().dt;
         canvas.translate(point.x, point.y);
         canvas.rotate(angle);
 

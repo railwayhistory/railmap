@@ -214,7 +214,7 @@ pub struct Dimensions {
 
 impl Dimensions {
     const D0: Self = Self {
-        line_width: 0.75 * units::DT,
+        line_width: 0.6 * units::DT,
         other_width: 0.5,
         guide_width: 0.3,
         seg: 5.0 * units::DT,

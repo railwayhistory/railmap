@@ -619,18 +619,18 @@ impl TextSpan {
         // If we are packed, we only consider the inked area, otherwise
         // use the font’s extents.
         let (top, bottom) = if self.properties.packed {
-            (text.y_bearing, text.y_bearing + text.height)
+            (text.y_bearing(), text.y_bearing() + text.height())
         }
         else {
             // The font height may be bigger than ascent plus descent so
             // we correct descent for this.
-            (-font.ascent, -font.ascent + font.height)
+            (-font.ascent(), -font.ascent() + font.height())
         };
 
         // For the width, we use the text’s x_advance. This should consider the
         // intended width instead of the inked width.
         let left = 0.;
-        let right = text.x_advance;
+        let right = text.x_advance();
 
         (
             Rect::new(left, top, right, bottom),

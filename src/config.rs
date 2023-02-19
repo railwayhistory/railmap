@@ -24,8 +24,10 @@ pub struct Config {
 
 impl Config {
     pub fn load(path: impl AsRef<Path>) -> Result<Self, io::Error> {
-        let data = fs::read(path.as_ref())?;
-        let mut data: Self = toml::from_slice(&data)?;
+        let data = fs::read_to_string(path.as_ref())?;
+        let mut data: Self = toml::from_str(&data).map_err(|err| {
+            io::Error::new(io::ErrorKind::Other, err)
+        })?;
         if let Some(path) = path.as_ref().parent() {
             data.prepare(path);
         }

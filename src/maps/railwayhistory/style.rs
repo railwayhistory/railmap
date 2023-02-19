@@ -206,6 +206,11 @@ impl Style {
         self.colors.color(self.palette(), class)
     }
 
+    /// Returns the color for the track underlay.
+    pub fn track_underlay_color(&self, class: &Class) -> Color {
+        self.colors.color(self.palette(), class)
+    }
+
     /// Returns the color for cat markings if they should be drawn.
     pub fn cat_color(&self, class: &Class) -> Option<Color> {
         self.colors.cat_color(self.palette(), class)

@@ -1,5 +1,6 @@
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::num::NonZeroUsize;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use hyper::{Body, Request, Response};
@@ -26,7 +27,9 @@ impl<T: Theme> Server<T> {
         Server {
             theme,
             features: Arc::new(features),
-            cache: Arc::new(Mutex::new(LruCache::new(10_000))),
+            cache: Arc::new(Mutex::new(
+                LruCache::new(NonZeroUsize::new(10_000).unwrap())
+            )),
         }
     }
 }
