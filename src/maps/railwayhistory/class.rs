@@ -440,8 +440,10 @@ impl ElectricCat {
     }
 
     const SYSTEMS: &'static [(&'static str, u16, ElectricSystem)] = &[
+        ("ac0k725", 725, Ac),
         ("ac6k6", 6600, Ac),
         ("ac15", 15000, Ac),
+        ("ac11", 11000, Ac),
         ("ac25", 25000, Ac),
         ("dc30", 3000, Dc),
         ("dc3", 3000, Dc), // XXX Temporary. Fix in data!
