@@ -187,7 +187,7 @@ markers! {
             stroke_round(canvas)
         },
         |canvas: &Canvas, u: Dimensions| {
-            chevron(canvas, 0.4 * u.sw, 0., u.sh);
+            chevron(canvas, 0.4 * u.sw, 0.5 * u.sp, u.sh);
             canvas.fill()
         }
     ),
@@ -318,9 +318,9 @@ markers! {
             stop_small(canvas, u)?;
 
             let hsp = 0.5 * u.sp;
-            canvas.move_to(-0.5 * u.sw + hsp, 0.);
+            canvas.move_to(-0.5 * u.sw + hsp, 1.75 * u.sp);
             canvas.line_to(-0.5 * u.sw + hsp, u.sh - hsp);
-            canvas.line_to(0.5 * u.sw, 0.);
+            canvas.line_to(0.5 * u.sw, 1.75 * u.sp);
             canvas.close_path();
             canvas.fill()
         }
@@ -867,13 +867,21 @@ markers! {
             canvas.fill()
         },
         |canvas: &Canvas, u: Dimensions| {
-            stop_small(canvas, u)?;
-            canvas.arc(
-                0., 0.5 * u.sh,
-                0.5 * (u.sh - 2.5 * u.sp),
-                0., 2. * PI,
-            );
-            canvas.fill()
+            stop_small(canvas, u)
+        }
+    ),
+
+    ("ltd-stop") => (
+        |canvas: &Canvas, u: Dimensions| {
+            let hsp = 0.5 * u.sp;
+            stop(canvas, u)?;
+            canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
+            canvas.line_to(0.5 * u.sw - hsp, u.sh - 0.5 * u.sp);
+            canvas.set_line_width(u.sp);
+            stroke_round(canvas)
+        },
+        |canvas: &Canvas, u: Dimensions| {
+            stop_small(canvas, u)
         }
     ),
 
@@ -937,9 +945,18 @@ markers! {
 fn station_small(
     canvas: &Canvas, u: Dimensions
 ) -> Result<(), cairo::Error> {
+    let hsp = 0.5 * u.sp;
+    canvas.move_to(-0.5 * u.sw, 1.75 * u.sp - hsp);
+    canvas.line_to(-0.5 * u.sw, u.sh);
+    canvas.line_to(0.5 * u.sw, u.sh);
+    canvas.line_to(0.5 * u.sw, 1.75 * u.sp - hsp);
+    canvas.close_path();
+
+    /*
     top_ds_rect(
         canvas, -0.5 * u.sw, 0.5 * u.sw, 0., u.sh, u.ds,
     );
+    */
     canvas.fill()
 }
 
@@ -960,6 +977,15 @@ fn station_casing(
 fn station_small_casing(
     canvas: &Canvas, u: Dimensions
 ) -> Result<(), cairo::Error> {
+    let hsp = 0.5 * u.sp;
+    canvas.move_to(-0.5 * u.sw, 1.75 * u.sp - hsp);
+    canvas.line_to(-0.5 * u.sw, u.sh);
+    canvas.line_to(0.5 * u.sw, u.sh);
+    canvas.line_to(0.5 * u.sw, 1.75 * u.sp - hsp);
+    canvas.close_path();
+    canvas.set_source_rgba(1., 1., 1., 0.7);
+    canvas.set_line_width(u.csp);
+    /*
     top_ds_rect(canvas,
         -0.5 * u.sw + 0.5 * u.sp,
         0.5 * u.sw - 0.5 * u.sp,
@@ -968,6 +994,7 @@ fn station_small_casing(
         u.ds,
     );
     canvas.set_line_width(u.csp);
+    */
     stroke_round(canvas)
 }
 
@@ -987,6 +1014,14 @@ fn stop(
 fn stop_small(
     canvas: &Canvas, u: Dimensions
 ) -> Result<(), cairo::Error> {
+    let hsp = 0.5 * u.sp;
+    canvas.move_to(-0.5 * u.sw + hsp, 1.75 * u.sp);
+    canvas.line_to(-0.5 * u.sw + hsp, u.sh - hsp);
+    canvas.line_to(0.5 * u.sw - hsp, u.sh - hsp);
+    canvas.line_to(0.5 * u.sw - hsp, 1.75 * u.sp);
+    canvas.close_path();
+
+    /*
     top_ds_rect(canvas,
         -0.5 * u.sw + 0.5 * u.sp,
         0.5 * u.sw - 0.5 * u.sp,
@@ -994,6 +1029,7 @@ fn stop_small(
         u.sh - 0.5 * u.sp,
         u.ds,
     );
+    */
     canvas.set_line_width(u.sp);
     stroke_round(canvas)
 }
