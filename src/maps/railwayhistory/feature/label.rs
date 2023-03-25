@@ -9,6 +9,7 @@ use crate::render::label::{Align, Label, Layout};
 use crate::render::path::{Distance, Position};
 use crate::import::eval;
 use crate::import::Failed;
+use crate::theme::Style as _;
 use super::super::class::{Class, Status};
 use super::super::style::Style;
 use super::super::theme::Railwayhistory;
@@ -471,7 +472,9 @@ impl Properties {
     }
 
     pub fn apply_font(&self, style: &Style, canvas: &Canvas) {
-        canvas.apply_font(self.face, self.size.size() * style.canvas_bp());
+        canvas.apply_font(
+            self.face, self.size.size(style) * style.canvas_bp()
+        );
     }
 
     pub fn apply_color(&self, style: &Style, canvas: &Canvas) {
@@ -493,16 +496,28 @@ pub enum FontSize {
 }
 
 impl FontSize {
-    pub fn size(self) -> f64 {
+    pub fn size(self, style: &Style) -> f64 {
         use self::FontSize::*;
 
-        match self {
-            Xsmall => 5.,
-            Small => 6.,
-            Medium => 7.,
-            Large => 9.,
-            Xlarge => 11.,
-            Badge => 5.6,
+        if style.detail() >= 3 {
+            match self {
+                Xsmall => 5.,
+                Small => 6.5,
+                Medium => 7.,
+                Large => 9.,
+                Xlarge => 11.,
+                Badge => 5.4,
+            }
+        }
+        else {
+            match self {
+                Xsmall => 5.,
+                Small => 6.,
+                Medium => 7.,
+                Large => 9.,
+                Xlarge => 11.,
+                Badge => 5.4,
+            }
         }
     }
 
@@ -648,7 +663,7 @@ impl TextSpan {
                 let join = canvas.line_join();
                 self.properties.apply_font(style, canvas);
                 Color::WHITE.apply(canvas);
-                canvas.set_line_width(self.properties.size.size());
+                canvas.set_line_width(self.properties.size.size(style));
                 canvas.set_line_cap(cairo::LineCap::Butt);
                 canvas.set_line_join(cairo::LineJoin::Bevel);
                 canvas.move_to(point.x, point.y);
