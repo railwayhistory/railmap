@@ -4,7 +4,7 @@ pub use self::server::Server;
 
 pub mod config;
 pub mod import;
-pub mod maps;
+pub mod map;
 pub mod render;
 pub mod server;
 pub mod tile;

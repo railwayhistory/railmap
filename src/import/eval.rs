@@ -3,8 +3,8 @@ use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::collections::HashMap;
 use std::str::FromStr;
+use femtomap::feature::FeatureSetBuilder;
 use crate::render::color::Color;
-use crate::render::feature::FeatureSet;
 use crate::render::path::{Distance, Edge, Position, Subpath, Trace};
 use crate::import::Failed;
 use crate::import::path::{ImportPath, PathSet};
@@ -363,7 +363,7 @@ impl<T: Theme> Partial<T> {
     fn eval_procedure(
         self, 
         scope: &mut Scope<T>,
-        features: &mut FeatureSet<T>,
+        features: &mut FeatureSetBuilder<T::Feature>,
         err: &mut Error
     ) -> Result<(), Failed> {
         match self.function.as_ref() {
@@ -684,7 +684,9 @@ impl ops::AddAssign for PositionOffset {
 
 impl ast::StatementList {
     pub fn eval_all<T: Theme>(
-        self, scope: &mut Scope<T>, features: &mut FeatureSet<T>
+        self,
+        scope: &mut Scope<T>,
+        features: &mut FeatureSetBuilder<T::Feature>
     ) -> Result<(), Error> {
         let mut err = Error::default();
         self.eval(scope, features, &mut err);
@@ -694,7 +696,7 @@ impl ast::StatementList {
     pub fn eval<T: Theme>(
         self,
         scope: &mut Scope<T>,
-        features: &mut FeatureSet<T>,
+        features: &mut FeatureSetBuilder<T::Feature>,
         err: &mut Error
     ) {
         for statement in self.statements {
@@ -707,7 +709,7 @@ impl ast::Statement {
     pub fn eval<T: Theme>(
         self,
         scope: &mut Scope<T>,
-        features: &mut FeatureSet<T>,
+        features: &mut FeatureSetBuilder<T::Feature>,
         err: &mut Error
     ) {
         match self {
@@ -741,7 +743,7 @@ impl ast::Procedure {
     fn eval<T: Theme>(
         self, 
         scope: &mut Scope<T>,
-        features: &mut FeatureSet<T>,
+        features: &mut FeatureSetBuilder<T::Feature>,
         err: &mut Error
     ) -> Result<(), Failed> {
         let args = self.args.eval(scope, err)?;
@@ -782,7 +784,7 @@ impl ast::With {
     pub fn eval<T: Theme>(
         self,
         scope: &mut Scope<T>,
-        features: &mut FeatureSet<T>,
+        features: &mut FeatureSetBuilder<T::Feature>,
         err: &mut Error
     ) {
         // We need our own scope.

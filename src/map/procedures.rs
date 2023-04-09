@@ -1,8 +1,8 @@
 //! All our procedures.
 
+use femtomap::feature::FeatureSetBuilder;
 use crate::import::{ast, eval};
 use crate::import::Failed;
-use crate::render::feature::FeatureSet;
 use crate::render::label::{Align, Anchor};
 use crate::render::path::{Edge, Position, Trace};
 use super::class::Class;
@@ -24,7 +24,7 @@ const PROCEDURES: &[(
         ast::Pos,
         eval::ArgumentList<Railwayhistory>,
         &eval::Scope<Railwayhistory>,
-        &mut FeatureSet<Railwayhistory>,
+        &mut FeatureSetBuilder<Feature>,
         &mut eval::Error
     ) -> Result<(), Failed>
 )] = &[
@@ -37,7 +37,7 @@ const PROCEDURES: &[(
         features.insert(
             Feature::Area(AreaContour::new(class, trace)),
             scope.params().detail(pos, err)?,
-            scope.params().layer(), 1,
+            scope.params().layer(),
         );
         Ok(())
     }),
@@ -57,7 +57,6 @@ const PROCEDURES: &[(
             ),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
-            1,
         );
         Ok(())
     }),
@@ -74,7 +73,6 @@ const PROCEDURES: &[(
             Feature::Border(BorderContour::from_arg(class, trace, err)?),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
-            1,
         );
         Ok(())
     }),
@@ -93,7 +91,6 @@ const PROCEDURES: &[(
             Feature::Casing(TrackCasing::new(class, trace)),
             scope.params().detail(pos, err)?,
             scope.params().layer() - 0.1 + layer_offset,
-            1,
         );
         Ok(())
     }),
@@ -109,7 +106,7 @@ const PROCEDURES: &[(
         features.insert(
             Feature::Guide(GuideContour::from_arg(class, trace, err)?),
             scope.params().detail(pos, err)?,
-            scope.params().layer(), 1,
+            scope.params().layer(),
         );
         Ok(())
     }),
@@ -128,7 +125,7 @@ const PROCEDURES: &[(
                 label_properties, position, false, properties.into()
             ),
             scope.params().detail(pos, err)?,
-            scope.params().layer(), 1,
+            scope.params().layer(),
         );
         Ok(())
     }),
@@ -152,7 +149,7 @@ const PROCEDURES: &[(
         features.insert(
             layout.into_feature(label_properties, position, true, properties),
             scope.params().detail(pos, err)?,
-            scope.params().layer(), 1,
+            scope.params().layer(),
         );
         Ok(())
     }),
@@ -272,7 +269,7 @@ const PROCEDURES: &[(
                     properties.class().clone(), true, false, trace
             )),
             scope.params().detail(pos, err)?,
-            scope.params().layer(), 1,
+            scope.params().layer(),
         );
 
         // Build the label.
@@ -282,7 +279,7 @@ const PROCEDURES: &[(
                 halign, valign, properties, vec![layout],
             ).into_feature(lprop, pos3, false, bprop),
             scope.params().detail(symbols.pos(), err)?,
-            scope.params().layer(), 1,
+            scope.params().layer(),
         );
         Ok(())
     }),
@@ -303,7 +300,6 @@ const PROCEDURES: &[(
                     Feature::Dot(marker),
                     scope.params().detail(pos, err)?,
                     scope.params().layer() + layer_offset,
-                    1,
                 );
             }
             None => {
@@ -313,7 +309,6 @@ const PROCEDURES: &[(
                     Feature::Marker(marker),
                     scope.params().detail(pos, err)?,
                     scope.params().layer() - 0.3 + layer_offset,
-                    1,
                 );
             }
         }
@@ -331,7 +326,6 @@ const PROCEDURES: &[(
             Feature::Platform(PlatformContour::new(class, trace)),
             scope.params().detail(pos, err)?,
             scope.params().layer() - 0.2 + layer_offset,
-            1,
         );
         Ok(())
     }),
@@ -379,7 +373,7 @@ const PROCEDURES: &[(
                 label::Properties::with_size(label::FontSize::Small),
             ),
             scope.params().detail(pos, err)?,
-            scope.params().layer(), 1,
+            scope.params().layer(),
         );
         Ok(())
     }),
@@ -399,7 +393,6 @@ const PROCEDURES: &[(
             Feature::Dot(marker),
             scope.params().detail(pos, err)?,
             scope.params().layer() + layer_offset,
-            1,
         );
         Ok(())
     }),
@@ -490,7 +483,7 @@ const PROCEDURES: &[(
                 Default::default(), position, false, properties,
             ),
             scope.params().detail(symbols.pos(), err)?,
-            scope.params().layer(), 1,
+            scope.params().layer(),
         );
         Ok(())
     }),
@@ -512,7 +505,6 @@ const PROCEDURES: &[(
             Feature::Track(TrackContour::new(class, casing, trace)),
             scope.params().detail(pos, err)?,
             scope.params().layer() - 0.1 + layer_offset,
-            if casing { 2 } else { 1 },
         );
         Ok(())
     }),
@@ -542,7 +534,7 @@ impl Procedure {
         pos: ast::Pos,
         args: eval::ArgumentList<Railwayhistory>,
         scope: &eval::Scope<Railwayhistory>,
-        features: &mut FeatureSet<Railwayhistory>,
+        features: &mut FeatureSetBuilder<Feature>,
         err: &mut eval::Error,
     ) -> Result<(), Failed> {
         (*PROCEDURES[self.0].1)(pos, args, scope, features, err)

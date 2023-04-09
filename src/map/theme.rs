@@ -1,10 +1,11 @@
 
 use std::sync::Arc;
+use femtomap::feature::FeatureSetBuilder;
 use hyper::Body;
 use crate::config::Config;
 use crate::import::Failed;
 use crate::import::{ast, eval};
-use crate::render::feature::FeatureSet;
+use crate::render::canvas::Canvas;
 use crate::render::path::Distance;
 use crate::theme;
 use crate::tile::{TileId, TileFormat};
@@ -75,7 +76,7 @@ impl theme::Theme for Railwayhistory {
         pos: ast::Pos,
         args: eval::ArgumentList<Self>,
         scope: &eval::Scope<Self>,
-        features: &mut FeatureSet<Self>,
+        features: &mut FeatureSetBuilder<Self::Feature>,
         err: &mut eval::Error,
     ) -> Result<(), Failed> {
         procedure.eval(pos, args, scope, features, err)
@@ -100,7 +101,7 @@ impl theme::Theme for Railwayhistory {
     }
 
     fn index_page(&self) -> &'static [u8] {
-        include_bytes!("../../../html/railwayhistory/index.html").as_ref()
+        include_bytes!("../../html/railwayhistory/index.html").as_ref()
     }
 
     fn map_key(
@@ -113,6 +114,15 @@ impl theme::Theme for Railwayhistory {
             format,
         )
     }
+
+    fn render_shape<'a>(
+        &self,
+        shape: &<Self::Feature as femtomap::feature::Feature>::Shape<'a>,
+        style: &Self::Style,
+        canvas: &Canvas
+    ) {
+        shape.render(style, canvas);
+    }
 }
 
 
@@ -120,7 +130,7 @@ impl theme::Theme for Railwayhistory {
 
 #[derive(Clone, Debug, Default)]
 pub struct RenderParams {
-    detail: Option<(u8, u8)>,
+    detail: Option<(f64, f64)>,
     layer: f64,
     style: Option<ast::ShortString>,
 }
@@ -154,7 +164,7 @@ impl RenderParams {
         match value.value {
             eval::ExprVal::Number(val) => {
                 match val.into_u8() {
-                    Ok(val) => self.detail = Some((val, val)),
+                    Ok(val) => self.detail = Some((val as f64, val as f64)),
                     Err(_) => err.add(value.pos, "expected 8-bit integer"),
                 }
             }
@@ -165,11 +175,11 @@ impl RenderParams {
                 }
                 let mut val = val.into_iter();
                 let left = match val.next().unwrap().into_u8(err) {
-                    Ok(left) => left.0,
+                    Ok(left) => left.0 as f64,
                     Err(_) => return,
                 };
                 let right = match val.next().unwrap().into_u8(err) {
-                    Ok(right) => right.0,
+                    Ok(right) => right.0 as f64,
                     Err(_) => return,
                 };
                 self.detail = Some(if left < right {
@@ -216,7 +226,7 @@ impl RenderParams {
 
     pub fn detail(
         &self, pos: ast::Pos, err: &mut eval::Error
-    ) -> Result<(u8, u8), Failed> {
+    ) -> Result<(f64, f64), Failed> {
         match self.detail {
             Some(detail) => Ok(detail),
             None => {

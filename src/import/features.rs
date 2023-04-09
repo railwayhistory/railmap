@@ -1,7 +1,7 @@
 
 use std::{fmt, fs, io};
 use std::path::Path as FsPath;
-use crate::render::feature::FeatureSet;
+use femtomap::feature::FeatureSetBuilder;
 use crate::theme::Theme;
 use super::{ast, eval};
 use super::path::PathSet;
@@ -11,8 +11,8 @@ use super::eval::Scope;
 
 pub fn load<T: Theme>(
     theme: T, feature_dir: &FsPath, paths: &PathSet
-) -> Result<FeatureSet<T>, FeatureSetError> {
-    let mut features = FeatureSet::new();
+) -> Result<FeatureSetBuilder<T::Feature>, FeatureSetError> {
+    let mut features = FeatureSetBuilder::new();
     let mut err = FeatureSetError::default();
     
     load_dir::<T>(
@@ -26,7 +26,7 @@ pub fn load<T: Theme>(
 pub fn load_dir<T: Theme>(
     path: &FsPath,
     mut context: Scope<T>,
-    target: &mut FeatureSet<T>,
+    target: &mut FeatureSetBuilder<T::Feature>,
     err: &mut FeatureSetError,
 ) {
     // Before we do anything else, we run init.map if it is present on the
@@ -77,7 +77,7 @@ pub fn load_dir<T: Theme>(
 fn load_file<T: Theme>(
     path: &FsPath,
     scope: &mut Scope<T>,
-    target: &mut FeatureSet<T>,
+    target: &mut FeatureSetBuilder<T::Feature>,
     err: &mut FeatureSetError,
 ) {
     let data = match fs::read_to_string(path) {

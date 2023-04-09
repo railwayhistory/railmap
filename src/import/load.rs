@@ -1,7 +1,7 @@
 
 use std::fmt;
+use femtomap::feature::{FeatureSet, FeatureSetBuilder};
 use crate::config::Region;
-use crate::render::feature::FeatureSet;
 use crate::theme::Theme;
 use super::eval::Scope;
 use super::features::FeatureSetError;
@@ -12,7 +12,7 @@ use super::path::{PathSet, PathSetError};
 
 pub struct LoadFeatures<'a, T: Theme> {
     theme: &'a T,
-    features: FeatureSet<T>,
+    features: FeatureSetBuilder<T::Feature>,
     err: ImportError,
 }
 
@@ -44,9 +44,9 @@ impl<'a, T: Theme> LoadFeatures<'a, T> {
 
     pub fn finalize(
         self
-    ) -> Result<FeatureSet<T>, ImportError> {
+    ) -> Result<FeatureSet<T::Feature>, ImportError> {
         self.err.check()?;
-        Ok(self.features)
+        Ok(self.features.finalize())
     }
 }
 

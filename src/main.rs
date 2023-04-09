@@ -106,7 +106,7 @@ async fn main() {
         "railwayhistory" => {
             run(
                 config, matches,
-                railmap::maps::railwayhistory::Railwayhistory::default()
+                railmap::map::Railwayhistory::default()
             ).await
         }
         #[cfg(feature = "overnight")]

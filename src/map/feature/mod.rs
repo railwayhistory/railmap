@@ -6,10 +6,11 @@ pub mod label;
 pub mod markers;
 pub mod track;
 
-use kurbo::Rect;
+use femtomap::world;
 use crate::render::canvas::Canvas;
-use super::Railwayhistory;
+//use super::Railwayhistory;
 use super::style::Style;
+
 
 pub enum Feature {
     Area(area::AreaContour),
@@ -23,8 +24,27 @@ pub enum Feature {
     Track(track::TrackContour),
 }
 
-impl crate::render::feature::Feature<Railwayhistory> for Feature {
-    fn storage_bounds(&self) -> Rect {
+impl Feature {
+    pub fn render(&self, style: &Style, canvas: &Canvas) {
+        match self {
+            Feature::Area(value) => value.render(style, canvas),
+            Feature::Border(value) => value.render(style, canvas),
+            Feature::Casing(value) => value.render(style, canvas),
+            Feature::Dot(value) => value.render(style, canvas),
+            Feature::Guide(value) => value.render(style, canvas),
+            Feature::Label(value) => value.render(style, canvas),
+            Feature::Marker(value) => value.render(style, canvas),
+            Feature::Platform(value) => value.render(style, canvas),
+            Feature::Track(value) => value.render(style, canvas, 0),
+        }
+    }
+}
+
+impl femtomap::feature::Feature for Feature {
+    type Style = Style;
+    type Shape<'a> = &'a Self;
+
+    fn storage_bounds(&self) -> world::Rect {
         match self {
             Feature::Area(value) => value.storage_bounds(),
             Feature::Border(value) => value.storage_bounds(),
@@ -35,21 +55,11 @@ impl crate::render::feature::Feature<Railwayhistory> for Feature {
             Feature::Marker(value) => value.storage_bounds(),
             Feature::Platform(value) => value.storage_bounds(),
             Feature::Track(value) => value.storage_bounds(),
-        }
+        }.into()
     }
 
-    fn render(&self, style: &Style, canvas: &Canvas, depth: usize) {
-        match self {
-            Feature::Area(value) => value.render(style, canvas),
-            Feature::Border(value) => value.render(style, canvas),
-            Feature::Casing(value) => value.render(style, canvas),
-            Feature::Dot(value) => value.render(style, canvas),
-            Feature::Guide(value) => value.render(style, canvas),
-            Feature::Label(value) => value.render(style, canvas),
-            Feature::Marker(value) => value.render(style, canvas),
-            Feature::Platform(value) => value.render(style, canvas),
-            Feature::Track(value) => value.render(style, canvas, depth),
-        }
+    fn shape(&self, _: &Style) -> &Self {
+        self
     }
 }
 

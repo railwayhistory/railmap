@@ -3,10 +3,11 @@
 use std::hash::Hash;
 use std::str::FromStr;
 use hyper::Body;
+use femtomap::feature::{Feature, FeatureSetBuilder};
 use crate::config::Config;
 use crate::import::{ast, eval};
 use crate::import::Failed;
-use crate::render::feature::{Feature, FeatureSet};
+use crate::render::canvas::Canvas;
 use crate::render::label::Span;
 use crate::render::path::{Distance, MapDistance};
 use crate::tile::{TileId, TileFormat};
@@ -21,7 +22,7 @@ pub trait Theme: Sized + Clone + Send + Sync + 'static {
     type CustomExpr: Clone;
     type RenderParams: Default + Clone;
     type Style: Style;
-    type Feature: Feature<Self> + Send + Sync + 'static;
+    type Feature: Feature<Style = Self::Style> + Send + Sync + 'static;
     type Span: Span<Self>;
 
     fn config(&mut self, _config: &Config) { }
@@ -48,7 +49,7 @@ pub trait Theme: Sized + Clone + Send + Sync + 'static {
         pos: ast::Pos,
         args: eval::ArgumentList<Self>,
         scope: &eval::Scope<Self>,
-        features: &mut FeatureSet<Self>,
+        features: &mut FeatureSetBuilder<Self::Feature>,
         err: &mut eval::Error,
     ) -> Result<(), Failed>;
 
@@ -73,6 +74,13 @@ pub trait Theme: Sized + Clone + Send + Sync + 'static {
         style: <Self::Style as Style>::StyleId,
         format: TileFormat
     ) -> Body;
+
+    fn render_shape<'a>(
+        &self,
+        shape: &<Self::Feature as Feature>::Shape<'a>,
+        style: &Self::Style,
+        canvas: &Canvas
+    );
 }
 
 

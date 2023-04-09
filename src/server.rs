@@ -3,18 +3,18 @@ use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+use femtomap::feature::FeatureSet;
 use hyper::{Body, Request, Response};
 use hyper::body::Bytes;
 use hyper::service::{make_service_fn, service_fn};
 use lru::LruCache;
-use crate::render::feature::FeatureSet;
 use crate::tile::{Tile, TileId, TileFormat};
 use crate::theme::{Style, Theme};
 
 
 pub struct Server<T: Theme> {
     theme: T,
-    features: Arc<FeatureSet<T>>,
+    features: Arc<FeatureSet<T::Feature>>,
     cache: Arc<Mutex<LruCache<TileId<<T::Style as Style>::StyleId>, Bytes>>>,
 }
 
@@ -22,7 +22,7 @@ pub struct Server<T: Theme> {
 impl<T: Theme> Server<T> {
     pub fn new(
         theme: T,
-        features: FeatureSet<T>,
+        features: FeatureSet<T::Feature>,
     ) -> Self {
         Server {
             theme,
