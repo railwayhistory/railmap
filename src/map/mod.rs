@@ -1,5 +1,3 @@
-#![cfg(feature = "railwayhistory")]
-
 mod class;
 mod feature;
 mod functions;
