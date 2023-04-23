@@ -4,16 +4,17 @@
 //! class, style, and detail level.
 
 use kurbo::Rect;
+use femtomap::path::Trace;
+use femtomap::render::canvas;
+use femtomap::render::canvas::Canvas;
 use crate::import::eval;
 use crate::import::Failed;
 use crate::import::eval::{Expression, SymbolSet};
-use crate::render::canvas::Canvas;
-//use crate::render::color::Color;
-use crate::render::path::Trace;
 use crate::theme::Style as _;
 use super::super::class::{Category, Class, Gauge/*, GaugeGroup*/};
 use super::super::style::Style;
 use super::super::theme::Railwayhistory;
+use super::Shape;
 
 
 //------------ TrackClass ----------------------------------------------------
@@ -106,7 +107,15 @@ impl TrackContour {
         self.trace.storage_bounds()
     }
 
-    pub fn render(&self, style: &Style, canvas: &Canvas, depth: usize) {
+    pub fn shape(
+        &self, _style: &Style, _canvas: &canvas::Canvas
+    ) -> Box<dyn Shape + '_> {
+        Box::new(|style: &Style, canvas: canvas::Group| {
+            self.render(style, canvas)
+        })
+    }
+
+    fn render(&self, style: &Style, canvas: canvas::Group) {
         /*
         if self.class.class().surface().is_tunnel() {
             if depth == 0 {
@@ -116,7 +125,6 @@ impl TrackContour {
                 return;
             }
         }
-        */
 
         match depth {
             1 =>  {
@@ -125,86 +133,85 @@ impl TrackContour {
                 }
             }
             0 => {
+            */
                 match style.detail() {
                     0 => self.render_detail_0(style, canvas),
                     1 => self.render_detail_1(style, canvas),
                     2 => self.render_detail_2(style, canvas),
-                    3 => self.render_detail_3(style, canvas),
                     _ => self.render_detail_full(style, canvas),
                 }
+            /*
             }
             _ => { }
         }
+        */
     }
 
+    /*
     fn render_casing(&self, style: &Style, canvas: &Canvas) {
         canvas.set_source_rgba(1., 1., 1., 0.7);
         canvas.set_line_width(self.casing_width(style));
         self.trace.apply(canvas, style);
         canvas.stroke().unwrap();
     }
+    */
 
-    fn render_detail_0(&self, style: &Style, canvas: &Canvas) {
-        canvas.set_line_width(style.dimensions().line_width);
-        style.track_color(&self.class.class).apply(canvas);
-        self.trace.apply(canvas, style);
-        canvas.stroke().unwrap();
+    fn render_detail_0(&self, style: &Style, mut canvas: canvas::Group) {
+        canvas.apply_line_width(style.dimensions().line_width);
+        canvas.apply(style.track_color(&self.class.class));
+        self.trace.apply(&mut canvas, style);
+        canvas.stroke()
     }
 
-    fn render_detail_1(&self, style: &Style, canvas: &Canvas) {
+    fn render_detail_1(&self, style: &Style, mut canvas: canvas::Group) {
         if self.class.double {
-            canvas.set_line_width(
+            canvas.apply_line_width(
                 style.dimensions().line_width * 1.4
             );
         }
         else {
-            canvas.set_line_width(
+            canvas.apply_line_width(
                 style.dimensions().line_width * 1.0
             );
         }
-        style.track_color(&self.class.class).apply(canvas);
-        self.trace.apply(canvas, style);
-        canvas.stroke().unwrap();
+        canvas.apply(style.track_color(&self.class.class));
+        self.trace.apply(&mut canvas, style);
+        canvas.stroke()
     }
 
-    fn render_detail_2(&self, style: &Style, canvas: &Canvas) {
+    fn render_detail_2(&self, style: &Style, mut canvas: canvas::Group) {
         let units = style.dimensions();
         if self.class.class.category().is_main()
             || self.class.class.category().is_tram()
         {
             if self.class.double {
-                canvas.set_line_width(2.0 * units.line_width);
+                canvas.apply_line_width(2.0 * units.line_width);
             }
             else {
-                canvas.set_line_width(units.line_width);
+                canvas.apply_line_width(units.line_width);
             }
         }
         else {
-            canvas.set_line_width(units.other_width);
+            canvas.apply_line_width(units.other_width);
         }
         if self.class.combined {
-            canvas.set_dash(
-                &[0.5 * units.seg, 0.5 * units.seg],
+            canvas.apply(canvas::DashPattern::new(
+                [0.5 * units.seg, 0.5 * units.seg],
                 0.25 * units.seg
-            );
+            ))
         }
         else if self.class.class.status().is_project() {
-            canvas.set_dash(
-                &[0.7 * units.seg, 0.3 * units.seg],
+            canvas.apply(canvas::DashPattern::new(
+                [0.7 * units.seg, 0.3 * units.seg],
                 0.15 * units.seg
-            );
+            ))
         }
-        style.track_color(&self.class.class).apply(canvas);
-        self.trace.apply(canvas, style);
-        canvas.stroke().unwrap();
-        canvas.set_dash(&[], 0.);
+        canvas.apply(style.track_color(&self.class.class));
+        self.trace.apply(&mut canvas, style);
+        canvas.stroke()
     }
 
-    fn render_detail_3(&self, style: &Style, canvas: &Canvas) {
-        self.render_detail_full(style, canvas)
-    }
-
-    fn render_detail_full(&self, style: &Style, canvas: &Canvas) {
+    fn render_detail_full(&self, style: &Style, canvas: canvas::Group) {
         if self.class.double {
             self.render_full_double(style, canvas);
         }
@@ -213,26 +220,30 @@ impl TrackContour {
         }
     }
 
-    fn render_full_single(&self, style: &Style, canvas: &Canvas) {
-        self.render_full_electric(true, style, canvas);
+    fn render_full_single(&self, style: &Style, mut canvas: canvas::Group) {
+        self.render_full_electric(true, style, canvas.start());
+        /*
         if self.class.has_property() {
             self.render_full_property(true, style, canvas);
         }
-        self.render_full_base(None, style, canvas);
+        */
+        self.render_full_base(None, style, canvas.start());
     }
 
-    fn render_full_double(&self, style: &Style, canvas: &Canvas) {
-        self.render_full_electric(false, style, canvas);
+    fn render_full_double(&self, style: &Style, mut canvas: canvas::Group) {
+        self.render_full_electric(false, style, canvas.start());
+        /*
         if self.class.has_property() {
             self.render_full_property(false, style, canvas);
         }
+        */
         let offset = style.dimensions().dt * 0.5;
-        self.render_full_base(Some(offset), style, canvas);
-        self.render_full_base(Some(-offset), style, canvas);
+        self.render_full_base(Some(offset), style, canvas.start());
+        self.render_full_base(Some(-offset), style, canvas.start());
     }
 
     fn render_full_electric(
-        &self, single: bool, style: &Style, canvas: &Canvas
+        &self, single: bool, style: &Style, mut canvas: canvas::Group
     ) {
         if self.class.station {
             return
@@ -254,29 +265,29 @@ impl TrackContour {
                 self.class.maybe_flip(
                     0.5 * style.dimensions().mark(self.class.tight)
                 ),
-                canvas,
+                &mut canvas,
                 style,
             );
-            canvas.set_line_width(
+            canvas.apply_line_width(
                 style.dimensions().mark(self.class.tight)
             );
         }
         else {
-            self.trace.apply(canvas, style);
-            canvas.set_line_width(
+            self.trace.apply(&mut canvas, style);
+            canvas.apply_line_width(
                 style.dimensions().dt
             );
         }
 
         if let Some(cat_color) = cat_color {
-            cat_color.apply(canvas);
+            canvas.apply(cat_color);
             if rail_color.is_none() {
                 // We only have cat. This means one stroke in the center of
                 // the seg.
-                canvas.set_dash(
-                    &[stroke, seg - stroke],
+                canvas.apply(canvas::DashPattern::new(
+                    [stroke, seg - stroke],
                     0.5 * (seg - stroke)
-                );
+                ));
                 /*
                 // We only have cat. This means we have to draw 0.3seg in
                 // the center of each seg.
@@ -285,15 +296,15 @@ impl TrackContour {
                     0.45 * seg
                 );
                 */
-                canvas.stroke().unwrap();
+                canvas.stroke()
             }
             else {
                 // There also is rail. This means one stroke one third into
                 // the seg.
-                canvas.set_dash(
-                    &[stroke, seg - stroke],
+                canvas.apply(canvas::DashPattern::new(
+                    [stroke, seg - stroke],
                     (1./3.) * (seg - stroke)
-                );
+                ));
                 /*
                 // There also is rail. Which means we have to draw 0.3seg in
                 // the center of the first half of each double seg.
@@ -302,23 +313,23 @@ impl TrackContour {
                     0.45 * seg
                 );
                 */
-                canvas.stroke_preserve().unwrap();
+                canvas.stroke();
             }
         }
 
         if let Some(rail_color) = rail_color {
-            rail_color.apply(canvas);
+            canvas.apply(rail_color);
             if cat_color.is_none() {
                 // We only have third rail. This means we have two strokes
                 // around the center of the seg. The strokes are 1 stroke wide
                 // and 1.5 strokes apart.
-                canvas.set_dash(
-                    &[
+                canvas.apply(canvas::DashPattern::new(
+                    [
                         stroke, stroke, stroke,
                         seg - 3. * stroke
                     ],
                     0.5 * (seg - 3. * stroke)
-                );
+                ));
                 /*
                 // We only have third rail. This means we have to draw a
                 // 0.3seg made from one 0.05seg and one 0.2seg segment in
@@ -332,13 +343,13 @@ impl TrackContour {
             else {
                 // We have both cat and rail. This means our two strokes
                 // around around the second third of the seg.
-                canvas.set_dash(
-                    &[
+                canvas.apply(canvas::DashPattern::new(
+                    [
                         stroke, stroke, stroke,
                         seg - 3. * stroke
                     ],
                     (2./3.) * (seg - 3. * stroke)
-                );
+                ));
                 /*
                 // We have both cat and rail. This means our bit goes in
                 // the center of the second half of the double seg.
@@ -348,15 +359,15 @@ impl TrackContour {
                 );
                 */
             }
-            canvas.stroke().unwrap();
+            canvas.stroke()
         }
 
     }
 
+    /*
     fn render_full_property(
         &self, _single: bool, _style: &Style, _canvas: &Canvas
     ) {
-        /*
         if self.class.station {
             return
         }
@@ -491,21 +502,21 @@ impl TrackContour {
             canvas.stroke().unwrap();
             canvas.set_line_cap(cairo::LineCap::Butt);
         }
-        */
     }
+    */
 
     fn render_full_base(
         &self,
         offset: Option<f64>,
-        style: &Style, canvas: &Canvas
+        style: &Style, mut canvas: canvas::Group,
     ) {
         if let Some(offset) = offset {
-            self.trace.apply_offset(offset, canvas, style);
+            self.trace.apply_offset(offset, &mut canvas, style);
         }
         else {
-            self.trace.apply(canvas, style);
+            self.trace.apply(&mut canvas, style);
         }
-        canvas.set_line_width(
+        canvas.apply_line_width(
             if self.class.class.category().is_main() {
                 style.dimensions().line_width
             }
@@ -513,25 +524,20 @@ impl TrackContour {
                 style.dimensions().other_width
             }
         );
-        style.track_color(&self.class.class).apply(canvas);
+        canvas.apply(style.track_color(&self.class.class));
         if self.class.combined {
             let seg = style.dimensions().seg;
-            canvas.set_dash(&[0.5 * seg, 0.5 * seg], 0.25 * seg);
+            canvas.apply(canvas::DashPattern::new(
+                    [0.5 * seg, 0.5 * seg], 0.25 * seg
+            ));
         }
         else if self.class.class.status().is_project() {
             let seg = style.dimensions().seg;
-            canvas.set_dash(&[0.7 * seg, 0.3 * seg], 0.7 * seg);
+            canvas.apply(canvas::DashPattern::new(
+                [0.7 * seg, 0.3 * seg], 0.7 * seg
+            ));
         }
-        else {
-            canvas.set_dash(&[], 0.);
-        }
-        if let Some(offset) = offset {
-            self.trace.apply_offset(offset, canvas, style);
-        }
-        else {
-            self.trace.apply(canvas, style);
-        }
-        canvas.stroke().unwrap();
+        canvas.stroke()
     }
 
     /*
@@ -568,7 +574,6 @@ impl TrackContour {
         Color::WHITE.apply(canvas);
         canvas.stroke().unwrap();
     }
-    */
 
     fn casing_width(&self, style: &Style) -> f64 {
         if self.class.double {
@@ -578,6 +583,7 @@ impl TrackContour {
             1.2 * style.dimensions().dt
         }
     }
+    */
 }
 
 
@@ -598,11 +604,15 @@ impl TrackCasing {
         self.trace.storage_bounds()
     }
 
-    pub fn render(&self, style: &Style, canvas: &Canvas) {
-        canvas.set_source_rgba(1., 1., 1., 0.7);
-        canvas.set_line_width(self.line_width(style));
-        self.trace.apply(canvas, style);
-        canvas.stroke().unwrap();
+    pub fn shape(
+        &self, _style: &Style, _canvas: &canvas::Canvas
+    ) -> Box<dyn Shape + '_> {
+        Box::new(|style: &Style, mut canvas: canvas::Group| {
+            canvas.apply(canvas::Color::rgba(1., 1., 1., 0.7));
+            canvas.apply_line_width(self.line_width(style));
+            self.trace.apply(&mut canvas, style);
+            canvas.stroke();
+        })
     }
 
     fn line_width(&self, style: &Style) -> f64 {

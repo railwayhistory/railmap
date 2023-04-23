@@ -50,64 +50,27 @@ impl Class {
         }
     }
 
-    pub fn update(&self, class: &Class) -> Class {
-        Class {
-            category: {
-                if let Some(category) = class.category {
-                    Some(category)
-                }
-                else {
-                    self.category
-                }
-            },
-            status: {
-                if let Some(status) = class.status {
-                    Some(status)
-                }
-                else {
-                    self.status
-                }
-            },
-            surface: {
-                if let Some(surface) = class.surface {
-                    Some(surface)
-                }
-                else {
-                    self.surface
-                }
-            },
-            cat: {
-                if let Some(cat) = class.cat {
-                    Some(cat)
-                }
-                else {
-                    self.cat
-                }
-            },
-            rail: {
-                if let Some(rail) = class.rail {
-                    Some(rail)
-                }
-                else {
-                    self.rail
-                }
-            },
-            speed: {
-                if let Some(speed) = class.speed {
-                    Some(speed)
-                }
-                else {
-                    self.speed
-                }
-            },
-            pax: {
-                if let Some(pax) = class.pax {
-                    Some(pax)
-                }
-                else {
-                    self.pax
-                }
-            }
+    pub fn update(&mut self, class: &Class) {
+        if self.category.is_none() {
+            self.category = class.category
+        }
+        if self.status.is_none() {
+            self.status = class.status
+        }
+        if self.surface.is_none() {
+            self.surface = class.surface
+        }
+        if self.cat.is_none() {
+            self.cat = class.cat
+        }
+        if self.rail.is_none() {
+            self.rail = class.rail
+        }
+        if self.speed.is_none() {
+            self.speed = class.speed
+        }
+        if self.pax.is_none() {
+            self.pax = class.pax
         }
     }
 

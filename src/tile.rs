@@ -1,8 +1,8 @@
 use std::{fmt, ops};
 use std::str::FromStr;
 use femtomap::feature::FeatureSet;
+use femtomap::render::Canvas;
 use kurbo::{Point, Rect};
-use crate::render::canvas::Canvas;
 use crate::theme::{Style, Theme};
 
 /// The maximum zoom level we support.
@@ -40,17 +40,24 @@ impl<'a, T: Theme> Tile<'a, T> {
         &mut self, surface: &Surface, features: &FeatureSet<T::Feature>,
     ) {
         let style = self.theme.style(&self.id);
-        let canvas = Canvas::new(surface);
+        let mut canvas = Canvas::new(surface);
         let size = self.id.format.size();
         canvas.set_clip(Rect::new(0., 0., size, size));
         let shapes = features.shape(
             style.detail() as f64,
             self.feature_bounds(&style).into(),
-            &style
+            &style, &canvas,
         );
-        shapes.iter().for_each(|shape| {
-            self.theme.render_shape(shape, &style, &canvas)
-        });
+
+        for group in shapes.layer_groups() {
+            for stage in T::Stage::default() {
+                group.iter().for_each(|shape| {
+                    self.theme.render_shape(
+                        shape.shape(), &stage, &style, canvas.start()
+                    )
+                });
+            }
+        }
     }
 
     fn feature_bounds(&self, style: &T::Style) -> Rect {

@@ -1,13 +1,14 @@
 //! Rendering dot markers.
 
 use std::f64::consts::PI;
-use kurbo::Rect;
+use femtomap::path::Position;
+use femtomap::render::canvas;
+use kurbo::{Circle, Rect, Point, Shape as _};
 use crate::import::eval;
 use crate::import::Failed;
-use crate::render::canvas::Canvas;
-use crate::render::path::Position;
 use super::super::class::Class;
 use super::super::style::Style;
+use super::Shape;
 
 
 //------------ DotMarker -----------------------------------------------------
@@ -88,38 +89,48 @@ impl DotMarker {
         self.position.storage_bounds()
     }
 
-    pub fn render(&self, style: &Style, canvas: &Canvas) {
+    pub fn shape(
+        &self, style: &Style, canvas: &canvas::Canvas
+    ) -> Box<dyn Shape + '_> {
+        Box::new(|style: &Style, canvas: canvas::Group| {
+            self.render(style, canvas)
+        })
+    }
+
+    pub fn render(&self, style: &Style, mut canvas: canvas::Group) {
         let (point, _) = self.position.resolve(style);
-        canvas.translate(point.x, point.y);
-        style.primary_marker_color(&self.class).apply(canvas);
+        canvas.apply(canvas::Matrix::identity().translate(point));
+
         let u = style.dimensions();
         let radius = self.size.radius() * style.dimensions().dt;
         let sp = style.dimensions().sp;
 
         if self.casing {
-            canvas.move_to(0., 0.);
-            canvas.arc(0., 0., radius, 0., 2.0 * PI);
-            canvas.set_line_width(3. * sp);
-            canvas.set_operator(cairo::Operator::Clear);
-            canvas.stroke().unwrap();
-            canvas.set_operator(cairo::Operator::Over);
+            canvas.apply_outline(
+                Circle::new((0., 0.), radius + 1.5 * sp).path_elements(0.1)
+            );
+            canvas.apply(canvas::Operator::DestinationOut);
+            canvas.fill();
+            canvas.apply(canvas::Operator::default());
         }
+
+        canvas.apply(style.primary_marker_color(&self.class));
         match self.inner {
             Inner::Fill => {
-                canvas.move_to(0., 0.);
-                canvas.arc(0., 0., radius, 0., 2.0 * PI);
-                canvas.fill().unwrap();
+                canvas.apply_outline(
+                    Circle::new((0., 0.), radius).path_elements(0.1)
+                );
+                canvas.fill();
             }
             Inner::Stroke => {
-                canvas.move_to(radius - 0.5 * sp, 0.);
-                canvas.arc(0., 0., radius - 0.5 * sp, 0., 2.0 * PI);
-                canvas.set_line_width(u.sp);
-                canvas.stroke().unwrap();
+                canvas.apply_outline(
+                    Circle::new((0., 0.), radius - 0.5 * sp).path_elements(0.1)
+                );
+                canvas.apply_line_width(u.sp);
+                canvas.stroke();
             }
             Inner::None => { }
         }
-
-        canvas.identity_matrix();
     }
 }
 

@@ -5,7 +5,6 @@ pub use self::server::Server;
 pub mod config;
 pub mod import;
 pub mod map;
-pub mod render;
 pub mod server;
 pub mod tile;
 pub mod theme;

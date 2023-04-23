@@ -2,14 +2,13 @@
 
 use std::hash::Hash;
 use std::str::FromStr;
-use hyper::Body;
+use femtomap::path::{Distance, MapDistance};
+use femtomap::render::canvas;
 use femtomap::feature::{Feature, FeatureSetBuilder};
+use hyper::Body;
 use crate::config::Config;
 use crate::import::{ast, eval};
 use crate::import::Failed;
-use crate::render::canvas::Canvas;
-use crate::render::label::Span;
-use crate::render::path::{Distance, MapDistance};
 use crate::tile::{TileId, TileFormat};
 use crate::transform::Transform;
 
@@ -23,7 +22,7 @@ pub trait Theme: Sized + Clone + Send + Sync + 'static {
     type RenderParams: Default + Clone;
     type Style: Style;
     type Feature: Feature<Style = Self::Style> + Send + Sync + 'static;
-    type Span: Span<Self>;
+    type Stage: IntoIterator<Item = Self::Stage> + Default;
 
     fn config(&mut self, _config: &Config) { }
 
@@ -78,15 +77,16 @@ pub trait Theme: Sized + Clone + Send + Sync + 'static {
     fn render_shape<'a>(
         &self,
         shape: &<Self::Feature as Feature>::Shape<'a>,
+        stage: &Self::Stage,
         style: &Self::Style,
-        canvas: &Canvas
+        canvas: canvas::Group,
     );
 }
 
 
 //------------ Style ---------------------------------------------------------
 
-pub trait Style {
+pub trait Style: femtomap::path::Style {
     type StyleId: Send + Sync + 'static + Clone + Hash + Eq + FromStr;
 
     /// Returns the a multiplier by which to grow the bounds.

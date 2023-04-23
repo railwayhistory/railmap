@@ -4,8 +4,8 @@ use std::convert::TryInto;
 use std::collections::HashMap;
 use std::str::FromStr;
 use femtomap::feature::FeatureSetBuilder;
-use crate::render::color::Color;
-use crate::render::path::{Distance, Edge, Position, Subpath, Trace};
+use femtomap::path::{Distance, Edge, Position, Subpath, Trace};
+use femtomap::render::pattern::Color;
 use crate::import::Failed;
 use crate::import::path::{ImportPath, PathSet};
 use crate::theme::Theme;
@@ -117,6 +117,19 @@ impl<T: Theme> Expression<T> {
     ) -> Result<(u8, ast::Pos), Failed> {
         let (val, pos) = self.into_number(err)?;
         match val.into_u8() {
+            Ok(val) => Ok((val, pos)),
+            Err(msg) => {
+                err.add(pos, msg);
+                Err(Failed)
+            }
+        }
+    }
+
+    pub fn into_i16(
+        self, err: &mut Error
+    ) -> Result<(i16, ast::Pos), Failed> {
+        let (val, pos) = self.into_number(err)?;
+        match val.into_i16() {
             Ok(val) => Ok((val, pos)),
             Err(msg) => {
                 err.add(pos, msg);
@@ -275,6 +288,17 @@ pub enum Number {
 
 impl Number {
     pub fn into_u8(self) -> Result<u8, String> {
+        match self {
+            Number::Int(val) => {
+                val.try_into().map_err(|_| "value out of range".into())
+            }
+            Number::Float(_) => {
+                Err("integer number expected".into())
+            }
+        }
+    }
+
+    pub fn into_i16(self) -> Result<i16, String> {
         match self {
             Number::Int(val) => {
                 val.try_into().map_err(|_| "value out of range".into())

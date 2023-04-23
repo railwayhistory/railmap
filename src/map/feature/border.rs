@@ -1,14 +1,16 @@
 //! Rendering of borders.
 
-use kurbo::Rect;
+use femtomap::path::Trace;
+use femtomap::render::canvas;
+use femtomap::render::canvas::DashPattern;
+use femtomap::render::pattern::Color;
+use kurbo::{BezPath, Rect};
 use crate::import::Failed;
 use crate::import::eval;
-use crate::render::canvas::Canvas;
-use crate::render::color::Color;
-use crate::render::path::Trace;
 use crate::theme::Style as _;
 use super::super::style::Style;
 use super::super::theme::Railwayhistory;
+use super::Shape;
 
 //------------ Configuration -------------------------------------------------
 
@@ -87,47 +89,59 @@ impl BorderContour {
         self.trace.storage_bounds()
     }
 
-    pub fn render(&self, style: &Style, canvas: &Canvas) {
+
+    pub fn shape(
+        &self, style: &Style, _canvas: &canvas::Canvas
+    ) -> Box<dyn Shape + '_> {
+        let outline = self.trace.outline(style);
         if style.detail() <= 2 {
-            self.render_low(style, canvas)
+            Box::new(move |style: &Style, canvas: canvas::Group| {
+                self.render_low(&outline, style, canvas)
+            })
         }
         else {
-            self.render_high(style, canvas)
+            Box::new(move |style: &Style, canvas: canvas::Group| {
+                self.render_high(&outline, style, canvas)
+            })
         }
+        
     }
 
-    fn render_low(&self, style: &Style, canvas: &Canvas) {
-        canvas.set_line_width(LOW_BORDER_WIDTH * style.canvas_bp());
+    fn render_low(
+        &self, outline: &BezPath, style: &Style, mut canvas: canvas::Group
+    ) {
+        canvas.apply_line_width(LOW_BORDER_WIDTH * style.canvas_bp());
         if self.former {
-            LOW_FORMER_BORDER_COLOR.apply(canvas);
+            canvas.apply(LOW_FORMER_BORDER_COLOR);
         }
         else {
-            LOW_BORDER_COLOR.apply(canvas);
+            canvas.apply(LOW_BORDER_COLOR);
         }
-        self.trace.apply(canvas, style);
-        canvas.stroke().unwrap();
+        canvas.apply(outline);
+        canvas.stroke()
     }
 
-    fn render_high(&self, style: &Style, canvas: &Canvas) {
-        self.category.apply_casing_width_high(style, canvas);
+    fn render_high(
+        &self, outline: &BezPath, style: &Style, mut canvas: canvas::Group
+    ) {
+        self.category.apply_casing_width_high(style, &mut canvas);
         if self.former {
-            FORMER_CASING_COLOR.apply(canvas);
+            canvas.apply(FORMER_CASING_COLOR);
         }
         else {
-            CASING_COLOR.apply(canvas);
+            canvas.apply(CASING_COLOR);
         }
-        self.trace.apply(canvas, style);
-        canvas.stroke_preserve().unwrap();
-        canvas.set_line_width(BORDER_WIDTH * style.canvas_bp());
+        canvas.apply(outline);
+        canvas.stroke();
+        canvas.apply_line_width(BORDER_WIDTH * style.canvas_bp());
         if self.former {
-            FORMER_BORDER_COLOR.apply(canvas);
+            canvas.apply(FORMER_BORDER_COLOR)
         }
         else {
-            BORDER_COLOR.apply(canvas);
+            canvas.apply(BORDER_COLOR);
         }
-        self.category.apply_dash_high(style, canvas);
-        canvas.stroke().unwrap();
-        canvas.set_dash(&[], 0.);
+        self.category.apply_dash_high(style, &mut canvas);
+        canvas.stroke()
     }
 }
 
@@ -158,38 +172,42 @@ impl Category {
         }
     }
 
-    fn apply_casing_width_high(self, style: &Style, canvas: &Canvas) {
+    fn apply_casing_width_high(
+        self, style: &Style, canvas: &mut canvas::Group
+    ) {
         match self {
             Category::National => {
-                canvas.set_line_width(CASING_WIDTH * style.canvas_bp());
+                canvas.apply_line_width(CASING_WIDTH * style.canvas_bp());
             }
             Category::State => {
-                canvas.set_line_width(0.5 * CASING_WIDTH * style.canvas_bp());
+                canvas.apply_line_width(0.5 * CASING_WIDTH * style.canvas_bp());
             }
         }
     }
 
-    fn apply_dash_high(self, style: &Style, canvas: &Canvas) {
+    fn apply_dash_high(
+        self, style: &Style, canvas: &mut canvas::Group
+    ) {
         match self {
             Category::National => {
-                canvas.set_dash(
-                    &[
+                canvas.apply(DashPattern::new(
+                    [
                         DASH_BASE * style.canvas_bp(),
                         0.4 * DASH_BASE * style.canvas_bp(),
                         0.1 * DASH_BASE * style.canvas_bp(),
                         0.4 * DASH_BASE * style.canvas_bp(),
                     ],
                     (DASH_BASE * 1.45 * DASH_BASE) * style.canvas_bp()
-                );
+                ));
             }
             Category::State => {
-                canvas.set_dash(
-                    &[
+                canvas.apply(DashPattern::new(
+                    [
                         DASH_BASE * style.canvas_bp(),
                         0.6 * DASH_BASE * style.canvas_bp(),
                     ],
                     (DASH_BASE * 0.3 * DASH_BASE) * style.canvas_bp()
-                );
+                ));
             }
         }
     }

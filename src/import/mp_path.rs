@@ -1,6 +1,6 @@
 use std::f64::consts::SQRT_2;
 use kurbo::Vec2;
-use crate::render::path::Path;
+use femtomap::path::Path;
 
 
 

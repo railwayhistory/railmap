@@ -6,12 +6,12 @@ use std::fs::File;
 use std::path::Path as FsPath;
 use std::str::FromStr;
 use std::sync::{Mutex};
+use femtomap::path::Path;
 use ignore::{WalkBuilder, WalkState};
 use ignore::types::TypesBuilder;
 use kurbo::Vec2;
 use osmxml::elements::{MemberType, Osm, Relation, Way};
 use osmxml::read::read_xml;
-use crate::render::path::Path;
 use super::mp_path;
 
 

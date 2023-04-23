@@ -4,9 +4,9 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::ops::MulAssign;
 use std::sync::Arc;
+use femtomap::path::MapDistance;
+use femtomap::render::pattern::Color;
 use crate::theme;
-use crate::render::color::Color;
-use crate::render::path::MapDistance;
 use crate::tile::{TileId, TileFormat};
 use crate::transform::Transform;
 use super::class::{
@@ -90,6 +90,17 @@ pub struct Style {
     transform: Transform,
 }
 
+impl Style {
+    pub fn detail(&self) -> u8 {
+        self.detail
+    }
+
+    pub fn resolve_distance(&self, distance: MapDistance) -> f64 {
+        distance.value()
+        * units::MAP_DISTANCES[distance.unit()].1[self.detail as usize]
+    }
+}
+
 impl theme::Style for Style {
     type StyleId = StyleId;
 
@@ -118,6 +129,18 @@ impl theme::Style for Style {
         self.transform
     }
 }
+
+impl femtomap::path::Style for Style {
+    fn resolve_distance(&self, distance: MapDistance) -> f64 {
+        distance.value()
+        * units::MAP_DISTANCES[distance.unit()].1[self.detail as usize]
+    }
+
+    fn transform(&self) -> Transform {
+        self.transform
+    }
+}
+
 
 impl Style {
     pub fn new(

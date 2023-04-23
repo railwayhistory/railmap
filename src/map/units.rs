@@ -1,6 +1,6 @@
 /// The units we understand.
 
-use crate::render::path::{Distance, MapDistance};
+use femtomap::path::{Distance, MapDistance};
 
 // Various canvas units in bp.
 pub const BP: f64 = 1.;

@@ -2,14 +2,16 @@
 //!
 //! Guides are thin lines attaching a label to something.
 
+use femtomap::path::Trace;
+use femtomap::render::canvas;
+use femtomap::render::canvas::Color;
 use kurbo::Rect;
 use crate::import::eval;
 use crate::import::Failed;
 use super::super::class::Class;
-use crate::render::canvas::Canvas;
-use crate::render::path::Trace;
 use super::super::style::Style;
 use super::super::theme::Railwayhistory;
+use super::Shape;
 
 //------------ GuideContour --------------------------------------------------
 
@@ -51,27 +53,31 @@ impl GuideContour {
         self.trace.storage_bounds()
     }
 
-    pub fn render(&self, style: &Style, canvas: &Canvas) {
-        let color = if self.linenum {
-            if !style.include_line_labels() {
-                return
+    pub fn shape(
+        &self, style: &Style, canvas: &canvas::Canvas
+    ) -> Box<dyn Shape + '_> {
+        Box::new(|style: &Style, mut canvas: canvas::Group| {
+            let color = if self.linenum {
+                if !style.include_line_labels() {
+                    return
+                }
+                style.label_color(&self.class)
             }
-            style.label_color(&self.class)
-        }
-        else {
-            style.track_color(&self.class)
-        };
-        self.trace.apply(canvas, style);
-        if self.casing {
-            canvas.set_line_width(
-                1.8 * style.dimensions().guide_width
-            );
-            canvas.set_source_rgba(1., 1., 1., 0.7);
-            canvas.stroke_preserve().unwrap();
-        }
-        canvas.set_line_width(style.dimensions().guide_width);
-        color.apply(canvas);
-        canvas.stroke().unwrap();
+            else {
+                style.track_color(&self.class)
+            };
+            self.trace.apply(&mut canvas, style);
+            if self.casing {
+                canvas.apply_line_width(
+                    1.8 * style.dimensions().guide_width
+                );
+                canvas.apply(Color::rgba(1., 1., 1., 0.7));
+                canvas.stroke();
+            }
+            canvas.apply_line_width(style.dimensions().guide_width);
+            canvas.apply(color);
+            canvas.stroke();
+        })
     }
 }
 

@@ -101,24 +101,5 @@ async fn main() {
         }
     };
 
-    match config.theme.as_str() {
-        #[cfg(feature = "railwayhistory")]
-        "railwayhistory" => {
-            run(
-                config, matches,
-                railmap::map::Railwayhistory::default()
-            ).await
-        }
-        #[cfg(feature = "overnight")]
-        "overnight" => {
-            run(
-                config, matches,
-                railmap::maps::overnight::Overnight
-            ).await
-        }
-        theme => {
-            eprintln!("Unknown theme '{}' in config.", theme);
-            std::process::exit(1)
-        }
-    }
+    run(config, matches, railmap::map::Railwayhistory::default()).await
 }

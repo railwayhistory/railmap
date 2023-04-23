@@ -1,16 +1,15 @@
 
 use std::sync::Arc;
+use femtomap::path::Distance;
 use femtomap::feature::FeatureSetBuilder;
+use femtomap::render::canvas;
 use hyper::Body;
 use crate::config::Config;
 use crate::import::Failed;
 use crate::import::{ast, eval};
-use crate::render::canvas::Canvas;
-use crate::render::path::Distance;
 use crate::theme;
 use crate::tile::{TileId, TileFormat};
-use super::feature::Feature;
-use super::feature::label::Span;
+use super::feature::{Feature, Stage};
 use super::mapkey::map_key;
 use super::style::{ColorSet, Style};
 
@@ -25,11 +24,11 @@ pub struct Railwayhistory {
 impl theme::Theme for Railwayhistory {
     type Function = super::functions::Function;
     type Procedure = super::procedures::Procedure;
-    type CustomExpr = super::feature::label::LayoutBuilder;
+    type CustomExpr = super::feature::label::Layout;
     type RenderParams = RenderParams;
     type Style = Style;
     type Feature = Feature;
-    type Span = Span;
+    type Stage = Stage;
 
     fn config(&mut self, config: &Config) {
         let mut colors = ColorSet::default();
@@ -118,10 +117,11 @@ impl theme::Theme for Railwayhistory {
     fn render_shape<'a>(
         &self,
         shape: &<Self::Feature as femtomap::feature::Feature>::Shape<'a>,
+        stage: &Self::Stage,
         style: &Self::Style,
-        canvas: &Canvas
+        canvas: canvas::Group,
     ) {
-        shape.render(style, canvas);
+        shape.render(*stage, style, canvas);
     }
 }
 
@@ -131,7 +131,7 @@ impl theme::Theme for Railwayhistory {
 #[derive(Clone, Debug, Default)]
 pub struct RenderParams {
     detail: Option<(f64, f64)>,
-    layer: f64,
+    layer: i16,
     style: Option<ast::ShortString>,
 }
 
@@ -198,11 +198,8 @@ impl RenderParams {
         value: eval::Expression<Railwayhistory>,
         err: &mut eval::Error
     ) {
-        match value.value {
-            eval::ExprVal::Number(val) => {
-                self.layer = val.into_f64();
-            }
-            _ => err.add(value.pos, "expected number"),
+        if let Ok(val) = value.into_i16(err) {
+            self.layer = val.0
         }
     }
 
@@ -236,7 +233,7 @@ impl RenderParams {
         }
     }
 
-    pub fn layer(&self) -> f64 {
+    pub fn layer(&self) -> i16 {
         self.layer
     }
 

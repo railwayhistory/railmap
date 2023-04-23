@@ -1,7 +1,6 @@
 use hyper::Body;
 use kurbo::Point;
-use crate::render::canvas::Canvas;
-use crate::theme::Style as _;
+use femtomap::render::canvas::Canvas;
 use crate::tile::{Surface, TileFormat};
 use super::style::Style;
 

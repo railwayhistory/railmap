@@ -1,8 +1,9 @@
 //! Rendering an area.
 
-use kurbo::Rect;
-use crate::render::canvas::Canvas;
-use crate::render::path::Trace;
+use femtomap::path::Trace;
+use femtomap::render::canvas;
+use kurbo::{BezPath,Rect};
+use super::Shape;
 use super::super::class::Class;
 use super::super::style::Style;
 
@@ -23,10 +24,17 @@ impl AreaContour {
         self.trace.storage_bounds()
     }
 
-    pub fn render(&self, style: &Style, canvas: &Canvas) {
-        style.track_color(&self.class).apply(canvas);
-        self.trace.apply(canvas, style);
-        canvas.fill().unwrap();
+    pub fn shape(
+        &self, style: &Style, _canvas: &canvas::Canvas
+    ) -> Box<dyn Shape> {
+        let color = style.track_color(&self.class);
+        let outline = self.trace.outline(style);
+
+        Box::new(move |_style: &Style, mut canvas: canvas::Group| {
+            canvas.apply(color);
+            canvas.apply(&outline);
+            canvas.fill();
+        })
     }
 }
 
@@ -48,10 +56,17 @@ impl PlatformContour {
         self.trace.storage_bounds()
     }
 
-    pub fn render(&self, style: &Style, canvas: &Canvas) {
-        self.trace.apply(canvas, style);
-        style.track_color(&self.class).apply(canvas);
-        canvas.fill().unwrap();
+    pub fn shape(
+        &self, style: &Style, _canvas: &canvas::Canvas
+    ) -> Box<dyn Shape> {
+        let color = style.track_color(&self.class);
+        let outline = self.trace.outline(style);
+
+        Box::new(move |_style: &Style, mut canvas: canvas::Group| {
+            canvas.apply(color);
+            canvas.apply(&outline);
+            canvas.fill();
+        })
     }
 }
 

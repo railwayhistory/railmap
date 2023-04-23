@@ -1,11 +1,9 @@
 /// The function we support during import.
 
+use femtomap::render::pattern::Color;
 use crate::import::Failed;
 use crate::import::eval;
 use crate::import::eval::ExprVal;
-use crate::render::color::Color;
-use crate::render::label::Align;
-use crate::render::path::{Distance, MapDistance};
 use super::feature::label;
 use super::theme::Railwayhistory;
 
@@ -37,14 +35,11 @@ const FUNCTIONS: &[(
     // hbar(width: unit-number)
     // ```
     ("hbar", &|args, _, err| {
-        let width =
+        let _width =
             args.into_sole_positional(err)?
             .into_number(err)?.0.into_f64();
 
-        Ok(label::LayoutBuilder::hrule(
-            Distance::new(None, vec![MapDistance::new(width, 0)]),
-            label::PropertiesBuilder::default()
-        ).into())
+        Ok(label::Layout::hrule(Default::default()).into())
     }),
 
     // Produces a horizontal box for a label layout.
@@ -66,21 +61,38 @@ const FUNCTIONS: &[(
         let mut args = args.into_iter();
 
         let mut align = args.next().unwrap().into_symbol_set(err)?;
-        let halign = Align::h_from_symbols(
-            &mut align
-        ).unwrap_or(Align::Start);
-        let valign = match Align::v_from_symbols(&mut align) {
+        let halign = match label::halign_from_symbols(&mut align) {
+            Some(align) => align,
+            None => {
+                err.add(align.pos(), "horizontal alignment required");
+                return Err(Err(Failed))
+            }
+        };
+        let valign = match label::valign_from_symbols(&mut align) {
             Some(align) => align,
             None => {
                 err.add(align.pos(), "vertical alignment required");
                 return Err(Err(Failed))
             }
         };
-        let properties = label::PropertiesBuilder::from_symbols(&mut align);
+        let properties = label::LayoutProperties::from_symbols(&mut align);
         align.check_exhausted(err)?;
-        Ok(label::LayoutBuilder::hbox(
+        Ok(label::Layout::hbox(
             halign, valign, properties,
-            label::StackBuilder::from_args(args, err)?,
+            label::layouts_from_args(args, err)?,
+        ).into())
+    }),
+
+    // Produces a horizontal rule.
+    //
+    // ```text
+    // hrule(style)
+    // ```
+    ("hrule", &|args, _, err| {
+        Ok(label::Layout::hrule(
+                label::LayoutProperties::from_arg(
+                    args.into_sole_positional(err)?, err
+                )?
         ).into())
     }),
 
@@ -170,9 +182,9 @@ const FUNCTIONS: &[(
     // ```
     ("span", &|args, _scope, err| {
         let [properties, text] = args.into_positionals(err)?;
-        let properties = label::PropertiesBuilder::from_arg(properties, err)?;
+        let properties = label::LayoutProperties::from_arg(properties, err)?;
         let text = text.into_text(err)?.0;
-        Ok(label::LayoutBuilder::span(text, properties).into())
+        Ok(label::Layout::span(text, properties).into())
     }),
 
     // Produces a vertical box for a label layout.
@@ -194,21 +206,38 @@ const FUNCTIONS: &[(
         let mut args = args.into_iter();
 
         let mut align = args.next().unwrap().into_symbol_set(err)?;
-        let halign = match Align::h_from_symbols(&mut align) {
+        let halign = match label::halign_from_symbols(&mut align) {
             Some(align) => align,
             None => {
                 err.add(align.pos(), "horizonal alignment required");
                 return Err(Err(Failed))
             }
         };
-        let valign = Align::v_from_symbols(
-            &mut align
-        ).unwrap_or(Align::Start);
-        let properties = label::PropertiesBuilder::from_symbols(&mut align);
+        let valign = match label::valign_from_symbols(&mut align) {
+            Some(align) => align,
+            None => {
+                err.add(align.pos(), "vertical alignment required");
+                return Err(Err(Failed))
+            }
+        };
+        let properties = label::LayoutProperties::from_symbols(&mut align);
         align.check_exhausted(err)?;
-        Ok(label::LayoutBuilder::vbox(
+        Ok(label::Layout::vbox(
             halign, valign, properties,
-            label::StackBuilder::from_args(args, err)?,
+            label::layouts_from_args(args, err)?,
+        ).into())
+    }),
+
+    // Produces a vertical rule.
+    //
+    // ```text
+    // vrule(style)
+    // ```
+    ("vrule", &|args, _, err| {
+        Ok(label::Layout::vrule(
+                label::LayoutProperties::from_arg(
+                    args.into_sole_positional(err)?, err
+                )?
         ).into())
     }),
 ];
