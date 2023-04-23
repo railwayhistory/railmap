@@ -6,7 +6,7 @@ use femtomap::path::{MapDistance, Position};
 use femtomap::render::canvas::{self, Canvas, Group};
 use femtomap::render::pattern::Color;
 use femtomap::render::text::{
-    Font, FontBuilder, FontFamily, FontStyle, FontWeight
+    Font, FontBuilder, FontFamily, FontFeatures, FontStyle, FontWeight
 };
 use kurbo::{Point, Rect, Vec2};
 use crate::import::eval;
@@ -19,10 +19,13 @@ use super::{Shape, Stage};
 
 //------------ Configuration -------------------------------------------------
 
-const SANS_FAMILY: FontFamily = FontFamily::from_static("Fira Sans Book");
+const SANS_FAMILY: FontFamily = FontFamily::from_static("FiraGO");
 const ROMAN_FAMILY: FontFamily = FontFamily::from_static(
-    "Source Serif SmText"
+    "Source Serif 4 SmText"
 );
+
+const SANS_FEATURES: FontFeatures = FontFeatures::from_static("tnum");
+const ROMAN_FEATURES: FontFeatures = FontFeatures::from_static("");
 
 
 //------------ Feature -------------------------------------------------------
@@ -242,7 +245,9 @@ pub struct LayoutProperties {
 impl LayoutProperties {
     fn base() -> Self {
         Self {
-            font: FontBuilder::new().family(SANS_FAMILY),
+            font: FontBuilder::new()
+                .family(SANS_FAMILY)
+                .features(SANS_FEATURES) ,
             .. Default::default()
         }
     }
@@ -281,10 +286,10 @@ impl LayoutProperties {
         // Family
         //
         if symbols.take("sans") {
-            res = res.family(SANS_FAMILY);
+            res = res.family(SANS_FAMILY).features(SANS_FEATURES);
         }
         else if symbols.take("roman") {
-            res = res.family(ROMAN_FAMILY);
+            res = res.family(ROMAN_FAMILY).features(ROMAN_FEATURES);
         }
 
         // Stretch
@@ -399,7 +404,7 @@ impl layout::Properties for LayoutProperties {
                 canvas.apply(canvas::LineJoin::Bevel);
                 canvas.apply(Color::WHITE);
                 canvas.apply_line_width(
-                    style.dimensions().sp * 2.0
+                    style.dimensions().sp * 5.
                 );
                 layout.stroke_text(base, canvas);
             }
@@ -413,6 +418,21 @@ impl layout::Properties for LayoutProperties {
                     layout.fill_frame(base, canvas);
                 }
             }
+            /*
+            Stage::Inside => {
+                // Draw boxes around boxes for debugging.
+                let mut outer = layout.outer(base);
+                canvas.apply(outer);
+                canvas.apply(Color::RED);
+                canvas.apply_line_width(0.6);
+                canvas.stroke();
+                outer.y0 = 0.;
+                outer.y1 = 0.;
+                canvas.apply(outer);
+                canvas.apply(Color::BLUE);
+                canvas.stroke();
+            }
+            */
             _ => { }
         }
     }
