@@ -3,7 +3,7 @@
 use std::{fs, io};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use femtomap::render::pattern::Color;
+use femtomap::render::Color;
 use serde::Deserialize;
 
 //------------ Config --------------------------------------------------------

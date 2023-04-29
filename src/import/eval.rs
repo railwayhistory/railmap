@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use femtomap::feature::FeatureSetBuilder;
 use femtomap::path::{Distance, Edge, Position, Subpath, Trace};
-use femtomap::render::pattern::Color;
+use femtomap::render::Color;
 use crate::import::Failed;
 use crate::import::path::{ImportPath, PathSet};
 use crate::theme::Theme;

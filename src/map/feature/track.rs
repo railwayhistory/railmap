@@ -3,10 +3,9 @@
 //! Track is a contour feature with complex rendering rules depending on the
 //! class, style, and detail level.
 
-use kurbo::Rect;
+use kurbo::{BezPath, Rect};
 use femtomap::path::Trace;
-use femtomap::render::canvas;
-use femtomap::render::canvas::Canvas;
+use femtomap::render::{Canvas, Color, DashPattern, Group, LineWidth, Outline};
 use crate::import::eval;
 use crate::import::Failed;
 use crate::import::eval::{Expression, SymbolSet};
@@ -14,7 +13,7 @@ use crate::theme::Style as _;
 use super::super::class::{Category, Class, Gauge/*, GaugeGroup*/};
 use super::super::style::Style;
 use super::super::theme::Railwayhistory;
-use super::Shape;
+use super::{Shape, Stage};
 
 
 //------------ TrackClass ----------------------------------------------------
@@ -108,62 +107,123 @@ impl TrackContour {
     }
 
     pub fn shape(
-        &self, _style: &Style, _canvas: &canvas::Canvas
+        &self, style: &Style, _canvas: &Canvas
     ) -> Box<dyn Shape + '_> {
-        Box::new(|style: &Style, canvas: canvas::Group| {
-            self.render(style, canvas)
-        })
-    }
-
-    fn render(&self, style: &Style, canvas: canvas::Group) {
-        /*
-        if self.class.class().surface().is_tunnel() {
-            if depth == 0 {
-                if style.detail() > 3 {
-                    self.render_tunnel_full(style, canvas);
-                }
-                return;
-            }
+        if style.detail() == 2 {
+            return Box::new(ContourShape2::new(self, style));
         }
 
-        match depth {
-            1 =>  {
+        let yes = !self.class.station;
+
+        if self.class.double && style.detail() >= 3 {
+            let left = self.trace.outline_offset(
+                -0.5 * style.dimensions().dt,
+                style
+            );
+            let right = self.trace.outline_offset(
+                0.5 * style.dimensions().dt,
+                style
+            );
+            if self.class.flip {
+                Box::new([
+                    ContourShape::new(
+                        &self.class, self.casing, false, yes, left
+                    ),
+                    ContourShape::new(
+                        &self.class, self.casing, yes, true, right
+                    ),
+                ])
+            }
+            else {
+                Box::new([
+                    ContourShape::new(
+                        &self.class, self.casing, yes, false, left
+                    ),
+                    ContourShape::new(
+                        &self.class, self.casing, false, yes, right
+                    ),
+                ])
+            }
+        }
+        else {
+            let trace = self.trace.outline(style);
+            Box::new(
+                ContourShape::new(&self.class, self.casing, yes, yes, trace)
+            )
+        }
+    }
+}
+
+
+//------------ ContourShape --------------------------------------------------
+
+struct ContourShape<'a> {
+    class: &'a TrackClass,
+    casing: bool,
+    left: bool,
+    right: bool,
+    trace: Outline,
+}
+
+impl<'a> ContourShape<'a> {
+    fn new(
+        class: &'a TrackClass,
+        casing: bool,
+        left: bool,
+        right: bool,
+        trace: Outline,
+    ) -> Self {
+        Self { class, casing, left, right, trace }
+    }
+}
+
+
+impl<'a> Shape for ContourShape<'a> {
+    fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
+        let canvas = canvas.sketch().into_group();
+        match stage {
+            Stage::Casing => {
                 if self.casing {
                     self.render_casing(style, canvas);
                 }
             }
-            0 => {
-            */
+            Stage::Base => {
                 match style.detail() {
                     0 => self.render_detail_0(style, canvas),
                     1 => self.render_detail_1(style, canvas),
                     2 => self.render_detail_2(style, canvas),
                     _ => self.render_detail_full(style, canvas),
                 }
-            /*
+            }
+            Stage::Inside => {
+                if self.class.class().surface().is_tunnel()
+                    && style.detail() >= 3
+                {
+                    //self.render_tunnel_full(style, canvas);
+                }
             }
             _ => { }
         }
-        */
+     }
+}
+
+impl<'a> ContourShape<'a> {
+
+    fn render_casing(&self, style: &Style, mut canvas: Group) {
+        canvas.apply(Color::rgba(1., 1., 1., 0.7));
+        canvas.apply_line_width(self.casing_width(style));
+        canvas.apply(&self.trace);
+        canvas.stroke();
     }
 
-    /*
-    fn render_casing(&self, style: &Style, canvas: &Canvas) {
-        canvas.set_source_rgba(1., 1., 1., 0.7);
-        canvas.set_line_width(self.casing_width(style));
-        self.trace.apply(canvas, style);
-        canvas.stroke().unwrap();
-    }
-    */
-
-    fn render_detail_0(&self, style: &Style, mut canvas: canvas::Group) {
+    fn render_detail_0(&self, style: &Style, mut canvas: Group) {
         canvas.apply_line_width(style.dimensions().line_width);
         canvas.apply(style.track_color(&self.class.class));
-        self.trace.apply(&mut canvas, style);
+        canvas.apply(&self.trace);
         canvas.stroke()
     }
 
-    fn render_detail_1(&self, style: &Style, mut canvas: canvas::Group) {
+    fn render_detail_1(&self, style: &Style, mut canvas: Group) {
         if self.class.double {
             canvas.apply_line_width(
                 style.dimensions().line_width * 1.4
@@ -175,11 +235,11 @@ impl TrackContour {
             );
         }
         canvas.apply(style.track_color(&self.class.class));
-        self.trace.apply(&mut canvas, style);
+        canvas.apply(&self.trace);
         canvas.stroke()
     }
 
-    fn render_detail_2(&self, style: &Style, mut canvas: canvas::Group) {
+    fn render_detail_2(&self, style: &Style, mut canvas: Group) {
         let units = style.dimensions();
         if self.class.class.category().is_main()
             || self.class.class.category().is_tram()
@@ -195,55 +255,48 @@ impl TrackContour {
             canvas.apply_line_width(units.other_width);
         }
         if self.class.combined {
-            canvas.apply(canvas::DashPattern::new(
+            canvas.apply(DashPattern::new(
                 [0.5 * units.seg, 0.5 * units.seg],
                 0.25 * units.seg
             ))
         }
         else if self.class.class.status().is_project() {
-            canvas.apply(canvas::DashPattern::new(
+            canvas.apply(DashPattern::new(
                 [0.7 * units.seg, 0.3 * units.seg],
                 0.15 * units.seg
             ))
         }
         canvas.apply(style.track_color(&self.class.class));
-        self.trace.apply(&mut canvas, style);
+        canvas.apply(&self.trace);
         canvas.stroke()
     }
 
-    fn render_detail_full(&self, style: &Style, canvas: canvas::Group) {
-        if self.class.double {
-            self.render_full_double(style, canvas);
-        }
-        else {
-            self.render_full_single(style, canvas);
-        }
-    }
-
-    fn render_full_single(&self, style: &Style, mut canvas: canvas::Group) {
-        self.render_full_electric(true, style, canvas.start());
+    fn render_detail_full(&self, style: &Style, mut canvas: Group) {
+        self.render_full_electric(style, &mut canvas);
         /*
         if self.class.has_property() {
             self.render_full_property(true, style, canvas);
         }
         */
-        self.render_full_base(None, style, canvas.start());
+        self.render_full_base(style, &mut canvas);
     }
 
-    fn render_full_double(&self, style: &Style, mut canvas: canvas::Group) {
-        self.render_full_electric(false, style, canvas.start());
-        /*
-        if self.class.has_property() {
-            self.render_full_property(false, style, canvas);
+    fn render_full_electric(&self, style: &Style, canvas: &mut Group) {
+        if !self.left {
+            return
         }
-        */
-        let offset = style.dimensions().dt * 0.5;
-        self.render_full_base(Some(offset), style, canvas.start());
-        self.render_full_base(Some(-offset), style, canvas.start());
+        let cat_color = style.cat_color(&self.class.class);
+        let rail_color = style.rail_color(&self.class.class);
+        if cat_color.is_none() && rail_color.is_none() {
+            return;
+        }
+
+        
     }
 
+    /*
     fn render_full_electric(
-        &self, single: bool, style: &Style, mut canvas: canvas::Group
+        &self, single: bool, style: &Style, mut canvas: Group
     ) {
         if self.class.station {
             return
@@ -284,7 +337,7 @@ impl TrackContour {
             if rail_color.is_none() {
                 // We only have cat. This means one stroke in the center of
                 // the seg.
-                canvas.apply(canvas::DashPattern::new(
+                canvas.apply(DashPattern::new(
                     [stroke, seg - stroke],
                     0.5 * (seg - stroke)
                 ));
@@ -301,7 +354,7 @@ impl TrackContour {
             else {
                 // There also is rail. This means one stroke one third into
                 // the seg.
-                canvas.apply(canvas::DashPattern::new(
+                canvas.apply(DashPattern::new(
                     [stroke, seg - stroke],
                     (1./3.) * (seg - stroke)
                 ));
@@ -323,7 +376,7 @@ impl TrackContour {
                 // We only have third rail. This means we have two strokes
                 // around the center of the seg. The strokes are 1 stroke wide
                 // and 1.5 strokes apart.
-                canvas.apply(canvas::DashPattern::new(
+                canvas.apply(DashPattern::new(
                     [
                         stroke, stroke, stroke,
                         seg - 3. * stroke
@@ -343,7 +396,7 @@ impl TrackContour {
             else {
                 // We have both cat and rail. This means our two strokes
                 // around around the second third of the seg.
-                canvas.apply(canvas::DashPattern::new(
+                canvas.apply(DashPattern::new(
                     [
                         stroke, stroke, stroke,
                         seg - 3. * stroke
@@ -364,7 +417,6 @@ impl TrackContour {
 
     }
 
-    /*
     fn render_full_property(
         &self, _single: bool, _style: &Style, _canvas: &Canvas
     ) {
@@ -505,17 +557,8 @@ impl TrackContour {
     }
     */
 
-    fn render_full_base(
-        &self,
-        offset: Option<f64>,
-        style: &Style, mut canvas: canvas::Group,
-    ) {
-        if let Some(offset) = offset {
-            self.trace.apply_offset(offset, &mut canvas, style);
-        }
-        else {
-            self.trace.apply(&mut canvas, style);
-        }
+    fn render_full_base(&self, style: &Style, canvas: &mut Group) {
+        canvas.apply(&self.trace);
         canvas.apply_line_width(
             if self.class.class.category().is_main() {
                 style.dimensions().line_width
@@ -527,13 +570,13 @@ impl TrackContour {
         canvas.apply(style.track_color(&self.class.class));
         if self.class.combined {
             let seg = style.dimensions().seg;
-            canvas.apply(canvas::DashPattern::new(
+            canvas.apply(DashPattern::new(
                     [0.5 * seg, 0.5 * seg], 0.25 * seg
             ));
         }
         else if self.class.class.status().is_project() {
             let seg = style.dimensions().seg;
-            canvas.apply(canvas::DashPattern::new(
+            canvas.apply(DashPattern::new(
                 [0.7 * seg, 0.3 * seg], 0.7 * seg
             ));
         }
@@ -541,21 +584,21 @@ impl TrackContour {
     }
 
     /*
-    fn render_tunnel_full(&self, style: &Style, canvas: &Canvas) {
+    fn render_tunnel_full(&self, style: &Style, mut canvas: Group) {
         if self.class.double {
             let offset = style.dimensions().dt * 0.5;
-            self.render_tunnel_base(Some(offset), style, canvas);
-            self.render_tunnel_base(Some(-offset), style, canvas);
+            self.render_tunnel_base(Some(offset), style, &mut canvas);
+            self.render_tunnel_base(Some(-offset), style, &mut canvas);
         }
         else {
-            self.render_tunnel_base(None, style, canvas);
+            self.render_tunnel_base(None, style, &mut canvas);
         }
     }
 
     fn render_tunnel_base(
         &self,
         offset: Option<f64>,
-        style: &Style, canvas: &Canvas
+        style: &Style, canvas: &mut Group
     ) {
         if let Some(offset) = offset {
             self.trace.apply_offset(offset, canvas, style);
@@ -563,27 +606,106 @@ impl TrackContour {
         else {
             self.trace.apply(canvas, style);
         }
-        canvas.set_line_width(
-            0.4 * if self.class.class.category().is_main() {
+        canvas.apply_line_width(
+            0.5 * if self.class.class.category().is_main() {
                 style.dimensions().line_width
             }
             else {
                 style.dimensions().other_width
             }
         );
-        Color::WHITE.apply(canvas);
-        canvas.stroke().unwrap();
-    }
-
-    fn casing_width(&self, style: &Style) -> f64 {
-        if self.class.double {
-            2.2 * style.dimensions().dt
-        }
-        else {
-            1.2 * style.dimensions().dt
-        }
+        canvas.apply(Color::WHITE);
+        canvas.stroke();
     }
     */
+
+    fn casing_width(&self, style: &Style) -> f64 {
+        1.2 * style.dimensions().dt
+    }
+}
+
+//------------ ContourShape2 -------------------------------------------------
+
+struct ContourShape2 {
+    casing: bool,
+    color: Color,
+    width: f64,
+    dash: Option<DashPattern<2>>,
+    trace: Outline,
+}
+
+impl ContourShape2 {
+    fn new(
+        contour: &TrackContour,
+        style: &Style,
+    ) -> Self {
+        Self {
+            casing: contour.casing,
+            color: style.track_color(&contour.class.class),
+            width: if contour.class.class.category().is_main() {
+                if contour.class.double {
+                    style.dimensions().line_width * 2.0
+                }
+                else {
+                    style.dimensions().line_width
+                }
+            }
+            else {
+                style.dimensions().other_width
+            },
+            dash: if contour.class.combined {
+                Some(DashPattern::new(
+                    [
+                        0.5 * style.dimensions().seg,
+                        0.5 * style.dimensions().seg
+                    ],
+                    0.25 * style.dimensions().seg
+                ))
+            }
+            else if contour.class.class.status().is_project() {
+                Some(DashPattern::new(
+                    [
+                        0.7 * style.dimensions().seg,
+                        0.3 * style.dimensions().seg
+                    ],
+                    0.15 * style.dimensions().seg
+                ))
+            }
+            else {
+                None
+            },
+            trace: contour.trace.outline(style)
+        }
+    }
+}
+
+impl Shape for ContourShape2 {
+    fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
+        match stage {
+            Stage::Casing => {
+                if self.casing {
+                    canvas.sketch().apply(
+                        Color::rgba(1., 1., 1., 0.7)
+                    ).apply(
+                        LineWidth(1.5 * self.width)
+                    ).apply(
+                        &self.trace
+                    ).stroke();
+                }
+            }
+            Stage::Base => {
+                let mut canvas = canvas.sketch();
+                canvas.apply(self.color);
+                canvas.apply(LineWidth(self.width));
+                if let Some(dash) = self.dash {
+                    canvas.apply(dash);
+                }
+                canvas.apply(&self.trace);
+                canvas.stroke();
+            }
+            _ => { }
+        }
+    }
 }
 
 
@@ -605,12 +727,13 @@ impl TrackCasing {
     }
 
     pub fn shape(
-        &self, _style: &Style, _canvas: &canvas::Canvas
+        &self, _style: &Style, _canvas: &Canvas
     ) -> Box<dyn Shape + '_> {
-        Box::new(|style: &Style, mut canvas: canvas::Group| {
-            canvas.apply(canvas::Color::rgba(1., 1., 1., 0.7));
-            canvas.apply_line_width(self.line_width(style));
-            self.trace.apply(&mut canvas, style);
+        Box::new(|style: &Style, canvas: &mut Canvas| {
+            let mut canvas = canvas.sketch();
+            canvas.apply(Color::rgba(1., 1., 1., 0.7));
+            canvas.apply(LineWidth(self.line_width(style)));
+            canvas.apply(self.trace.iter_outline(style));
             canvas.stroke();
         })
     }

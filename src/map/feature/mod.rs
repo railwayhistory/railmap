@@ -8,7 +8,7 @@ pub mod label;
 pub mod markers;
 pub mod track;
 
-use femtomap::render::canvas;
+use femtomap::render::Canvas;
 use femtomap::world;
 use super::style::Style;
 
@@ -23,24 +23,6 @@ pub enum Feature {
     Marker(markers::StandardMarker),
     Platform(area::PlatformContour),
     Track(track::TrackContour),
-}
-
-impl Feature {
-        /*
-    pub fn render(&self, _style: &Style, _canvas: &Canvas) {
-        match self {
-            Feature::Area(value) => value.render(style, canvas),
-            Feature::Border(value) => value.render(style, canvas),
-            Feature::Casing(value) => value.render(style, canvas),
-            Feature::Dot(value) => value.render(style, canvas),
-            Feature::Guide(value) => value.render(style, canvas),
-            Feature::Label(value) => value.render(style, canvas),
-            Feature::Marker(value) => value.render(style, canvas),
-            Feature::Platform(value) => value.render(style, canvas),
-            Feature::Track(value) => value.render(style, canvas, 0),
-        }
-    }
-        */
 }
 
 impl femtomap::feature::Feature for Feature {
@@ -62,7 +44,7 @@ impl femtomap::feature::Feature for Feature {
     }
 
     fn shape(
-        &self, style: &Style, canvas: &canvas::Canvas
+        &self, style: &Style, canvas: &Canvas
     ) -> Option<Box<dyn Shape + '_>> {
         match self {
             Feature::Area(value) => Some(value.shape(style, canvas)),
@@ -79,7 +61,7 @@ impl femtomap::feature::Feature for Feature {
 }
 
 pub trait Shape {
-    fn render(&self, stage: Stage, style: &Style, canvas: canvas::Group);
+    fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas);
 }
 
 impl<'a, S: Shape + 'a> From<S> for Box<dyn Shape + 'a> {
@@ -88,11 +70,17 @@ impl<'a, S: Shape + 'a> From<S> for Box<dyn Shape + 'a> {
     }
 }
 
-impl<F: Fn(&Style, canvas::Group)> Shape for F {
-    fn render(&self, stage: Stage, style: &Style, canvas: canvas::Group) {
+impl<F: Fn(&Style, &mut Canvas)> Shape for F {
+    fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
         if matches!(stage, Stage::Base) {
            (*self)(style, canvas)
         }
+    }
+}
+
+impl<T: Shape, const N: usize> Shape for [T; N] {
+    fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
+        self.iter().for_each(|item| item.render(stage, style, canvas))
     }
 }
 

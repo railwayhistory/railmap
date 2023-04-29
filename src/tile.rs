@@ -53,7 +53,7 @@ impl<'a, T: Theme> Tile<'a, T> {
             for stage in T::Stage::default() {
                 group.iter().for_each(|shape| {
                     self.theme.render_shape(
-                        shape.shape(), &stage, &style, canvas.start()
+                        shape.shape(), &stage, &style, &mut canvas
                     )
                 });
             }

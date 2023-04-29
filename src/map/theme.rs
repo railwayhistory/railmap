@@ -2,7 +2,7 @@
 use std::sync::Arc;
 use femtomap::path::Distance;
 use femtomap::feature::FeatureSetBuilder;
-use femtomap::render::canvas;
+use femtomap::render::Canvas;
 use hyper::Body;
 use crate::config::Config;
 use crate::import::Failed;
@@ -119,7 +119,7 @@ impl theme::Theme for Railwayhistory {
         shape: &<Self::Feature as femtomap::feature::Feature>::Shape<'a>,
         stage: &Self::Stage,
         style: &Self::Style,
-        canvas: canvas::Group,
+        canvas: &mut Canvas,
     ) {
         shape.render(*stage, style, canvas);
     }

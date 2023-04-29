@@ -1,6 +1,6 @@
 /// The function we support during import.
 
-use femtomap::render::pattern::Color;
+use femtomap::render::Color;
 use crate::import::Failed;
 use crate::import::eval;
 use crate::import::eval::ExprVal;

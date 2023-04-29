@@ -5,7 +5,7 @@ use std::str::FromStr;
 use std::ops::MulAssign;
 use std::sync::Arc;
 use femtomap::path::MapDistance;
-use femtomap::render::pattern::Color;
+use femtomap::render::Color;
 use crate::theme;
 use crate::tile::{TileId, TileFormat};
 use crate::transform::Transform;

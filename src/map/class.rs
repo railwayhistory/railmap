@@ -153,13 +153,13 @@ impl Class {
     /// with different classes.
     ///
     /// Class layer offsets are in the range of -0.005 to 0.
-    pub fn layer_offset(&self) -> f64 {
-        let base = if self.pax().is_full() { 0. }
-        else if self.category().is_tram() { -0.001 }
-        else { -0.002 };
-        let electric = if self.has_active_cat() { -0.00001 }
-                       else if self.has_active_rail() { -0.00005 }
-                       else { -0.00008 };
+    pub fn layer_offset(&self) -> i16 {
+        let base = if self.pax().is_full() { 0 }
+        else if self.category().is_tram() { -3 }
+        else { -6 };
+        let electric = if self.has_active_cat() { 0 }
+                       else if self.has_active_rail() { -1 }
+                       else { -2 };
         base + self.status().layer_offset() + electric
     }
 }
@@ -294,13 +294,13 @@ impl Status {
         matches!(self, Status::Explanned | Status::Planned)
     }
 
-    pub fn layer_offset(self) -> f64 {
+    pub fn layer_offset(self) -> i16 {
         match self {
-            Status::Open => 0.,
-            Status::Closed => -0.0001,
-            Status::Removed => -0.0002,
-            Status::Gone => -0.0003,
-            _ => -0.0004,
+            Status::Open => 0,
+            Status::Closed => -10,
+            Status::Removed => -20,
+            Status::Gone => -30,
+            _ => -40,
         }
     }
 }

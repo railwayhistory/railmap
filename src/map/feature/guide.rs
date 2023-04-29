@@ -3,8 +3,7 @@
 //! Guides are thin lines attaching a label to something.
 
 use femtomap::path::Trace;
-use femtomap::render::canvas;
-use femtomap::render::canvas::Color;
+use femtomap::render::{Canvas, Color, LineWidth};
 use kurbo::Rect;
 use crate::import::eval;
 use crate::import::Failed;
@@ -54,9 +53,9 @@ impl GuideContour {
     }
 
     pub fn shape(
-        &self, style: &Style, canvas: &canvas::Canvas
+        &self, style: &Style, canvas: &Canvas
     ) -> Box<dyn Shape + '_> {
-        Box::new(|style: &Style, mut canvas: canvas::Group| {
+        Box::new(|style: &Style, canvas: &mut Canvas| {
             let color = if self.linenum {
                 if !style.include_line_labels() {
                     return
@@ -66,17 +65,19 @@ impl GuideContour {
             else {
                 style.track_color(&self.class)
             };
-            self.trace.apply(&mut canvas, style);
+
+            let mut sketch = canvas.sketch();
+            sketch.apply(self.trace.iter_outline(style));
             if self.casing {
-                canvas.apply_line_width(
+                sketch.apply(LineWidth(
                     1.8 * style.dimensions().guide_width
-                );
-                canvas.apply(Color::rgba(1., 1., 1., 0.7));
-                canvas.stroke();
+                ));
+                sketch.apply(Color::rgba(1., 1., 1., 0.7));
+                sketch.stroke();
             }
-            canvas.apply_line_width(style.dimensions().guide_width);
-            canvas.apply(color);
-            canvas.stroke();
+            sketch.apply(LineWidth(style.dimensions().guide_width));
+            sketch.apply(color);
+            sketch.stroke();
         })
     }
 }

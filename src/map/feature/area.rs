@@ -1,7 +1,7 @@
 //! Rendering an area.
 
 use femtomap::path::Trace;
-use femtomap::render::canvas;
+use femtomap::render::Canvas;
 use kurbo::{BezPath,Rect};
 use super::Shape;
 use super::super::class::Class;
@@ -25,14 +25,15 @@ impl AreaContour {
     }
 
     pub fn shape(
-        &self, style: &Style, _canvas: &canvas::Canvas
+        &self, style: &Style, _canvas: &Canvas
     ) -> Box<dyn Shape> {
         let color = style.track_color(&self.class);
         let outline = self.trace.outline(style);
 
-        Box::new(move |_style: &Style, mut canvas: canvas::Group| {
-            canvas.apply(color);
+        Box::new(move |_style: &Style, canvas: &mut Canvas| {
+            let mut canvas = canvas.sketch();
             canvas.apply(&outline);
+            canvas.apply(color);
             canvas.fill();
         })
     }
@@ -57,14 +58,15 @@ impl PlatformContour {
     }
 
     pub fn shape(
-        &self, style: &Style, _canvas: &canvas::Canvas
+        &self, style: &Style, _canvas: &Canvas
     ) -> Box<dyn Shape> {
         let color = style.track_color(&self.class);
         let outline = self.trace.outline(style);
 
-        Box::new(move |_style: &Style, mut canvas: canvas::Group| {
-            canvas.apply(color);
+        Box::new(move |_style: &Style, canvas: &mut Canvas| {
+            let mut canvas = canvas.sketch();
             canvas.apply(&outline);
+            canvas.apply(color);
             canvas.fill();
         })
     }

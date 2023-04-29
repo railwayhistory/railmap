@@ -41,7 +41,7 @@ const PROCEDURES: &[(
             Feature::Area(AreaContour::new(class, trace)),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
-            0.,
+            -100,
         );
         Ok(())
     }),
@@ -63,7 +63,7 @@ const PROCEDURES: &[(
             ).into(),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
-            0.,
+            100,
         );
         Ok(())
     }),
@@ -80,7 +80,7 @@ const PROCEDURES: &[(
             Feature::Border(BorderContour::from_arg(class, trace, err)?),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
-            0.,
+            -500,
         );
         Ok(())
     }),
@@ -99,7 +99,7 @@ const PROCEDURES: &[(
             Feature::Casing(TrackCasing::new(class, trace)),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
-            -0.1 + layer_offset,
+            -2000 + layer_offset,
         );
         Ok(())
     }),
@@ -116,7 +116,7 @@ const PROCEDURES: &[(
             Feature::Guide(GuideContour::from_arg(class, trace, err)?),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
-            0.,
+            200,
         );
         Ok(())
     }),
@@ -137,7 +137,7 @@ const PROCEDURES: &[(
             ).into(),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
-            0.,
+            200,
         );
         Ok(())
     }),
@@ -169,7 +169,7 @@ const PROCEDURES: &[(
             ).into(),
             scope.params().detail(pos, err)?,
             scope.params().layer() + 1,
-            0.,
+            100,
         );
         Ok(())
     }),
@@ -290,7 +290,7 @@ const PROCEDURES: &[(
             )),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
-            0.,
+            200,
         );
 
         // Build the label.
@@ -304,7 +304,7 @@ const PROCEDURES: &[(
             ).into(),
             scope.params().detail(symbols.pos(), err)?,
             scope.params().layer(),
-            0.,
+            200,
         );
         Ok(())
     }),
@@ -325,7 +325,7 @@ const PROCEDURES: &[(
                     Feature::Dot(marker),
                     scope.params().detail(pos, err)?,
                     scope.params().layer(),
-                    layer_offset,
+                    100 + layer_offset,
                 );
             }
             None => {
@@ -335,7 +335,7 @@ const PROCEDURES: &[(
                     Feature::Marker(marker),
                     scope.params().detail(pos, err)?,
                     scope.params().layer(),
-                    -0.3 + layer_offset,
+                    -200 + layer_offset,
                 );
             }
         }
@@ -353,7 +353,7 @@ const PROCEDURES: &[(
             Feature::Platform(PlatformContour::new(class, trace)),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
-            -0.2 + layer_offset,
+            -100 + layer_offset,
         );
         Ok(())
     }),
@@ -405,7 +405,7 @@ const PROCEDURES: &[(
             ).into(),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
-            0.,
+            1000,
         );
         Ok(())
     }),
@@ -425,7 +425,7 @@ const PROCEDURES: &[(
             Feature::Dot(marker),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
-            layer_offset,
+            layer_offset + 100,
         );
         Ok(())
     }),
@@ -516,7 +516,7 @@ const PROCEDURES: &[(
             ).into(),
             scope.params().detail(symbols.pos(), err)?,
             scope.params().layer(),
-            0.,
+            200,
         );
         Ok(())
     }),
@@ -538,7 +538,7 @@ const PROCEDURES: &[(
             Feature::Track(TrackContour::new(class, casing, trace)),
             scope.params().detail(pos, err)?,
             scope.params().layer(),
-            -0.1 + layer_offset,
+            layer_offset,
         );
         Ok(())
     }),

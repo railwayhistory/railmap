@@ -3,7 +3,7 @@
 use std::hash::Hash;
 use std::str::FromStr;
 use femtomap::path::{Distance, MapDistance};
-use femtomap::render::canvas;
+use femtomap::render::Canvas;
 use femtomap::feature::{Feature, FeatureSetBuilder};
 use hyper::Body;
 use crate::config::Config;
@@ -79,7 +79,7 @@ pub trait Theme: Sized + Clone + Send + Sync + 'static {
         shape: &<Self::Feature as Feature>::Shape<'a>,
         stage: &Self::Stage,
         style: &Self::Style,
-        canvas: canvas::Group,
+        canvas: &mut Canvas,
     );
 }
 

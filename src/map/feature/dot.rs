@@ -2,8 +2,8 @@
 
 use std::f64::consts::PI;
 use femtomap::path::Position;
-use femtomap::render::canvas;
-use kurbo::{Circle, Rect, Point, Shape as _};
+use femtomap::render::{Canvas, LineWidth, Matrix, Operator};
+use kurbo::{Circle, Rect, Point};
 use crate::import::eval;
 use crate::import::Failed;
 use super::super::class::Class;
@@ -90,44 +90,46 @@ impl DotMarker {
     }
 
     pub fn shape(
-        &self, style: &Style, canvas: &canvas::Canvas
+        &self, style: &Style, canvas: &Canvas
     ) -> Box<dyn Shape + '_> {
-        Box::new(|style: &Style, canvas: canvas::Group| {
+        Box::new(|style: &Style, canvas: &mut Canvas| {
             self.render(style, canvas)
         })
     }
 
-    pub fn render(&self, style: &Style, mut canvas: canvas::Group) {
-        let (point, _) = self.position.resolve(style);
-        canvas.apply(canvas::Matrix::identity().translate(point));
+    pub fn render(&self, style: &Style, canvas: &mut Canvas) {
 
-        let u = style.dimensions();
+        let (point, _) = self.position.resolve(style);
         let radius = self.size.radius() * style.dimensions().dt;
         let sp = style.dimensions().sp;
 
         if self.casing {
-            canvas.apply_outline(
-                Circle::new((0., 0.), radius + 1.5 * sp).path_elements(0.1)
+            let mut sketch = canvas.sketch();
+            sketch.apply(
+                Circle::new(point, radius + 1.5 * sp)
             );
-            canvas.apply(canvas::Operator::DestinationOut);
-            canvas.fill();
-            canvas.apply(canvas::Operator::default());
+            sketch.apply(Operator::DestinationOut);
+            sketch.fill();
         }
 
-        canvas.apply(style.primary_marker_color(&self.class));
         match self.inner {
             Inner::Fill => {
-                canvas.apply_outline(
-                    Circle::new((0., 0.), radius).path_elements(0.1)
-                );
-                canvas.fill();
+                canvas.sketch().apply(
+                    Circle::new(point, radius)
+                ).apply(
+                    style.primary_marker_color(&self.class)
+                ).fill();
             }
             Inner::Stroke => {
-                canvas.apply_outline(
-                    Circle::new((0., 0.), radius - 0.5 * sp).path_elements(0.1)
-                );
-                canvas.apply_line_width(u.sp);
-                canvas.stroke();
+                canvas.sketch().apply(
+                    Circle::new(point, radius - 0.5 * sp)
+                ).apply(
+                    style.primary_marker_color(
+                        &self.class
+                    )
+                ).apply(
+                    LineWidth(sp)
+                ).stroke();
             }
             Inner::None => { }
         }

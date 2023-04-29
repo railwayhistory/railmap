@@ -3,10 +3,10 @@
 use femtomap::layout;
 use femtomap::layout::{Align, Margins, ShapedLayout};
 use femtomap::path::{MapDistance, Position};
-use femtomap::render::canvas::{self, Canvas, Group};
-use femtomap::render::pattern::Color;
-use femtomap::render::text::{
-    Font, FontBuilder, FontFamily, FontFeatures, FontStyle, FontWeight
+use femtomap::render::{
+    Canvas, Color, Font, FontBuilder, FontFamily, FontFeatures, FontStretch,
+    FontStyle, FontWeight, Group, LineCap, LineJoin, LineWidth, Matrix,
+    Operator, Sketch,
 };
 use kurbo::{Point, Rect, Vec2};
 use crate::import::eval;
@@ -69,14 +69,14 @@ impl Feature {
     }
 
     pub fn shape(
-        &self, style: &Style, canvas: &canvas::Canvas
+        &self, style: &Style, canvas: &Canvas
     ) -> Option<Box<dyn Shape + '_>> {
         if self.properties.linenum && !style.include_line_labels() {
             return None
         }
         let (point, angle) = self.position.resolve_label(style, self.on_path);
         Some(Box::new(ShapedFeature {
-            matrix: canvas::Matrix::identity().translate(point).rotate(angle),
+            matrix: Matrix::identity().translate(point).rotate(angle),
             layout: self.layout.shape(style, canvas)
         }))
     }
@@ -92,14 +92,16 @@ impl From<Feature> for super::Feature {
 //------------ ShapedFeature -------------------------------------------------
 
 struct ShapedFeature<'a> {
-    matrix: canvas::Matrix,
+    matrix: Matrix,
     layout: ShapedLayout<'a, LayoutProperties>,
 }
 
 impl<'a> Shape for ShapedFeature<'a> {
-    fn render(&self, stage: Stage, style: &Style, mut canvas: canvas::Group) {
-        canvas.apply(self.matrix);
-        self.layout.render(style, Default::default(), &stage, &mut canvas)
+    fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
+        self.layout.render(
+            style, Default::default(), &stage,
+            canvas.sketch().apply(self.matrix)
+        )
     }
 }
 
@@ -294,10 +296,16 @@ impl LayoutProperties {
 
         // Stretch
         //
+        if symbols.take("condensed") {
+            res = res.stretch(FontStretch::Condensed);
+        }
 
         // Style
         //
-        if symbols.take("italic") {
+        if symbols.take("italic")
+            || symbols.take("designation")
+            || symbols.take("former")
+        {
             res = res.style(FontStyle::Italic);
         }
         else if symbols.take("upright") {
@@ -311,8 +319,11 @@ impl LayoutProperties {
         if symbols.take("bold") {
             res = res.weight(FontWeight::Bold)
         }
-        else if symbols.take("book") {
+        else if symbols.take("regular") {
             res = res.weight(FontWeight::Normal)
+        }
+        else if symbols.take("light") {
+            res = res.weight(FontWeight::Light)
         }
 
         res
@@ -385,14 +396,14 @@ impl layout::Properties for LayoutProperties {
         style: &Self::Style,
         base: Vec2,
         stage: &Self::Stage,
-        canvas: &mut Group
+        canvas: &mut Sketch,
     ) {
         match stage {
             Stage::Back => {
                 if matches!(self.layout_type, LayoutType::BadgeFrame) {
-                    let mut canvas = canvas.start();
+                    let mut canvas = canvas.group();
                     canvas.apply(layout.outer(base));
-                    canvas.apply(canvas::Operator::DestinationOut);
+                    canvas.apply(Operator::DestinationOut);
                     canvas.fill();
                 }
             }
@@ -400,12 +411,10 @@ impl layout::Properties for LayoutProperties {
                 if !layout.is_span() {
                     return
                 }
-                canvas.apply(canvas::LineCap::Butt);
-                canvas.apply(canvas::LineJoin::Bevel);
+                canvas.apply(LineCap::Butt);
+                canvas.apply(LineJoin::Bevel);
                 canvas.apply(Color::WHITE);
-                canvas.apply_line_width(
-                    style.dimensions().sp * 5.
-                );
+                canvas.apply(LineWidth(style.dimensions().sp * 5.));
                 layout.stroke_text(base, canvas);
             }
             Stage::Base => {
