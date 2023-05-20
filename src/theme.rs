@@ -100,7 +100,7 @@ pub trait Style: femtomap::path::Style {
     /// Canvas lengths will be scaled by this value.
     fn mag(&self) -> f64;
 
-    fn detail(&self) -> u8;
+    fn detail(&self) -> f64;
 
     fn scale(&mut self, canvas_bp: f64);
 

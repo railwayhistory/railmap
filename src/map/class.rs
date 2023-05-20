@@ -650,15 +650,18 @@ pub struct Gauge {
     ///
     /// This is only present for three or four rail track.
     secondary: Option<u16>,
+
+    /// The gauge group.
+    group: Option<GaugeGroup>,
 }
 
 impl Gauge {
     pub fn from_symbols(symbols: &mut SymbolSet) -> Self {
-        // XXX Temporarily accept deprecated symbols.
-        symbols.take("narrow");
-        symbols.take("narrower");
-
-        let mut res = Gauge { main: None, secondary: None };
+        let mut res = Gauge {
+            main: None,
+            secondary: None,
+            group: GaugeGroup::from_symbols(symbols),
+        };
         for &(name, gauge) in Self::MAIN_GAUGES {
             if symbols.take(name) {
                 res.main = Some(gauge);
@@ -684,6 +687,7 @@ impl Gauge {
         ("g800", 800),
         ("g900", 900),
         ("g1000", 1000),
+        ("g1100", 1100),
         ("g1200", 1200),
         ("g1435", 1435),
         ("g1520", 1520),
@@ -700,22 +704,8 @@ impl Gauge {
         self.main.unwrap_or(1435)
     }
 
-    pub fn main_group(self) -> GaugeGroup {
-        if self.main() == 1435 {
-            GaugeGroup::Standard
-        }
-        else if self.main() < 600 {
-            GaugeGroup::Minimum
-        }
-        else if self.main() < 1000 {
-            GaugeGroup::Narrower 
-        }
-        else if self.main() < 1435 {
-            GaugeGroup::Narrow
-        }
-        else {
-            GaugeGroup::Broad
-        }
+    pub fn group(self) -> Option<GaugeGroup> {
+        self.group
     }
 
     pub fn secondary(self) -> Option<u16> {
@@ -728,17 +718,29 @@ impl Gauge {
 
 #[derive(Clone, Copy, Debug)]
 pub enum GaugeGroup {
-    Minimum,
     Narrower,
     Narrow,
-    Standard,
     Broad,
+    Broader,
 }
 
 impl GaugeGroup {
-    /// Returns whether the group is standard.
-    pub fn is_standard(self) -> bool {
-        matches!(self, GaugeGroup::Standard)
+    pub fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
+        if symbols.take("narrower") {
+            Some(GaugeGroup::Narrower)
+        }
+        else if symbols.take("narrow") {
+            Some(GaugeGroup::Narrow)
+        }
+        else if symbols.take("broad") {
+            Some(GaugeGroup::Broad)
+        }
+        else if symbols.take("broader") {
+            Some(GaugeGroup::Broader)
+        }
+        else {
+            None
+        }
     }
 }
 

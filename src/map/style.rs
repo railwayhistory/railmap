@@ -39,7 +39,7 @@ pub enum StyleId {
 }
 
 impl StyleId {
-    pub fn detail(self, zoom: u8) -> u8 {
+    pub fn detail(self, zoom: u8) -> f64 {
         match self {
             StyleId::Overview(_) => OVERVIEW_DETAILS[zoom as usize],
             StyleId::Detail(_) => DETAIL_DETAILS[zoom as usize],
@@ -83,7 +83,7 @@ impl FromStr for StyleId {
 #[derive(Clone, Debug)]
 pub struct Style {
     id: StyleId,
-    detail: u8,
+    detail: f64,
     mag: f64,
     dimensions: Dimensions,
     colors: Arc<ColorSet>,
@@ -91,8 +91,12 @@ pub struct Style {
 }
 
 impl Style {
-    pub fn detail(&self) -> u8 {
+    pub fn detail(&self) -> f64 {
         self.detail
+    }
+
+    pub fn detail_step(&self) -> u8 {
+        self.detail as u8
     }
 
     pub fn resolve_distance(&self, distance: MapDistance) -> f64 {
@@ -112,7 +116,7 @@ impl theme::Style for Style {
         self.mag
     }
 
-    fn detail(&self) -> u8 {
+    fn detail(&self) -> f64 {
         self.detail
     }
 
@@ -151,10 +155,10 @@ impl Style {
         let mag = id.style.mag(id.zoom);
         let canvas_bp = id.format.canvas_bp() * mag;
         let scale = id.format.size() * id.n();
-        let mut dimensions = if detail < 3 {
+        let mut dimensions = if detail < 3. {
             Dimensions::D0
         }
-        else if detail < 4 {
+        else if detail < 4. {
             Dimensions::D3
         }
         else {
@@ -179,10 +183,10 @@ impl Style {
     ) -> Self {
         let canvas_bp = format.canvas_bp();
         let detail = id.detail(zoom);
-        let mut dimensions = if detail < 3 {
+        let mut dimensions = if detail < 3. {
             Dimensions::D0
         }
-        else if detail < 4 {
+        else if detail < 4. {
             Dimensions::D3
         }
         else {
@@ -246,7 +250,7 @@ impl Style {
 
     /// Returns the color for a station label.
     pub fn label_color(&self, class: &Class) -> Color {
-        self.colors.color(self.palette(), class)
+        self.colors.label_color(self.palette(), class)
     }
 
     /// Returns the primary color for a marker.
@@ -259,11 +263,11 @@ impl Style {
 //============ Detail Levels and Magnifications ==============================
 
 /// The mapping of zoom levels to details.
-const DETAIL_DETAILS: &[u8] = &[
-    0, 0, 0, 0, 0,
-    0, 0, 1, 1, 2,
-    3, 3, 4, 4, 5,
-    5, 5, 5, 5, 5,
+const DETAIL_DETAILS: &[f64] = &[
+    0.0, 0.0, 0.0, 0.0, 0.0,
+    0.0, 0.5, 1.0, 1.5, 2.0,
+    3.0, 3.5, 4.0, 4.5, 5.0,
+    5.5, 5.5, 5.5, 5.5, 5.5,
 ];
 
 /// The mapping of zoom levels to magnification.
@@ -275,11 +279,11 @@ const DETAIL_MAG: &[f64] = &[
 ];
 
 /// The mapping of zoom levels to details.
-const OVERVIEW_DETAILS: &[u8] = &[
-    0, 0, 0, 0, 0,
-    0, 0, 1, 1, 2,
-    2, 2, 2, 2, 2,
-    2, 2, 2, 2, 2,
+const OVERVIEW_DETAILS: &[f64] = &[
+    0.0, 0.0, 0.0, 0.0, 0.0,
+    0.0, 0.5, 1.0, 1.5, 2.0,
+    2.5, 2.5, 2.5, 2.5, 2.5,
+    2.5, 2.5, 2.5, 2.5, 2.5,
 ];
 
 /// The mapping of zoom levels to magnification.
@@ -304,6 +308,8 @@ pub struct Dimensions {
 
     /// The width of a station, private, or tram track.
     pub other_width: f64,
+
+    pub mark_width: f64,
 
     pub guide_width: f64,
 
@@ -351,6 +357,7 @@ impl Dimensions {
     const D0: Self = Self {
         line_width: 0.8,
         other_width: 0.5,
+        mark_width: 0.5,
         guide_width: 0.3,
         seg: 6. * units::DT,
         dt: units::DT,
@@ -370,10 +377,11 @@ impl Dimensions {
     const D3: Self = Self {
         line_width: 1.,
         other_width: 0.7,
+        mark_width: 0.7,
         dt: 0.8 * units::DT,
         mark: 0.6 * units::DT,
         tight_mark: 0.4 * units::DT,
-        seg: 5. * units::DT,
+        seg: 0.8 * 5. * units::DT,
         sw: units::S3W,
         sh: units::S3H,
         ds: 0.15 * units::S3W,
@@ -383,8 +391,9 @@ impl Dimensions {
     };
 
     const D4: Self = Self {
-        line_width: 1.,
-        other_width: 0.7,
+        line_width: 1.1,
+        other_width: 0.8,
+        mark_width: 0.5,
         mark: 0.8 * units::DT,
         sw: units::SW,
         sh: units::SH,
@@ -412,6 +421,7 @@ impl MulAssign<f64> for  Dimensions {
     fn mul_assign(&mut self, rhs: f64) {
         self.line_width *= rhs;
         self.other_width *= rhs;
+        self.mark_width *= rhs;
         self.guide_width *= rhs;
         self.seg *= rhs;
         self.dt *= rhs;
@@ -504,6 +514,10 @@ color_set! {
     removed,
     gone,
 
+    closed_text,
+    removed_text,
+    gone_text,
+
     tram,
     tram_closed,
     tram_removed,
@@ -518,6 +532,15 @@ impl ColorSet {
             Palette::Pax => self.pax_color(class),
             Palette::El => self.el_color(class),
             Palette::Proof => self.proof_color(class),
+        }
+    }
+
+    fn label_color(&self, palette: Palette, class: &Class) -> Color {
+        if let Some(color) = self.ex_label_color(class.status()) {
+            color
+        }
+        else {
+            self.color(palette, class)
         }
     }
 
@@ -705,11 +728,22 @@ impl ColorSet {
             Status::Gone => Some(self.gone),
         }
     }
+
+    fn ex_label_color(&self, status: Status) -> Option<Color> {
+        match status {
+            Status::Open | Status::Planned => None,
+            Status::Closed => Some(self.closed_text),
+            Status::Removed | Status::Explanned => Some(self.removed_text),
+            Status::Gone => Some(self.gone_text),
+        }
+    }
 }
 
-impl Default for ColorSet {
-    fn default() -> Self {
+#[allow(dead_code)]
+impl ColorSet {
+    fn colorful() -> Self {
         ColorSet {
+            /*
             el_none_pax:        Color::hex("98690dff").unwrap(),
             el_ole_ac_high_pax: Color::hex("8845aaff").unwrap(),
             el_ole_ac_low_pax:  Color::hex("aa4689ff").unwrap(),
@@ -725,6 +759,23 @@ impl Default for ColorSet {
             el_ole_dc_low:  Color::hex("ac3900ff").unwrap(),
             el_rail:        Color::hex("004f2eff").unwrap(),
             el_rail_four:   Color::hex("444400ff").unwrap(),
+            */
+
+            el_none_pax:        Color::hex("523700ff").unwrap(),
+            el_ole_ac_high_pax: Color::hex("4d2263ff").unwrap(),
+            el_ole_ac_low_pax:  Color::hex("691f51ff").unwrap(),
+            el_ole_dc_high_pax: Color::hex("720c00ff").unwrap(),
+            el_ole_dc_low_pax:  Color::hex("ac3900ff").unwrap(),
+            el_rail_pax:        Color::hex("007e49ff").unwrap(),
+            el_rail_four_pax:   Color::hex("444400ff").unwrap(),
+
+            el_none:        Color::hex("523700ff").unwrap(),
+            el_ole_ac_high: Color::hex("4d2263ff").unwrap(),
+            el_ole_ac_low:  Color::hex("691f51ff").unwrap(),
+            el_ole_dc_high: Color::hex("720c00ff").unwrap(),
+            el_ole_dc_low:  Color::hex("ac3900ff").unwrap(),
+            el_rail:        Color::hex("007e49ff").unwrap(),
+            el_rail_four:   Color::hex("444400ff").unwrap(),
 
             pax_full: Color::grey(0.1),
             pax_ltd: Color::grey(0.3),
@@ -735,6 +786,10 @@ impl Default for ColorSet {
             removed: Color::grey(0.650),
             gone:    Color::grey(0.850),
 
+            closed_text:  Color::grey(0.500),
+            removed_text: Color::grey(0.500),
+            gone_text:    Color::grey(0.500),
+
             tram:         Color::hex("1c63abff").unwrap(),
             tram_closed:  Color::hex("5e8eb9ff").unwrap(),
             tram_removed: Color::hex("8fb0d1ff").unwrap(),
@@ -742,6 +797,53 @@ impl Default for ColorSet {
 
             toxic: Color::rgb(0.824, 0.824, 0.0),
         }
+    }
+
+    pub fn bw() -> Self {
+        let color = Color::grey(0.1);
+        ColorSet {
+            el_none_pax:        color,
+            el_ole_ac_high_pax: color,
+            el_ole_ac_low_pax:  color,
+            el_ole_dc_high_pax: color,
+            el_ole_dc_low_pax:  color,
+            el_rail_pax:        color,
+            el_rail_four_pax:   color,
+
+            el_none:        color,
+            el_ole_ac_high: color,
+            el_ole_ac_low:  color,
+            el_ole_dc_high: color,
+            el_ole_dc_low:  color,
+            el_rail:        color,
+            el_rail_four:   color,
+
+            pax_full: Color::grey(0.1),
+            pax_ltd: Color::grey(0.3),
+            pax_none: Color::grey(0.7),
+            pax_closed: Color::grey(0.9),
+
+            closed:  Color::grey(0.550),
+            removed: Color::grey(0.650),
+            gone:    Color::grey(0.850),
+
+            closed_text:  Color::grey(0.500),
+            removed_text: Color::grey(0.500),
+            gone_text:    Color::grey(0.500),
+
+            tram:         Color::hex("1c63abff").unwrap(),
+            tram_closed:  Color::grey(0.550),
+            tram_removed: Color::grey(0.650),
+            tram_gone:    Color::grey(0.850),
+
+            toxic: Color::rgb(0.824, 0.824, 0.0),
+        }
+    }
+}
+
+impl Default for ColorSet {
+    fn default() -> Self {
+        Self::colorful()
     }
 }
 

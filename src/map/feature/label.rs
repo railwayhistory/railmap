@@ -24,7 +24,7 @@ const ROMAN_FAMILY: FontFamily = FontFamily::from_static(
     "Source Serif 4 SmText"
 );
 
-const SANS_FEATURES: FontFeatures = FontFeatures::from_static("tnum");
+const SANS_FEATURES: FontFeatures = FontFeatures::from_static("pnum");
 const ROMAN_FEATURES: FontFeatures = FontFeatures::from_static("");
 
 
@@ -351,6 +351,10 @@ impl LayoutProperties {
         }
         self.class.update(&base.class)
     }
+
+    fn size(&self) -> FontSize {
+        self.size.unwrap_or_default()
+    }
 }
 
 
@@ -360,7 +364,7 @@ impl layout::Properties for LayoutProperties {
 
     fn font(&self, style: &Self::Style) -> Font {
         self.font.clone().size(
-            self.size.unwrap_or_default().size(style)
+            self.size().size(style)
         ).finalize()
     }
 
@@ -369,12 +373,15 @@ impl layout::Properties for LayoutProperties {
     }
 
     fn frame(&self, style: &Self::Style) -> Option<Margins> {
-        if matches!(self.layout_type, LayoutType::TextFrame) {
-            // XXX Make this font and size dependent.
-            Some(Margins::equal(0.3))
-        }
-        else {
-            None
+        // XXX Make this font and size dependent.
+        match self.layout_type {
+            LayoutType::Rule => {
+                Some(Margins::equal(0.5 * style.dimensions().guide_width))
+            }
+            LayoutType::TextFrame => {
+                Some(Margins::equal(style.dimensions().guide_width))
+            }
+            _ => None,
         }
     }
 
@@ -400,11 +407,19 @@ impl layout::Properties for LayoutProperties {
     ) {
         match stage {
             Stage::Back => {
-                if matches!(self.layout_type, LayoutType::BadgeFrame) {
-                    let mut canvas = canvas.group();
-                    canvas.apply(layout.outer(base));
-                    canvas.apply(Operator::DestinationOut);
-                    canvas.fill();
+                match self.layout_type {
+                    LayoutType::BadgeFrame => {
+                        let mut canvas = canvas.group();
+                        canvas.apply(layout.outer(base));
+                        canvas.apply(Operator::DestinationOut);
+                        canvas.fill();
+                    }
+                    LayoutType::TextFrame => {
+                        canvas.apply(layout.outer(base));
+                        canvas.apply(Color::WHITE);
+                        canvas.fill();
+                    }
+                    _ => { }
                 }
             }
             Stage::Casing => {
@@ -414,7 +429,7 @@ impl layout::Properties for LayoutProperties {
                 canvas.apply(LineCap::Butt);
                 canvas.apply(LineJoin::Bevel);
                 canvas.apply(Color::WHITE);
-                canvas.apply(LineWidth(style.dimensions().sp * 5.));
+                canvas.apply(LineWidth(self.size().size(style) * 0.3));
                 layout.stroke_text(base, canvas);
             }
             Stage::Base => {
@@ -454,6 +469,7 @@ impl layout::Properties for LayoutProperties {
 pub enum LayoutType {
     #[default]
     Normal,
+    Rule,
     TextFrame,
     BadgeFrame,
 }
@@ -477,10 +493,10 @@ impl FontSize {
     pub fn size(self, style: &Style) -> f64 {
         use self::FontSize::*;
 
-        let base = if style.detail() >= 3 {
+        let base = if style.detail() >= 3.0 {
             match self {
                 Xsmall => 5.,
-                Small => 6.5,
+                Small => 6.,
                 Medium => 7.,
                 Large => 9.,
                 Xlarge => 11.,

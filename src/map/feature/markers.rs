@@ -128,7 +128,7 @@ impl StandardMarker {
             ).rotate(angle + self.orientation)
         );
         canvas.apply(style.primary_marker_color(&self.class));
-        if style.detail() > 3 {
+        if style.detail() >= 4. {
             (self.marker.large)(&mut canvas, style.dimensions())
         }
         else {

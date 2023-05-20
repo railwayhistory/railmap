@@ -92,7 +92,7 @@ impl BorderContour {
         &self, style: &Style, _canvas: &Canvas
     ) -> Box<dyn Shape + '_> {
         let outline = self.trace.outline(style);
-        if style.detail() <= 2 {
+        if style.detail() < 3. {
             Box::new(move |style: &Style, canvas: &mut Canvas| {
                 self.render_low(&outline, style, canvas)
             })

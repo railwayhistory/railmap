@@ -38,8 +38,10 @@ const FUNCTIONS: &[(
         let _width =
             args.into_sole_positional(err)?
             .into_number(err)?.0.into_f64();
+        let mut props = label::LayoutProperties::default();
+        props.set_layout_type(label::LayoutType::Rule);
 
-        Ok(label::Layout::hrule(Default::default()).into())
+        Ok(label::Layout::hrule(props).into())
     }),
 
     // Produces a horizontal box for a label layout.
@@ -75,7 +77,10 @@ const FUNCTIONS: &[(
                 return Err(Err(Failed))
             }
         };
-        let properties = label::LayoutProperties::from_symbols(&mut align);
+        let mut properties = label::LayoutProperties::from_symbols(&mut align);
+        if align.take("frame") {
+            properties.set_layout_type(label::LayoutType::TextFrame);
+        }
         align.check_exhausted(err)?;
         Ok(label::Layout::hbox(
             halign, valign, properties,
@@ -234,11 +239,11 @@ const FUNCTIONS: &[(
     // vrule(style)
     // ```
     ("vrule", &|args, _, err| {
-        Ok(label::Layout::vrule(
-                label::LayoutProperties::from_arg(
-                    args.into_sole_positional(err)?, err
-                )?
-        ).into())
+        let mut props = label::LayoutProperties::from_arg(
+            args.into_sole_positional(err)?, err
+        )?;
+        props.set_layout_type(label::LayoutType::Rule);
+        Ok(label::Layout::vrule(props).into())
     }),
 ];
 

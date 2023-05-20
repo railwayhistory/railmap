@@ -11,7 +11,7 @@ pub fn map_key(style: Style, format: TileFormat) -> Body {
     {
         let canvas = Canvas::new(&surface);
 
-        match style.detail() {
+        match style.detail_step() {
             0 => map_key_0(&style, &canvas),
             1 => map_key_0(&style, &canvas),
             2 => map_key_0(&style, &canvas),

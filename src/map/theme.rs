@@ -131,6 +131,7 @@ impl theme::Theme for Railwayhistory {
 #[derive(Clone, Debug, Default)]
 pub struct RenderParams {
     detail: Option<(f64, f64)>,
+    zoom: Option<Zoom>,
     layer: i16,
     style: Option<ast::ShortString>,
 }
@@ -148,6 +149,7 @@ impl RenderParams {
             "layer" => self.update_layer(value, err),
             "link" => self.update_link(value, err),
             "style" => self.update_style(value, err),
+            "zoom" => self.update_zoom(value, err),
             _ => {
                 err.add(pos, format!("unknown render param {}", target));
                 return Err(Failed)
@@ -221,11 +223,33 @@ impl RenderParams {
         }
     }
 
+    fn update_zoom(
+        &mut self,
+        value: eval::Expression<Railwayhistory>,
+        err: &mut eval::Error
+    ) {
+        if let Ok(value) = Zoom::from_value(value, err) {
+            self.zoom = Some(value)
+        }
+    }
+
     pub fn detail(
         &self, pos: ast::Pos, err: &mut eval::Error
     ) -> Result<(f64, f64), Failed> {
         match self.detail {
-            Some(detail) => Ok(detail),
+            Some((x, y)) => {
+                Ok(match self.zoom {
+                    Some(Zoom::Low) => {
+                        (x - 0.1, y + 0.6)
+                    }
+                    Some(Zoom::High) => {
+                        (x + 0.6, y + 0.9)
+                    }
+                    None => {
+                        (x - 0.1, y + 0.9)
+                    }
+                })
+            }
             None => {
                 err.add(pos, "no detail level selected yet");
                 Err(Failed)
@@ -239,6 +263,33 @@ impl RenderParams {
 
     pub fn style(&self) -> Option<&str> {
         self.style.as_ref().map(ast::ShortString::as_str)
+    }
+}
+
+//------------ Zoom ----------------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+pub enum Zoom {
+    Low,
+    High,
+}
+
+impl Zoom {
+    fn from_value(
+        value: eval::Expression<Railwayhistory>,
+        err: &mut eval::Error
+    ) -> Result<Self, Failed> {
+        let (value, pos) = value.into_symbol(err)?;
+        if value == "high" {
+            Ok(Zoom::High)
+        }
+        else if value == "low" {
+            Ok(Zoom::Low)
+        }
+        else {
+            err.add(pos, "expected symbol :high or :low");
+            Err(Failed)
+        }
     }
 }
 
