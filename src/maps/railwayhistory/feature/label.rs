@@ -318,6 +318,8 @@ impl FontFaceBuilder {
         use self::FontStretch::*;
         use self::FontWeight::*;
 
+        let _ = symbols.take("roman");
+
         FontFaceBuilder {
             family: None,
             stretch: {
@@ -501,7 +503,7 @@ impl FontSize {
 
         if style.detail() >= 3 {
             match self {
-                Xsmall => 5.,
+                Xsmall => 5.0,
                 Small => 6.5,
                 Medium => 7.,
                 Large => 9.,
