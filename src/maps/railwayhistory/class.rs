@@ -717,6 +717,7 @@ impl Gauge {
     const MAIN_GAUGES: &'static [(&'static str, u16)] = &[
         ("g600", 600),
         ("g750", 750),
+        ("g760", 760),
         ("g785", 785),
         ("g800", 800),
         ("g900", 900),
