@@ -290,6 +290,10 @@ impl Status {
         }
     }
 
+    pub fn is_open(self) -> bool {
+        matches!(self, Status::Open)
+    }
+
     pub fn is_project(self) -> bool {
         matches!(self, Status::Explanned | Status::Planned)
     }
@@ -683,9 +687,11 @@ impl Gauge {
     const MAIN_GAUGES: &'static [(&'static str, u16)] = &[
         ("g600", 600),
         ("g750", 750),
+        ("g760", 760),
         ("g785", 785),
         ("g800", 800),
         ("g900", 900),
+        ("g950", 950),
         ("g1000", 1000),
         ("g1100", 1100),
         ("g1200", 1200),

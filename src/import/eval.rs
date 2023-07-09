@@ -622,6 +622,26 @@ impl<T: Theme> ArgumentList<T> {
         self.into_n_positionals(1, err).map(|mut res| res.pop().unwrap())
     }
 
+    /// Returns the only positional argument if there is one.
+    pub fn into_opt_sole_position(
+        self, err: &mut Error
+    ) -> Result<Option<Expression<T>>, Failed> {
+        if !self.keyword.is_empty() {
+            err.add(self.pos, "expected zero or one positional arguments");
+            return Err(Failed)
+        }
+        let mut args = self.positional.into_iter();
+        let res = match args.next() {
+            None => return Ok(None),
+            Some(res) => res,
+        };
+        if args.next().is_some() {
+            err.add(self.pos, "expected zero or one positional arguments");
+            return Err(Failed)
+        }
+        Ok(Some(res))
+    }
+
     /// Checks that there are keyword arguments only.
     pub fn keyword_only(&self, err: &mut Error) -> Result<(), Failed> {
         if !self.positional.is_empty() {

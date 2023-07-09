@@ -32,6 +32,15 @@ pub struct DotMarker {
 }
 
 impl DotMarker {
+    pub fn guide(class: Class, position: Position) -> Self {
+        Self {
+            position, class,
+            size: Size::Small,
+            inner: Inner::Fill,
+            casing: false,
+        }
+    }
+
     pub fn try_from_arg(
         arg: &mut eval::SymbolSet,
         position: Position,
@@ -60,9 +69,9 @@ impl DotMarker {
         err: &mut eval::Error,
     ) -> Result<Self, Failed> {
         let size = Size::from_symbols(&mut arg);
-        let inner = Inner::from_symbols(&mut arg);
-        let casing = Self::casing_from_symbols(&mut arg);
         let class = Class::from_symbols(&mut arg);
+        let inner = Inner::from_symbols(&class, &mut arg);
+        let casing = Self::casing_from_symbols(&mut arg);
         arg.check_exhausted(err)?;
         Ok(DotMarker { position, class, size, inner, casing })
     }
@@ -122,13 +131,13 @@ impl DotMarker {
             }
             Inner::Stroke => {
                 canvas.sketch().apply(
-                    Circle::new(point, radius - 0.5 * sp)
+                    Circle::new(point, radius - 0.75 * sp)
                 ).apply(
                     style.primary_marker_color(
                         &self.class
                     )
                 ).apply(
-                    LineWidth(sp)
+                    LineWidth(1.5 * sp)
                 ).stroke();
             }
             Inner::None => { }
@@ -175,15 +184,16 @@ impl Size {
 
 //------------ Inner ---------------------------------------------------------
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 enum Inner {
     None,
+    #[default]
     Fill,
     Stroke, 
 }
 
 impl Inner {
-    fn from_symbols(symbols: &mut eval::SymbolSet) -> Self {
+    fn from_symbols(class: &Class, symbols: &mut eval::SymbolSet) -> Self {
         if symbols.take("filled") {
             Inner::Fill
         }
@@ -192,6 +202,9 @@ impl Inner {
         }
         else if symbols.contains("casing") {
             Inner::None
+        }
+        else if class.status().is_open() && !class.pax().is_full() {
+            Inner::Stroke
         }
         else {
             Inner::Fill

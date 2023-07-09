@@ -94,11 +94,12 @@ const FUNCTIONS: &[(
     // hrule(style)
     // ```
     ("hrule", &|args, _, err| {
-        Ok(label::Layout::hrule(
-                label::LayoutProperties::from_arg(
-                    args.into_sole_positional(err)?, err
-                )?
-        ).into())
+        let mut props = match args.into_opt_sole_position(err)? {
+            Some(props) => label::LayoutProperties::from_arg(props, err)?,
+            None => Default::default(),
+        };
+        props.set_layout_type(label::LayoutType::Rule);
+        Ok(label::Layout::hrule(props).into())
     }),
 
     // Resolves a color from a string of hex digits.

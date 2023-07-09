@@ -367,6 +367,30 @@ markers! {
             station_small(canvas, u)
         }
     ),
+    ("de.kbf") => (
+        |canvas: &mut Group, u: Dimensions| {
+            let hsp = 0.5 * u.sp;
+            canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
+            canvas.line_to(-0.5 * u.sw + hsp, u.sh - hsp);
+            canvas.line_to(0.5 * u.sw - hsp, u.sh - hsp);
+            canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.sp);
+            canvas.close_path();
+            canvas.apply_line_width(u.sp);
+            canvas.stroke();
+
+            let hsp = 2. * u.sp;
+            canvas.new_path();
+            canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
+            canvas.line_to(-0.5 * u.sw + hsp, u.sh - hsp);
+            canvas.line_to(0.5 * u.sw - hsp, u.sh - hsp);
+            canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.sp);
+            canvas.close_path();
+            canvas.fill()
+        },
+        |canvas: &mut Group, u: Dimensions| {
+            station_xsmall(canvas, u)
+        }
+    ),
     ("de.bf.casing", "station.casing") => (
         |canvas: &mut Group, u: Dimensions| {
             station_casing(canvas, u)
@@ -657,6 +681,14 @@ markers! {
             stop_small(canvas, u)
         }
     ),
+    ("de.khp") => (
+        |canvas: &mut Group, u: Dimensions| {
+            stop(canvas, u)
+        },
+        |canvas: &mut Group, u: Dimensions| {
+            stop_xsmall(canvas, u)
+        }
+    ),
     ("de.hp.casing", "stop.casing") => (
         |canvas: &mut Group, u: Dimensions| {
             station_casing(canvas, u)
@@ -723,17 +755,11 @@ markers! {
             canvas.stroke()
         },
         |canvas: &mut Group, u: Dimensions| {
-            top_ds_rect(canvas,
-                -0.5 * u.sw + 0.5 * u.sp,
-                0.5 * u.sw - 0.5 * u.sp,
-                0.,
-                u.sh - 0.5 * u.sp,
-                u.ds,
-            );
-            canvas.move_to(0., 0.);
+            stop_small(canvas, u);
+            canvas.move_to(0., 1.75 * u.sp);
             canvas.line_to(0., u.sh - 0.5 * u.sp);
-            canvas.apply_line_width(u.sp);
-            stroke_round(canvas)
+            canvas.apply_line_width(0.8 * u.sp);
+            canvas.stroke()
         }
     ),
 
@@ -982,6 +1008,28 @@ fn station_small(
     canvas.new_path();
 }
 
+fn station_xsmall(
+    canvas: &mut Group, u: Dimensions
+) {
+    let sp = 0.8 * u.sp;
+    let hsp = 0.5 * u.sp;
+    let x = 0.4 * u.sw;
+    let (y0, y1) = (2.6 * sp - hsp, 0.9 * u.sh);
+    canvas.move_to(-x, y0);
+    canvas.line_to(-x, y1);
+    canvas.line_to(x, y1);
+    canvas.line_to(x, y0);
+    canvas.close_path();
+
+    /*
+    top_ds_rect(
+        canvas, -0.5 * u.sw, 0.5 * u.sw, 0., u.sh, u.ds,
+    );
+    */
+    canvas.fill();
+    canvas.new_path();
+}
+
 fn station_casing(
     canvas: &mut Group, u: Dimensions
 ) {
@@ -1053,6 +1101,24 @@ fn stop_small(
     );
     */
     canvas.apply_line_width(u.sp);
+    stroke_round(canvas);
+    canvas.new_path();
+}
+
+fn stop_xsmall(
+    canvas: &mut Group, u: Dimensions
+) {
+    let sp = 0.8 * u.sp;
+    let hsp = 0.5 * sp;
+    let x = 0.4 * u.sw - hsp;
+    let (y0, y1) = (2.6 * sp, 0.9 * u.sh - hsp);
+    canvas.move_to(-x, y0);
+    canvas.line_to(-x, y1);
+    canvas.line_to(x, y1);
+    canvas.line_to(x, y0);
+    canvas.close_path();
+
+    canvas.apply_line_width(sp);
     stroke_round(canvas);
     canvas.new_path();
 }

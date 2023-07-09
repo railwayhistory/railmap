@@ -2,6 +2,35 @@
 //!
 //! Track is a contour feature with complex rendering rules depending on the
 //! class, style, and detail level.
+//!
+//! # Track classes
+//!
+//! All line classes.
+//!
+//! Placement within multiple parallel tracks:
+//!
+//! * `:leftsame` if the track has another track of the same line on its left.
+//! * `:leftother` if the track has another track of a different line on its
+//!   left.
+//! * `:rightsame`if the track has another track of the same line of its
+//!   right.
+//! * `:rightother` if the track has another track of a different line on its
+//!   right.
+//!
+//! * In detail levels 3 and up, `:double` is a shortcut for two tracks offset
+//!   half a dt to the left and right and with `:rightsame` and `:leftsame`.
+//! * In detail levels 0 to 3, `:double` marks a track as double track.
+//! * `:tight` is a deprecated shortcut for `:leftother:rightother`.
+//!
+//! Placement within a sequence of segments that whose markings should look
+//! consecutive:
+//!
+//! * `:start` if the segment is at the start of the sequence, i.e., extra
+//!   spacing can be added at its beginning.
+//! * `:end` if the segement is at the end of the sequence, i.e., extra
+//!   spacing can be added at its end.
+//! * `:inner` if the segment is in the middle and markings need to be
+//!   “justified.”
 
 use std::f64::consts::FRAC_PI_2;
 use kurbo::{BezPath, PathEl, Rect, Vec2};
@@ -116,12 +145,7 @@ impl TrackContour {
             return Box::new(ContourShape2::new(self, style));
         }
         if style.detail_step() >= 3 {
-            if self.class.double {
-                return Box::new(ContourShape4Double::new(self, style));
-            }
-            else {
-                return Box::new(ContourShape4Single::new(self, style))
-            }
+            return ContourShape4::new(self, style)
         }
 
         let yes = !self.class.station;
@@ -637,20 +661,22 @@ impl<'a> ContourShape<'a> {
 
 //------------ ContourShape2 -------------------------------------------------
 
-struct ContourShape2 {
+struct ContourShape2<'a> {
+    class: &'a TrackClass,
     casing: bool,
     color: Color,
     width: f64,
-    dash: Option<DashPattern<2>>,
+    base_dash: Option<DashPattern<2>>,
     trace: Outline,
 }
 
-impl ContourShape2 {
+impl<'a> ContourShape2<'a> {
     fn new(
-        contour: &TrackContour,
+        contour: &'a TrackContour,
         style: &Style,
     ) -> Self {
         Self {
+            class: &contour.class,
             casing: contour.casing,
             color: style.track_color(&contour.class.class),
             width: if contour.class.class.category().is_main() {
@@ -658,19 +684,19 @@ impl ContourShape2 {
                     style.dimensions().line_width * 2.0
                 }
                 else {
-                    style.dimensions().line_width
+                    style.dimensions().line_width * 1.4
                 }
             }
             else {
-                style.dimensions().other_width
+                style.dimensions().other_width * 1.2
             },
-            dash: if contour.class.combined {
+            base_dash: if contour.class.combined {
                 Some(DashPattern::new(
                     [
                         0.5 * style.dimensions().seg,
                         0.5 * style.dimensions().seg
                     ],
-                    0.25 * style.dimensions().seg
+                    0.75 * style.dimensions().seg
                 ))
             }
             else if contour.class.class.status().is_project() {
@@ -679,7 +705,7 @@ impl ContourShape2 {
                         0.7 * style.dimensions().seg,
                         0.3 * style.dimensions().seg
                     ],
-                    0.15 * style.dimensions().seg
+                    0.85 * style.dimensions().seg
                 ))
             }
             else {
@@ -690,7 +716,7 @@ impl ContourShape2 {
     }
 }
 
-impl Shape for ContourShape2 {
+impl<'a> Shape for ContourShape2<'a> {
     fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
         match stage {
             Stage::Casing => {
@@ -708,36 +734,87 @@ impl Shape for ContourShape2 {
                 let mut canvas = canvas.sketch();
                 canvas.apply(self.color);
                 canvas.apply(LineWidth(self.width));
-                if let Some(dash) = self.dash {
+                if let Some(dash) = self.base_dash {
                     canvas.apply(dash);
                 }
                 canvas.apply(&self.trace);
                 canvas.stroke();
+            }
+            Stage::Inside => {
+                self.render_inside(style, canvas);
             }
             _ => { }
         }
     }
 }
 
-//------------ ContourShape4Single -------------------------------------------
+impl<'a> ContourShape2<'a> {
+    fn render_inside(&self, style: &Style, canvas: &mut Canvas) {
+        if !self.class.class.is_open() {
+            return
+        }
 
-struct ContourShape4Single<'a> {
-    class: &'a TrackClass,
-    casing: bool,
-    center: Outline,
+        let seg = style.dimensions().seg;
+        let mut canvas = canvas.sketch();
+
+        match self.class.class.pax() {
+            Pax::None => { }
+            Pax::Heritage => {
+                if self.class.station {
+                    return
+                }
+                canvas.apply(DashPattern::new(
+                    [0.25 * seg, 0.25 * seg],
+                    0.375 * seg
+                ));
+            }
+            _ => return
+        };
+        canvas.apply(LineWidth(self.width * 0.4));
+        canvas.apply(Color::WHITE);
+        canvas.apply(&self.trace);
+        canvas.stroke();
+    }
 }
 
-impl<'a> ContourShape4Single<'a> {
-    fn new(contour: &'a TrackContour, style: &Style) -> Self {
-        Self {
-            class: &contour.class,
-            casing: contour.casing,
-            center: contour.trace.outline(style),
+//------------ ContourShape4 -------------------------------------------------
+
+struct ContourShape4<'a> {
+    class: &'a TrackClass,
+    casing: bool,
+    track: Outline,
+}
+
+impl<'a> ContourShape4<'a> {
+    fn new(contour: &'a TrackContour, style: &Style) -> Box<dyn Shape + 'a> {
+        if contour.class.double {
+            let off = style.dimensions().dt * 0.5;
+            Box::new([
+                Self {
+                    class: &contour.class,
+                    casing: contour.casing,
+                    track: contour.trace.outline_offset(-off, style),
+                },
+                Self {
+                    class: &contour.class,
+                    casing: contour.casing,
+                    track: contour.trace.outline_offset(off, style),
+                }
+            ])
+        }
+        else {
+            Box::new(
+                Self {
+                    class: &contour.class,
+                    casing: contour.casing,
+                    track: contour.trace.outline(style),
+                }
+            )
         }
     }
 }
 
-impl<'a> Shape for ContourShape4Single<'a> {
+impl<'a> Shape for ContourShape4<'a> {
     fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
         match stage {
             Stage::Casing => {
@@ -747,7 +824,7 @@ impl<'a> Shape for ContourShape4Single<'a> {
                     canvas.apply(LineWidth(
                         1.2 * style.dimensions().dt
                     ));
-                    canvas.apply(&self.center);
+                    canvas.apply(&self.track);
                     canvas.stroke();
                 }
             }
@@ -766,13 +843,13 @@ impl<'a> Shape for ContourShape4Single<'a> {
                     self.render_tunnel(style, &mut canvas.sketch());
                 }
                 */
-            }
+           }
             _ => { }
         }
     }
 }
 
-impl<'a> ContourShape4Single<'a> {
+impl<'a> ContourShape4<'a> {
     fn render_base(&self, style: &Style, canvas: &mut Sketch) {
         canvas.apply(style.track_color(&self.class.class));
         canvas.apply(LineWidth(self.line_width(style)));
@@ -788,7 +865,7 @@ impl<'a> ContourShape4Single<'a> {
                 [0.7 * seg, 0.3 * seg], 0.7 * seg
             ));
         }
-        canvas.apply(&self.center);
+        canvas.apply(&self.track);
         canvas.stroke();
     }
 
@@ -797,7 +874,7 @@ impl<'a> ContourShape4Single<'a> {
         canvas.apply(LineWidth(
             self.line_width(style) - style.dimensions().guide_width
         ));
-        canvas.apply(&self.center);
+        canvas.apply(&self.track);
         canvas.stroke();
     }
 
@@ -819,7 +896,7 @@ impl<'a> ContourShape4Single<'a> {
 
                 canvas.apply(LineWidth(style.dimensions().mark_width));
                 canvas.apply(cat_color);
-                self.center.iter_positions(
+                self.track.iter_positions(
                     seg, Some(0.5 * seg)
                 ).for_each(|(pos, dir)| {
                     let dir = Vec2::from_angle(dir + FRAC_PI_2);
@@ -838,7 +915,7 @@ impl<'a> ContourShape4Single<'a> {
                 canvas.apply(LineWidth(style.dimensions().mark_width));
                 canvas.apply(rail_color);
 
-                let mut positions = self.center.positions();
+                let mut positions = self.track.positions();
                 let (mut p1, mut d1) = match positions.advance(0.5 * seg) {
                     Some(some) => some,
                     None => return,
@@ -894,7 +971,7 @@ impl<'a> ContourShape4Single<'a> {
             }
         }
 
-        self.center.iter_positions(
+        self.track.iter_positions(
             seg, Some(0.5 * seg)
         ).for_each(|(pos, dir)| {
             match group {
@@ -940,193 +1017,74 @@ impl<'a> ContourShape4Single<'a> {
         })
     }
 
+    /*
     fn render_inside(&self, style: &Style, canvas: &mut Sketch) {
-        if self.class.station {
-            return
+        if self.class.station || !self.class.class.is_open() {
+            return;
         }
-        if self.class.class.is_open()
-            && matches!(self.class.class.pax(), Pax::None)
-        {
-            let seg = style.dimensions().seg;
-            canvas.apply(LineWidth(self.line_width(style) * 0.5));
-            canvas.apply(Color::WHITE);
-            canvas.apply(DashPattern::new(
-                [0.5 * seg, 0.5 * seg],
-                0.25 * seg
-            ));
-            canvas.apply(&self.center);
-            canvas.stroke();
-        }
-    }
 
-    fn line_width(&self, style: &Style) -> f64 {
-        if self.class.class.category().is_main() {
-            style.dimensions().line_width
-        }
-        else {
-            style.dimensions().other_width
-        }
-    }
-}
+        let step = match self.class.class.pax() {
+            Pax::None => 0.5,
+            Pax::Heritage => 0.25,
+            _ => return
+        };
+        let step = step * style.dimensions().seg;
 
-
-
-//------------ ContourShape4Double -------------------------------------------
-
-struct ContourShape4Double<'a> {
-    class: &'a TrackClass,
-    casing: bool,
-    left: Outline,
-    center: Outline,
-    right: Outline,
-}
-
-impl<'a> ContourShape4Double<'a> {
-    fn new(contour: &'a TrackContour, style: &Style) -> Self {
-        let off = style.dimensions().dt * 0.5;
-        Self {
-            class: &contour.class,
-            casing: contour.casing,
-            left: contour.trace.outline_offset(-off, style),
-            center: contour.trace.outline(style),
-            right: contour.trace.outline_offset(off, style),
-        }
-    }
-}
-
-impl<'a> Shape for ContourShape4Double<'a> {
-    fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
-        match stage {
-            Stage::Casing => {
-                if self.casing {
-                    let mut canvas = canvas.sketch();
-                    canvas.apply(Color::rgba(1., 1., 1., 0.7));
-                    canvas.apply(LineWidth(
-                        1.2 * style.dimensions().dt
-                    ));
-                    canvas.apply(&self.left);
-                    canvas.stroke();
-                    canvas.apply(&self.right);
-                    canvas.stroke();
-                }
-            }
-            Stage::Base => {
-                let mut canvas = canvas.sketch();
-                self.render_base(style, &mut canvas);
-                if !self.class.station {
-                    self.render_electric(style, &mut canvas);
-                    self.render_gauge(style, &mut canvas);
-                }
-            }
-            Stage::Inside => {
-                if self.class.class.surface().is_tunnel() {
-                    self.render_tunnel(style, &mut canvas.sketch());
-                }
-            }
-            _ => { }
-        }
-    }
-}
-
-impl<'a> ContourShape4Double<'a> {
-    fn render_base(&self, style: &Style, canvas: &mut Sketch) {
-        canvas.apply(style.track_color(&self.class.class));
-        canvas.apply(LineWidth(self.line_width(style)));
-        if self.class.combined {
-            let seg = style.dimensions().seg;
-            canvas.apply(DashPattern::new(
-                    [0.5 * seg, 0.5 * seg], 0.25 * seg
-            ));
-        }
-        else if self.class.class.status().is_project() {
-            let seg = style.dimensions().seg;
-            canvas.apply(DashPattern::new(
-                [0.7 * seg, 0.3 * seg], 0.7 * seg
-            ));
-        }
-        canvas.apply(&self.left);
-        canvas.stroke();
-        canvas.apply(&self.right);
-        canvas.stroke();
-    }
-
-    fn render_tunnel(&self, style: &Style, canvas: &mut Sketch) {
+        canvas.apply(LineWidth(self.line_width(style) * 0.5));
         canvas.apply(Color::WHITE);
-        canvas.apply(LineWidth(
-            self.line_width(style) - style.dimensions().guide_width
-        ));
-        canvas.apply(&self.left);
-        canvas.stroke();
-        canvas.apply(&self.right);
-        canvas.stroke();
-    }
-
-    fn render_electric(&self, style: &Style, canvas: &mut Sketch) {
-        let cat_color = style.cat_color(&self.class.class);
-        let rail_color = style.rail_color(&self.class.class);
-
-        let seg = style.dimensions().seg;
-        let dt1 = style.dimensions().dt * 1.0;
-        
-        match (cat_color, rail_color) {
-            (Some(cat_color), None) => {
-
-                canvas.apply(LineWidth(style.dimensions().mark_width));
-                canvas.apply(cat_color);
-                self.center.iter_positions(
-                    seg, Some(0.5 * seg)
-                ).for_each(|(pos, dir)| {
-                    let dir = Vec2::from_angle(dir + FRAC_PI_2);
-                    canvas.apply([
-                        PathEl::MoveTo(pos + dir * -dt1),
-                        PathEl::LineTo(pos + dir * dt1),
-                    ]);
-                    canvas.stroke()
-                });
-            }
-
-            (None, Some(rail_color)) => {
-                let skip = style.dimensions().mark_width * 3.;
-                let seg = seg - skip;
-
-                canvas.apply(LineWidth(style.dimensions().mark_width));
-                canvas.apply(rail_color);
-
-                let mut positions = self.center.positions();
-                let (mut p1, mut d1) = match positions.advance(0.5 * seg) {
-                    Some(some) => some,
-                    None => return,
-                };
-
-                loop {
-                    let (p2, d2) = match positions.advance(skip) {
-                        Some(some) => some,
-                        None => return,
-                    };
-
-                    let dir1 = Vec2::from_angle(d1 + FRAC_PI_2);
-                    let dir2 = Vec2::from_angle(d2 + FRAC_PI_2);
-
-                    canvas.apply([
-                        PathEl::MoveTo(p1 + dir1 * -dt1),
-                        PathEl::LineTo(p1 + dir1 * dt1),
-                        PathEl::MoveTo(p2 + dir2 * -dt1),
-                        PathEl::LineTo(p2 + dir2 * dt1),
-                    ]);
-                    canvas.stroke();
-
-                    (p1, d1) = match positions.advance(seg) {
-                        Some(some) => some,
-                        None => return,
-                    };
-                }
-            }
-
-            _ => { }
+        let mut pos = self.track.positions();
+        pos.advance(0.5 * step + (self.track.arclen() % step) * 0.5);
+        loop {
+            let sub = match pos.advance_sub(step) {
+                Some(sub) => sub,
+                None => break,
+            };
+            canvas.apply(&sub);
+            canvas.stroke();
+            pos.advance(step);
         }
     }
+    */
 
-    fn render_gauge(&self, _style: &Style, _canvas: &mut Sketch) {
+    fn render_inside(&self, style: &Style, canvas: &mut Sketch) {
+        if !self.class.class.is_open() {
+            return;
+        }
+
+        match self.class.class.pax() {
+            Pax::None => {
+                if self.class.station {
+                    canvas.apply(LineWidth(self.line_width(style) * 0.3));
+                }
+                else {
+                    canvas.apply(LineWidth(self.line_width(style) * 0.4));
+                }
+                canvas.apply(Color::WHITE);
+                canvas.apply(&self.track);
+                canvas.stroke();
+            }
+            Pax::Heritage => {
+                if self.class.station {
+                    return
+                }
+                let step = 0.25 * style.dimensions().seg;
+                canvas.apply(LineWidth(self.line_width(style) * 0.5));
+                canvas.apply(Color::WHITE);
+                let mut pos = self.track.positions();
+                pos.advance(0.5 * step + (self.track.arclen() % step) * 0.5);
+                loop {
+                    let sub = match pos.advance_sub(step) {
+                        Some(sub) => sub,
+                        None => break,
+                    };
+                    canvas.apply(&sub);
+                    canvas.stroke();
+                    pos.advance(step);
+                }
+            }
+            _ => return
+        };
+
     }
 
     fn line_width(&self, style: &Style) -> f64 {

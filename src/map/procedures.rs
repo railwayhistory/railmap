@@ -174,6 +174,182 @@ const PROCEDURES: &[(
         Ok(())
     }),
 
+    // Draws a text box connected to a line with a guide.
+    //
+    // ```text
+    // line_box(
+    //     class: symbol-set, position: position,
+    //     [text-shift: distance,]
+    //     text: Text
+    // )
+    // ```
+    //
+    // Classes:
+    //
+    // * `:left`, `:right` for the direction of the guide.
+    // * `:n`, `:e`, `:s`, `:w`: the compass direction where the label is
+    //   anchored.
+    ("line_box", &|pos, args, scope, features, err| {
+        // Get the arguments.
+        let args = args.into_var_positionals(err,  |args, err| {
+            if args.positional().len() == 3 || args.positional().len() == 4 {
+                Ok(true)
+            }
+            else {
+                err.add(
+                    args.pos(),
+                    "expected 3 or 4 positional arguments"
+                );
+                Err(Failed)
+            }
+        }).map_err(|_| Failed)?;
+
+        let four = args.len() > 3;
+        let mut args = args.into_iter();
+        let mut symbols = args.next().unwrap().into_symbol_set(err)?;
+        let position = args.next().unwrap().into_position(err)?.0;
+        let shift = if four {
+            Some(args.next().unwrap().into_vector(err)?.0)
+        }
+        else {
+            None
+        };
+        let layout = label::layout_from_expr(
+            args.next().unwrap(), err
+        )?;
+
+        // Tear symbols apart.
+        let left = if symbols.take("left") {
+            true
+        }
+        else if symbols.take("right") {
+            false
+        }
+        else {
+            err.add(symbols.pos(), "missing direction ':left' or ':right'");
+            return Err(Failed)
+        };
+        let anchor = match Anchor::from_symbols(&mut symbols) {
+            Some(anchor) => anchor,
+            None => {
+                err.add(symbols.pos(), "missing label anchor direction");
+                return Err(Failed)
+            }
+        };
+        let mut properties = label::LayoutProperties::from_symbols(
+            &mut symbols
+        );
+        properties.set_layout_type(label::LayoutType::TextFrame);
+        properties.set_size(label::FontSize::Small);
+        let double = symbols.take("double");
+        symbols.check_exhausted(err)?;
+
+        // Get the positions for things.
+        let (pos0, pos1) = if double {
+            (
+                Some(position.sideways(
+                    resolve_unit(
+                        if left { -0.5 } else { 0.5 },
+                        "dt"
+                    ).unwrap()
+                )),
+                position.sideways(
+                    resolve_unit(
+                        if left { 0.5 } else { -0.5 },
+                        "dt"
+                    ).unwrap()
+                )
+            )
+        }
+        else {
+            (None, position.clone())
+        };
+        let pos2 = position.sideways(
+            resolve_unit(
+                if double {
+                    if left { 5.5 } else { -5.5 }
+                }
+                else {
+                    if left { 5.0 } else { -5.0 }
+                },
+                "dt"
+            ).unwrap()
+        );
+        let mut pos3 = pos2.clone();
+        if let Some(shift) = shift {
+            pos3.shift_assign(shift);
+        }
+
+        let (halign, valign) = {
+            use self::Anchor::*;
+            use self::Align::*;
+
+            match anchor {
+                North => (Center, Start),
+                NorthEast => (End, Start),
+                East => (End, Center),
+                SouthEast => (End, End),
+                South => (Center, End),
+                SouthWest => (Start, End),
+                West => (Start, Center),
+                NorthWest => (Start, Start)
+            }
+        };
+
+        // Build the dots
+        if let Some(pos0) = pos0.as_ref() {
+            features.insert(
+                Feature::Dot(DotMarker::guide(
+                    properties.class().clone(),
+                    pos0.clone(),
+                )),
+                scope.params().detail(pos, err)?,
+                scope.params().layer(),
+                200,
+            );
+        }
+        features.insert(
+            Feature::Dot(DotMarker::guide(
+                properties.class().clone(),
+                pos1.clone(),
+            )),
+            scope.params().detail(pos, err)?,
+            scope.params().layer(),
+            200,
+        );
+
+        // Build the guide
+        let mut trace = Trace::new();
+        if let Some(pos0) = pos0 {
+            trace.push_edge(1., 1., Edge::new(pos0, pos1.clone()));
+        }
+        trace.push_edge(1., 1., Edge::new(pos1, pos2));
+        features.insert(
+            Feature::Guide(GuideContour::new(
+                properties.class().clone(), true, false, trace
+            )),
+            scope.params().detail(pos, err)?,
+            scope.params().layer(),
+            200,
+        );
+
+        // Build the label.
+        features.insert(
+            label::Feature::new(
+                label::Layout::hbox(
+                    halign, valign, properties, vec![layout],
+                ),
+                label::LabelProperties::new_linenum(), pos3, false,
+                Default::default(),
+            ).into(),
+            scope.params().detail(symbols.pos(), err)?,
+            scope.params().layer(),
+            200,
+        );
+
+        Ok(())
+    }),
+
     // Draws a line label connected with a guide.
     //
     // ```text

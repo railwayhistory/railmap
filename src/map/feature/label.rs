@@ -115,6 +115,10 @@ pub struct LabelProperties {
 }
 
 impl LabelProperties {
+    pub fn new_linenum() -> Self {
+        Self { linenum: true }
+    }
+
     pub fn from_arg(
         linenum: bool,
         arg: eval::Expression<Railwayhistory>,
@@ -341,6 +345,10 @@ impl LayoutProperties {
         self.packed = Some(packed)
     }
 
+    pub fn set_size(&mut self, size: FontSize) {
+        self.size = Some(size)
+    }
+
     pub fn update(&mut self, base: &Self) {
         self.font.update(&base.font);
         if self.size.is_none() {
@@ -389,7 +397,7 @@ impl layout::Properties for LayoutProperties {
         if matches!(self.layout_type, LayoutType::BadgeFrame) {
             Margins::vh(
                 style.dimensions().dt * 0.1,
-                style.dimensions().dt * 0.3,
+                style.dimensions().dt * 0.5,
             )
         }
         else {

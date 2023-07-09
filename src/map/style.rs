@@ -536,7 +536,7 @@ impl ColorSet {
     }
 
     fn label_color(&self, palette: Palette, class: &Class) -> Color {
-        if let Some(color) = self.ex_label_color(class.status()) {
+        if let Some(color) = self.ex_label_color(class) {
             color
         }
         else {
@@ -729,8 +729,11 @@ impl ColorSet {
         }
     }
 
-    fn ex_label_color(&self, status: Status) -> Option<Color> {
-        match status {
+    fn ex_label_color(&self, class: &Class) -> Option<Color> {
+        if let Some(color) = self.tram_color(class) {
+            return Some(color)
+        }
+        match class.status() {
             Status::Open | Status::Planned => None,
             Status::Closed => Some(self.closed_text),
             Status::Removed | Status::Explanned => Some(self.removed_text),
