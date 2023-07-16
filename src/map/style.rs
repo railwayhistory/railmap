@@ -208,7 +208,7 @@ impl Style {
         self.dimensions
     }
 
-    fn palette(&self) -> Palette {
+    pub fn palette(&self) -> Palette {
         match self.id {
             StyleId::Overview(pal) => pal,
             StyleId::Detail(pal) => pal
@@ -605,8 +605,7 @@ impl ColorSet {
         else {
             match class.pax() {
                 Pax::None => self.pax_none,
-                Pax::Full => self.pax_full,
-                _ => self.pax_ltd,
+                _ => self.pax_full,
             }
         }
     }

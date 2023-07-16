@@ -43,7 +43,7 @@ use crate::import::Failed;
 use crate::import::eval::{Expression, SymbolSet};
 use crate::theme::Style as _;
 use super::super::class::{Category, Class, Gauge/*, GaugeGroup*/, Pax, Status};
-use super::super::style::Style;
+use super::super::style::{Palette, Style};
 use super::super::theme::Railwayhistory;
 use super::{Shape, Stage};
 
@@ -757,9 +757,9 @@ impl<'a> ContourShape2<'a> {
         let seg = style.dimensions().seg;
         let mut canvas = canvas.sketch();
 
-        match self.class.class.pax() {
-            Pax::None => { }
-            Pax::Heritage => {
+        match (style.palette(), self.class.class.pax()) {
+            (Palette::El, Pax::None) => { }
+            (_, Pax::Heritage) => {
                 if self.class.station {
                     return
                 }
