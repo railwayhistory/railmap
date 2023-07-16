@@ -90,6 +90,10 @@ impl Class {
         matches!(self.status(), Status::Open)
     }
 
+    pub fn is_open_no_pax(&self) -> bool {
+        self.is_open() && !matches!(self.pax(), Pax::Full)
+    }
+
     pub fn surface(&self) -> Surface {
         self.surface.unwrap_or_default()
     }
