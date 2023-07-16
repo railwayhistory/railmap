@@ -746,39 +746,21 @@ impl ColorSet {
 impl ColorSet {
     fn colorful() -> Self {
         ColorSet {
-            /*
-            el_none_pax:        Color::hex("98690dff").unwrap(),
-            el_ole_ac_high_pax: Color::hex("8845aaff").unwrap(),
-            el_ole_ac_low_pax:  Color::hex("aa4689ff").unwrap(),
-            el_ole_dc_high_pax: Color::hex("a51100ff").unwrap(),
-            el_ole_dc_low_pax:  Color::hex("d05113ff").unwrap(),
-            el_rail_pax:        Color::hex("007e49ff").unwrap(),
-            el_rail_four_pax:   Color::hex("6e6e00ff").unwrap(),
+            el_none_pax:        Color::hex(EL_NONE).unwrap(),
+            el_ole_ac_high_pax: Color::hex(EL_OLE_AC_HIGH).unwrap(),
+            el_ole_ac_low_pax:  Color::hex(EL_OLE_AC_LOW).unwrap(),
+            el_ole_dc_high_pax: Color::hex(EL_OLE_DC_HIGH).unwrap(),
+            el_ole_dc_low_pax:  Color::hex(EL_OLE_DC_LOW).unwrap(),
+            el_rail_pax:        Color::hex(EL_RAIL).unwrap(),
+            el_rail_four_pax:   Color::hex(EL_RAIL_FOUR).unwrap(),
 
-            el_none:        Color::hex("523700ff").unwrap(),
-            el_ole_ac_high: Color::hex("4d2263ff").unwrap(),
-            el_ole_ac_low:  Color::hex("691f51ff").unwrap(),
-            el_ole_dc_high: Color::hex("720c00ff").unwrap(),
-            el_ole_dc_low:  Color::hex("ac3900ff").unwrap(),
-            el_rail:        Color::hex("004f2eff").unwrap(),
-            el_rail_four:   Color::hex("444400ff").unwrap(),
-            */
-
-            el_none_pax:        Color::hex("523700ff").unwrap(),
-            el_ole_ac_high_pax: Color::hex("4d2263ff").unwrap(),
-            el_ole_ac_low_pax:  Color::hex("691f51ff").unwrap(),
-            el_ole_dc_high_pax: Color::hex("720c00ff").unwrap(),
-            el_ole_dc_low_pax:  Color::hex("ac3900ff").unwrap(),
-            el_rail_pax:        Color::hex("007e49ff").unwrap(),
-            el_rail_four_pax:   Color::hex("444400ff").unwrap(),
-
-            el_none:        Color::hex("523700ff").unwrap(),
-            el_ole_ac_high: Color::hex("4d2263ff").unwrap(),
-            el_ole_ac_low:  Color::hex("691f51ff").unwrap(),
-            el_ole_dc_high: Color::hex("720c00ff").unwrap(),
-            el_ole_dc_low:  Color::hex("ac3900ff").unwrap(),
-            el_rail:        Color::hex("007e49ff").unwrap(),
-            el_rail_four:   Color::hex("444400ff").unwrap(),
+            el_none:        Color::hex(EL_NONE).unwrap(),
+            el_ole_ac_high: Color::hex(EL_OLE_AC_HIGH).unwrap(),
+            el_ole_ac_low:  Color::hex(EL_OLE_AC_LOW).unwrap(),
+            el_ole_dc_high: Color::hex(EL_OLE_DC_HIGH).unwrap(),
+            el_ole_dc_low:  Color::hex(EL_OLE_DC_LOW).unwrap(),
+            el_rail:        Color::hex(EL_RAIL).unwrap(),
+            el_rail_four:   Color::hex(EL_RAIL).unwrap(),
 
             pax_full: Color::grey(0.1),
             pax_ltd: Color::grey(0.3),
@@ -793,10 +775,15 @@ impl ColorSet {
             removed_text: Color::grey(0.500),
             gone_text:    Color::grey(0.500),
 
-            tram:         Color::hex("1c63abff").unwrap(),
+            tram:         Color::hex(TRAM).unwrap(),
+            tram_closed:  Color::grey(0.550),
+            tram_removed: Color::grey(0.650),
+            tram_gone:    Color::grey(0.850),
+            /*
             tram_closed:  Color::hex("5e8eb9ff").unwrap(),
             tram_removed: Color::hex("8fb0d1ff").unwrap(),
             tram_gone:    Color::hex("bed2e4ff").unwrap(),
+            */
 
             toxic: Color::rgb(0.824, 0.824, 0.0),
         }
@@ -853,4 +840,19 @@ impl Default for ColorSet {
 //------------ InvalidStyle --------------------------------------------------
 
 pub struct InvalidStyle;
+
+
+//------------ Color Constants -----------------------------------------------
+
+const EL_NONE: &str = "2e3032ff";
+const EL_OLE_AC_HIGH: &str  = "812c66ff";
+const EL_OLE_AC_LOW: &str = "9b2321ff";
+const EL_OLE_DC_HIGH: &str = "b64f0dff";
+const EL_OLE_DC_LOW: &str = "84611eff";
+const EL_RAIL: &str = "007e40ff";
+const EL_RAIL_FOUR: &str = "53633bff";
+const TRAM: &str = "005387ff";
+
+#[allow(dead_code)]
+const BORDER: &str = "C45F8C";
 
