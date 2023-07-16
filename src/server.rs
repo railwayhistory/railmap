@@ -16,6 +16,7 @@ pub struct Server<T: Theme> {
     theme: T,
     features: Arc<FeatureSet<T::Feature>>,
     cache: Arc<Mutex<LruCache<TileId<<T::Style as Style>::StyleId>, Bytes>>>,
+    test_style: String,
 }
 
 
@@ -23,6 +24,7 @@ impl<T: Theme> Server<T> {
     pub fn new(
         theme: T,
         features: FeatureSet<T::Feature>,
+        test_style: String,
     ) -> Self {
         Server {
             theme,
@@ -30,6 +32,7 @@ impl<T: Theme> Server<T> {
             cache: Arc::new(Mutex::new(
                 LruCache::new(NonZeroUsize::new(10_000).unwrap())
             )),
+            test_style,
         }
     }
 }
@@ -140,7 +143,10 @@ impl<T: Theme> Server<T> {
             )
         }
 
-        let tile = match TileId::from_path(&request.uri().path()[1..]) {
+        let tile = match TileId::from_path(
+            &request.uri().path()[1..],
+            &self.test_style,
+        ) {
             Ok(tile) => tile,
             Err(_) => {
                 return Ok(not_found())
@@ -170,7 +176,8 @@ impl<T: Theme> Clone for Server<T> {
         Server {
             theme: self.theme.clone(),
             features: self.features.clone(),
-            cache: self.cache.clone()
+            cache: self.cache.clone(),
+            test_style: self.test_style.clone(),
         }
     }
 }

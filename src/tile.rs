@@ -101,13 +101,17 @@ impl<StyleId> TileId<StyleId> {
     /// ```text
     /// {style}/{zoom}/{x}/{y}.{fmt}
     /// ```
-    pub fn from_path(path: &str) -> Result<Self, TileIdError>
+    pub fn from_path(
+        path: &str, test_style: &str,
+    ) -> Result<Self, TileIdError>
     where StyleId: FromStr {
         let mut path = path.split('/');
 
-        let style = StyleId::from_str(
-            path.next().ok_or(TileIdError)?
-        ).map_err(|_| TileIdError)?;
+        let style = match path.next().ok_or(TileIdError)? {
+            "test" => test_style,
+            other => other,
+        };
+        let style = StyleId::from_str(style).map_err(|_| TileIdError)?;
 
         let zoom = u8::from_str(
             path.next().ok_or(TileIdError)?

@@ -51,7 +51,10 @@ async fn run<T: Theme>(config: Config, matches: ArgMatches, mut theme: T) {
         }
     };
 
-    let server = Server::new(theme, features);
+    let server = Server::new(
+        theme, features,
+        matches.value_of("style").unwrap().into(),
+    );
     eprintln!("Server ready after {:.03}s.", start.elapsed().as_secs_f32());
     server.run(addr).await;
 }
@@ -86,6 +89,14 @@ async fn main() {
             .help("the addr to listen on")
             .takes_value(true)
             .default_value("127.0.0.1:8080")
+        )
+        .arg(Arg::new("style")
+            .short('s')
+            .long("style")
+            .value_name("STYLE")
+            .help("the style to use in the test map")
+            .takes_value(true)
+            .default_value("lx")
         )
         .get_matches();
 
