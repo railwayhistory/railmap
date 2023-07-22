@@ -843,15 +843,15 @@ pub struct InvalidStyle;
 
 //------------ Color Constants -----------------------------------------------
 
-const EL_NONE: &str = "2e3032ff";
-const EL_OLE_AC_HIGH: &str  = "812c66ff";
-const EL_OLE_AC_LOW: &str = "9b2321ff";
-const EL_OLE_DC_HIGH: &str = "b64f0dff";
-const EL_OLE_DC_LOW: &str = "84611eff";
+const EL_NONE: &str = "5a3a29ff";
+const EL_OLE_AC_HIGH: &str  = "6c2b86ff";
+const EL_OLE_AC_LOW: &str = "812c5cff";
+const EL_OLE_DC_HIGH: &str = "9b2321ff";
+const EL_OLE_DC_LOW: &str = "b64f0dff";
 const EL_RAIL: &str = "007e40ff";
 const EL_RAIL_FOUR: &str = "53633bff";
 const TRAM: &str = "005387ff";
 
 #[allow(dead_code)]
-const BORDER: &str = "C45F8C";
+const BORDER: &str = "cb6894ff";
 
