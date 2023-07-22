@@ -316,7 +316,7 @@ impl<'a> ContourShape2<'a> {
         let mut canvas = canvas.sketch();
 
         match (style.palette(), self.class.class.pax()) {
-            (Palette::El, Pax::None) => { }
+            (Palette::El | Palette::Proof, Pax::None) => { }
             (_, Pax::Heritage) => {
                 if self.class.station {
                     return
@@ -411,6 +411,7 @@ impl<'a> ContourShape4<'a> {
     fn render_base(&self, style: &Style, canvas: &mut Sketch) {
         canvas.apply(style.track_color(&self.class.class));
         canvas.apply(LineWidth(self.line_width(style)));
+        /*
         if self.class.combined {
             let seg = style.dimensions().seg;
             canvas.apply(DashPattern::new(
@@ -423,8 +424,27 @@ impl<'a> ContourShape4<'a> {
                 [0.7 * seg, 0.3 * seg], 0.7 * seg
             ));
         }
-        canvas.apply(&self.track);
-        canvas.stroke();
+        if !self.class.station && self.class.class.is_open_no_pax() {
+            let seg = style.dimensions().seg;
+            let on = 0.9 * seg;
+            let off = seg - on;
+            let mut pos = self.track.positions();
+            //pos.advance(0.5 * step + (self.track.arclen() % step) * 0.5);
+            loop {
+                let sub = match pos.advance_sub(on) {
+                    Some(sub) => sub,
+                    None => break,
+                };
+                canvas.apply(&sub);
+                canvas.stroke();
+                pos.advance(off);
+            }
+        }
+        else {
+        */
+            canvas.apply(&self.track);
+            canvas.stroke();
+        //}
     }
 
     fn render_tunnel(&self, style: &Style, canvas: &mut Sketch) {
@@ -575,7 +595,6 @@ impl<'a> ContourShape4<'a> {
         })
     }
 
-    /*
     fn render_inside(&self, style: &Style, canvas: &mut Sketch) {
         if self.class.station || !self.class.class.is_open() {
             return;
@@ -591,7 +610,7 @@ impl<'a> ContourShape4<'a> {
         canvas.apply(LineWidth(self.line_width(style) * 0.5));
         canvas.apply(Color::WHITE);
         let mut pos = self.track.positions();
-        pos.advance(0.5 * step + (self.track.arclen() % step) * 0.5);
+        pos.advance(0.5 * step + (self.track.base_arclen() % step) * 0.5);
         loop {
             let sub = match pos.advance_sub(step) {
                 Some(sub) => sub,
@@ -602,8 +621,8 @@ impl<'a> ContourShape4<'a> {
             pos.advance(step);
         }
     }
-    */
 
+    /*
     fn render_inside(&self, style: &Style, canvas: &mut Sketch) {
         if !self.class.class.is_open() {
             return;
@@ -642,8 +661,8 @@ impl<'a> ContourShape4<'a> {
             }
             _ => return
         };
-
     }
+    */
 
     fn line_width(&self, style: &Style) -> f64 {
         if self.class.class.category().is_main() {
