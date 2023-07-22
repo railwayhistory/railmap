@@ -15,11 +15,11 @@ hyper = { version = "0.14.26", features = ["server", "http1", "http2", "tcp"] }
 ignore = "0.4.14"
 kurbo = "0.9.0"
 lazy_static = "1.4"
-lru = "0.10.0"
+lru = "0.11.0"
 nom = "7"
 nom_locate = "4"
 osmxml = { git = "https://github.com/partim/osmxml.git" }
-rstar = "0.10"
+rstar = "0.11"
 serde = { version = "1", features = ["derive"] }
 smallvec = { version = "1.8", features = [ "const_generics" ] }
 tokio = { version = "1.27.0", features = ["macros", "rt-multi-thread"] }
