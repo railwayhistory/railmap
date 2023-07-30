@@ -1,0 +1,17 @@
+name: Packaging
+
+on:
+  push:
+    tags:
+      - v*
+  workflow_dispatch:
+
+jobs:
+  package:
+    uses: NLnetLabs/ploutos/.github/workflows/pkg-rust.yml@v7
+    with:
+      package_build_rules: |
+        image:
+          - "debian:bookworm"
+        target: x86_64
+      
