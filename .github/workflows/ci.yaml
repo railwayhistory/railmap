@@ -15,6 +15,7 @@ jobs:
         os: [ubuntu-latest]
         rust: [stable]
     steps:
+    - run: apt-get install libcairo2-dev libpango1.0-dev
     - name: Checkout repository
       uses: actions/checkout@v2
     - name: Install Rust
