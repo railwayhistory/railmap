@@ -92,8 +92,16 @@ pub enum Stage {
     #[default]
     Back,
     Casing,
-    Base,
+    /// The base for shapes that have an inside.
+    InsideBase,
+
+    /// The inside of shapes that have an inside.
     Inside,
+
+    /// The base for shapes that don’t have an inside.
+    ///
+    /// These need to be drawn last so they can paint over the insides.
+    Base,
 }
 
 impl IntoIterator for Stage {
@@ -117,9 +125,10 @@ impl Iterator for StageIter {
         if let Some(stage) = self.0 {
             let next = match stage {
                 Stage::Back => Some(Stage::Casing),
-                Stage::Casing => Some(Stage::Base),
-                Stage::Base => Some(Stage::Inside),
-                Stage::Inside => None
+                Stage::Casing => Some(Stage::InsideBase),
+                Stage::InsideBase => Some(Stage::Inside),
+                Stage::Inside => Some(Stage::Base),
+                Stage::Base => None,
             };
             self.0 = next;
         }

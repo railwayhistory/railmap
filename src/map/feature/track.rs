@@ -226,6 +226,7 @@ struct ContourShape2<'a> {
     width: f64,
     base_dash: Option<DashPattern<2>>,
     trace: Outline,
+    has_inside: bool,
 }
 
 impl<'a> ContourShape2<'a> {
@@ -269,7 +270,8 @@ impl<'a> ContourShape2<'a> {
             else {
                 None
             },
-            trace: contour.trace.outline(style)
+            trace: contour.trace.outline(style),
+            has_inside: Self::will_have_inside(&contour.class, style),
         }
     }
 }
@@ -288,18 +290,20 @@ impl<'a> Shape for ContourShape2<'a> {
                     ).stroke();
                 }
             }
-            Stage::Base => {
-                let mut canvas = canvas.sketch();
-                canvas.apply(self.color);
-                canvas.apply(LineWidth(self.width));
-                if let Some(dash) = self.base_dash {
-                    canvas.apply(dash);
+            Stage::InsideBase => {
+                if self.has_inside {
+                    self.render_base(style, canvas);
                 }
-                canvas.apply(&self.trace);
-                canvas.stroke();
             }
             Stage::Inside => {
-                self.render_inside(style, canvas);
+                if self.has_inside {
+                    self.render_inside(style, canvas);
+                }
+            }
+            Stage::Base => {
+                if !self.has_inside {
+                    self.render_base(style, canvas);
+                }
             }
             _ => { }
         }
@@ -307,6 +311,28 @@ impl<'a> Shape for ContourShape2<'a> {
 }
 
 impl<'a> ContourShape2<'a> {
+    fn render_base(&self, style: &Style, canvas: &mut Canvas) {
+        let mut canvas = canvas.sketch();
+        canvas.apply(self.color);
+        canvas.apply(LineWidth(self.width));
+        if let Some(dash) = self.base_dash {
+            canvas.apply(dash);
+        }
+        canvas.apply(&self.trace);
+        canvas.stroke();
+    }
+
+    fn will_have_inside(class: &TrackClass, style: &Style) -> bool {
+        if !class.class.is_open() {
+            return false
+        }
+        match (style.palette(), class.class.pax()) {
+            (Palette::El | Palette::Proof, Pax::None) => true,
+            (_, Pax::Heritage) => true,
+            _ => false,
+        }
+    }
+
     fn render_inside(&self, style: &Style, canvas: &mut Canvas) {
         if !self.class.class.is_open() {
             return
@@ -341,34 +367,68 @@ struct ContourShape4<'a> {
     class: &'a TrackClass,
     casing: bool,
     track: Outline,
+    seg: Option<f64>,
+    has_inside: bool,
 }
 
 impl<'a> ContourShape4<'a> {
     fn new(contour: &'a TrackContour, style: &Style) -> Box<dyn Shape + 'a> {
+        let has_inside = Self::will_have_inside(&contour.class);
         if contour.class.double {
             let off = style.dimensions().dt * 0.5;
+            let left = contour.trace.outline_offset(-off, style);
+            let seg = Self::calc_seg(&contour.class, &left, style);
             Box::new([
                 Self {
                     class: &contour.class,
                     casing: contour.casing,
-                    track: contour.trace.outline_offset(-off, style),
+                    track: left,
+                    seg,
+                    has_inside,
                 },
                 Self {
                     class: &contour.class,
                     casing: contour.casing,
                     track: contour.trace.outline_offset(off, style),
+                    seg,
+                    has_inside,
                 }
             ])
         }
         else {
+            let track = contour.trace.outline(style);
+            let seg = Self::calc_seg(&contour.class, &track, style);
             Box::new(
                 Self {
                     class: &contour.class,
                     casing: contour.casing,
-                    track: contour.trace.outline(style),
+                    track,
+                    seg,
+                    has_inside,
                 }
             )
         }
+    }
+
+    fn calc_seg(
+        class: &TrackClass, outline: &Outline, style: &Style
+    ) -> Option<f64> {
+        if class.station {
+            return None
+        }
+        let len = outline.base_arclen();
+        let base_seg = style.dimensions().seg;
+        if len < base_seg {
+            return None
+        }
+        let div = len / base_seg;
+        let full = if div.fract() > 0.5 {
+            div.trunc() + 1.
+        }
+        else {
+            div.trunc()
+        };
+        Some(len / full)
     }
 }
 
@@ -386,22 +446,21 @@ impl<'a> Shape for ContourShape4<'a> {
                     canvas.stroke();
                 }
             }
-            Stage::Base => {
-                self.render_base(style, &mut canvas.sketch());
-                if !self.class.station {
-                    let mut canvas = canvas.sketch();
-                    self.render_electric(style, &mut canvas);
-                    self.render_gauge(style, &mut canvas);
+            Stage::InsideBase => {
+                if self.has_inside {
+                    self.render_track(style, &mut canvas.sketch());
                 }
             }
             Stage::Inside => {
-                self.render_inside(style, &mut canvas.sketch());
-                /*
-                if self.class.class.surface().is_tunnel() {
-                    self.render_tunnel(style, &mut canvas.sketch());
+                if self.has_inside {
+                    self.render_inside(style, &mut canvas.sketch());
                 }
-                */
-           }
+            }
+            Stage::Base => {
+                if !self.has_inside {
+                    self.render_track(style, &mut canvas.sketch());
+                }
+            }
             _ => { }
         }
     }
@@ -409,6 +468,14 @@ impl<'a> Shape for ContourShape4<'a> {
 
 impl<'a> ContourShape4<'a> {
     fn render_base(&self, style: &Style, canvas: &mut Sketch) {
+        self.render_track(style, canvas);
+        if !self.class.station {
+            self.render_electric(style, canvas);
+            self.render_gauge(style, canvas);
+        }
+    }
+
+    fn render_track(&self, style: &Style, canvas: &mut Sketch) {
         canvas.apply(style.track_color(&self.class.class));
         canvas.apply(LineWidth(self.line_width(style)));
         /*
@@ -457,10 +524,13 @@ impl<'a> ContourShape4<'a> {
     }
 
     fn render_electric(&self, style: &Style, canvas: &mut Sketch) {
+        let seg = match self.seg {
+            Some(seg) => seg,
+            None => return
+        };
         let cat_color = style.cat_color(&self.class.class);
         let rail_color = style.rail_color(&self.class.class);
 
-        let seg = style.dimensions().seg;
         let dt = style.dimensions().dt;
         let dr = if self.class.tight { 0.5 * dt } else { 0.75 * dt };
         /*
@@ -468,7 +538,7 @@ impl<'a> ContourShape4<'a> {
         */
         let dl = -dr;
         let (dl, dr) = if self.class.flip { (dr, dl) } else { (dl, dr) };
-        
+
         match (cat_color, rail_color) {
             (Some(cat_color), None) => {
 
@@ -530,12 +600,14 @@ impl<'a> ContourShape4<'a> {
     fn render_gauge(&self, style: &Style, canvas: &mut Sketch) {
         use super::super::class::GaugeGroup::*;
 
+        let seg = match self.seg {
+            Some(seg) => seg,
+            None => return
+        };
         let group = match self.class.gauge.group() {
             Some(group) => group,
             None => return,
         };
-
-        let seg = style.dimensions().seg;
         let radius = style.dimensions().dt * 0.5;
         let width = style.dimensions().guide_width;
         let radius_width = radius + 0.5 * width;
@@ -595,31 +667,61 @@ impl<'a> ContourShape4<'a> {
         })
     }
 
+    fn will_have_inside(class: &TrackClass) -> bool {
+        if !class.class.is_open() {
+            return false
+        }
+        matches!(class.class.pax(), Pax::None | Pax::Heritage)
+    }
+
     fn render_inside(&self, style: &Style, canvas: &mut Sketch) {
-        if self.class.station || !self.class.class.is_open() {
+        let seg = match self.seg {
+            Some(seg) => seg,
+            None => return
+        };
+
+        if !self.class.class.is_open() {
             return;
         }
-
-        let step = match self.class.class.pax() {
-            Pax::None => 0.5,
-            Pax::Heritage => 0.25,
-            _ => return
-        };
-        let step = step * style.dimensions().seg;
 
         canvas.apply(LineWidth(self.line_width(style) * 0.5));
         canvas.apply(Color::WHITE);
         let mut pos = self.track.positions();
-        pos.advance(0.5 * step + (self.track.base_arclen() % step) * 0.5);
-        loop {
-            let sub = match pos.advance_sub(step) {
-                Some(sub) => sub,
-                None => break,
-            };
-            canvas.apply(&sub);
-            canvas.stroke();
-            pos.advance(step);
-        }
+        match self.class.class.pax() {
+            Pax::None => {
+                let sub = match pos.advance_sub(0.25 * seg) {
+                    Some(sub) => sub,
+                    None => return,
+                };
+                canvas.apply(&sub);
+                canvas.stroke();
+                let step = 0.5 * seg;
+                loop {
+                    pos.advance(step);
+                    match pos.advance_sub(step) {
+                        Some(sub) => {
+                            canvas.apply(&sub);
+                            canvas.stroke();
+                        }
+                        None => break,
+                    }
+                }
+            }
+            Pax::Heritage => {
+                pos.advance(0.125 * seg);
+                let step = 0.25 * seg;
+                loop {
+                    let sub = match pos.advance_sub(step) {
+                        Some(sub) => sub,
+                        None => break,
+                    };
+                    canvas.apply(&sub);
+                    canvas.stroke();
+                    pos.advance(step);
+                }
+            }
+            _ => { }
+        };
     }
 
     /*
