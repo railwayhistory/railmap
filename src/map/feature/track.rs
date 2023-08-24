@@ -448,7 +448,7 @@ impl<'a> Shape for ContourShape4<'a> {
             }
             Stage::InsideBase => {
                 if self.has_inside {
-                    self.render_track(style, &mut canvas.sketch());
+                    self.render_base(style, &mut canvas.sketch());
                 }
             }
             Stage::Inside => {
@@ -458,7 +458,7 @@ impl<'a> Shape for ContourShape4<'a> {
             }
             Stage::Base => {
                 if !self.has_inside {
-                    self.render_track(style, &mut canvas.sketch());
+                    self.render_base(style, &mut canvas.sketch());
                 }
             }
             _ => { }
