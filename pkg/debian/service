@@ -3,7 +3,7 @@ Description=railmap
 After=network.target
 
 [Service]
-ExecStart=/usr/local/sbin/railmap /var/lib/railwayhistory/map-rules
+ExecStart=/usr/sbin/railmap -c /etc/railmap.conf
 Type=exec
 Restart=on-failure
 User=www-data
