@@ -36,6 +36,7 @@ panic = "abort"
 
 [package.metadata.deb]
 maintainer-scripts = "pkg/debian"
+section = "web"
 assets = [
     ["target/release/railmap", "usr/sbin/", "755"],
     ["README.md", "usr/share/doc/cargo-deb/README", "644"],
