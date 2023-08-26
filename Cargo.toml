@@ -40,5 +40,5 @@ assets = [
     ["target/release/railmap", "usr/sbin/", "755"],
     ["README.md", "usr/share/doc/cargo-deb/README", "644"],
 ]
-systemd-units = { unit-name = "routinator", enable = true }
+systemd-units = { unit-name = "railmap", enable = true }
 
