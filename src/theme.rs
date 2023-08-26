@@ -6,7 +6,7 @@ use femtomap::path::{Distance, MapDistance};
 use femtomap::render::Canvas;
 use femtomap::feature::{Feature, FeatureSetBuilder};
 use hyper::Body;
-use crate::config::Config;
+use crate::config::MapConfig;
 use crate::import::{ast, eval};
 use crate::import::Failed;
 use crate::tile::{TileId, TileFormat};
@@ -24,7 +24,7 @@ pub trait Theme: Sized + Clone + Send + Sync + 'static {
     type Feature: Feature<Style = Self::Style> + Send + Sync + 'static;
     type Stage: IntoIterator<Item = Self::Stage> + Default;
 
-    fn config(&mut self, _config: &Config) { }
+    fn config(&mut self, _config: &MapConfig) { }
 
     fn eval_distance(
         &self, number: f64, unit: &str, scope: &eval::Scope<Self>,

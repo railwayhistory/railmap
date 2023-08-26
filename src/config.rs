@@ -6,11 +6,11 @@ use std::path::{Path, PathBuf};
 use femtomap::render::Color;
 use serde::Deserialize;
 
-//------------ Config --------------------------------------------------------
+//------------ MapConfig -----------------------------------------------------
 
 /// The map configuration.
 #[derive(Clone, Debug, Deserialize)]
-pub struct Config {
+pub struct MapConfig {
     /// The theme to be used for interpreting the rules and rendering.
     pub theme: String,
 
@@ -22,7 +22,7 @@ pub struct Config {
     pub colors: HashMap<String, Color>,
 }
 
-impl Config {
+impl MapConfig {
     pub fn load(path: impl AsRef<Path>) -> Result<Self, io::Error> {
         let data = fs::read_to_string(path.as_ref())?;
         let mut data: Self = toml::from_str(&data).map_err(|err| {

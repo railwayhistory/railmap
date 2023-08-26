@@ -1,117 +1,234 @@
+use std::{fs, io};
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Instant;
-use clap::{Arg, ArgAction, ArgMatches, Command, crate_version, crate_authors};
-use railmap::{Config, LoadFeatures, Server};
+use clap::{
+    Arg, ArgAction, ArgMatches, Command, crate_version, crate_authors,
+    value_parser,
+};
+use railmap::{MapConfig, LoadFeatures, Server};
+use railmap::import::Failed;
 use railmap::theme::Theme;
 
-#[allow(dead_code)]
-async fn run<T: Theme>(config: Config, matches: ArgMatches, mut theme: T) {
-    let start = Instant::now();
-    theme.config(&config);
-    let mut features = LoadFeatures::new(&theme);
-    match matches.get_many::<String>("region") {
-        Some(values) => {
-            let mut values: Vec<_> = values.collect();
-            values.sort();
-            values.dedup();
-            for value in values {
-                match config.regions.get(value) {
-                    Some(region) => {
-                        features.load_region(region);
+const DEFAULT_CONFIG_PATH: &str = "/etc/railmap.conf";
+
+
+struct Config {
+    map: PathBuf,
+    regions: Option<Vec<String>>,
+    listen: SocketAddr,
+    style: String,
+}
+
+#[derive(serde::Deserialize)]
+struct ConfigFile {
+    map: Option<PathBuf>,
+    regions: Option<Vec<String>>,
+    listen: Option<SocketAddr>,
+    style: Option<String>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            map: PathBuf::new(),
+            regions: None,
+            listen: SocketAddr::from_str("127.0.0.1:8080").unwrap(),
+            style: String::from("lx"),
+        }
+    }
+}
+
+impl Config {
+    pub fn get() -> Result<Self, Failed> {
+        let mut matches = Self::get_matches();
+
+        let (config_path, insist) = match matches.remove_one::<PathBuf>(
+            "config"
+        ) {
+            Some(path) => (path, true),
+            None => (PathBuf::from(DEFAULT_CONFIG_PATH), false),
+        };
+
+        let mut config = Config::default();
+
+        match fs::read_to_string(&config_path) {
+            Ok(content) => {
+                let value = match toml::from_str(&content) {
+                    Ok(value) => value,
+                    Err(err) => {
+                        eprintln!(
+                            "Failed to parse config file: {}: {}",
+                            config_path.display(), err
+                        );
+                        return Err(Failed)
                     }
-                    None => {
-                        eprintln!("Unknown region '{}'.", value);
-                        std::process::exit(1);
-                    }
+                };
+                config.apply_toml(value);
+            }
+            Err(err) => {
+                if
+                    !matches!(err.kind(), io::ErrorKind::NotFound)
+                    || insist
+                {
+                    eprintln!(
+                        "Failed to read config file {}: {}",
+                        config_path.display(), err
+                    );
+                    return Err(Failed)
                 }
             }
         }
-        None => {
-            for region in config.regions.values() {
-                features.load_region(region)
-            }
+
+        config.apply_matches(matches);
+
+        if !config.map.is_file() {
+            eprintln!("Map configuration not provided or does not exist.");
+            return Err(Failed)
+        }
+
+        Ok(config)
+    }
+
+    fn get_matches() -> ArgMatches {
+        Command::new("railmap")
+            .version(crate_version!())
+            .author(crate_authors!())
+            .about("renders a railway map")
+            .arg(Arg::new("config")
+                .short('c')
+                .long("config")
+                .value_name("FILE")
+                .value_parser(value_parser!(PathBuf))
+                .help("the configuration file")
+                .action(ArgAction::Set)
+            )
+            .arg(Arg::new("map")
+                .short('m')
+                .long("map")
+                .value_name("FILE")
+                .value_parser(value_parser!(PathBuf))
+                .help("the map configuration file")
+                .action(ArgAction::Set)
+            )
+            .arg(Arg::new("region")
+                .short('r')
+                .long("region")
+                .value_name("NAME")
+                .help("select a region to render")
+                .num_args(1..)
+                .action(ArgAction::Append)
+            )
+            .arg(Arg::new("listen")
+                .short('l')
+                .long("listen")
+                .value_name("ADDR")
+                .value_parser(value_parser!(SocketAddr))
+                .help("the addr to listen on")
+                .action(ArgAction::Set)
+                .default_value("127.0.0.1:8080")
+            )
+            .arg(Arg::new("style")
+                .short('s')
+                .long("style")
+                .value_name("STYLE")
+                .help("the style to use in the test map")
+                .action(ArgAction::Set)
+                .default_value("lx")
+            )
+            .get_matches()
+    }
+
+    fn apply_matches(&mut self, mut matches: ArgMatches) {
+        if let Some(map) = matches.remove_one("map") {
+            self.map = map;
+        }
+        if let Some(regions) = matches.remove_many("region") {
+            self.regions = Some(regions.collect());
+        }
+        if let Some(addr) = matches.remove_one("listen") {
+            self.listen = addr;
+        }
+        if let Some(style) = matches.remove_one("style") {
+            self.style = style;
         }
     }
 
-    let features = match features.finalize() {
-        Ok(features) => features,
-        Err(err) => {
-            eprintln!("{}", err);
-            std::process::exit(1);
+    fn apply_toml(&mut self, toml: ConfigFile) {
+        if let Some(map) = toml.map {
+            self.map = map
         }
-    };
-
-    let addr_str: &String = matches.get_one("listen").unwrap();
-    let addr = match SocketAddr::from_str(addr_str) {
-        Ok(addr) => addr,
-        Err(_) => {
-            eprintln!("Invalid listen addr '{}'.", addr_str);
-            std::process::exit(1);
+        if let Some(regions) = toml.regions {
+            self.regions = Some(regions);
         }
-    };
+        if let Some(listen) = toml.listen {
+            self.listen = listen;
+        }
+        if let Some(style) = toml.style {
+            self.style = style;
+        }
+    }
 
-    let server = Server::new(
-        theme, features,
-        matches.get_one::<String>("style").unwrap().clone(),
-    );
-    eprintln!("Server ready after {:.03}s.", start.elapsed().as_secs_f32());
-    server.run(addr).await;
+    pub async fn run(self) {
+        let map = match MapConfig::load(&self.map) {
+            Ok(map) => map,
+            Err(err) => {
+                eprintln!(
+                    "Failed to load map config {}: {}",
+                    self.map.display(), err
+                );
+                return
+            }
+        };
+
+        let start = Instant::now();
+        let mut theme = railmap::map::Railwayhistory::default();
+        theme.config(&map);
+        let mut features = LoadFeatures::new(&theme);
+        match self.regions {
+            Some(mut values) => {
+                values.sort();
+                values.dedup();
+                for value in values {
+                    match map.regions.get(&value) {
+                        Some(region) => {
+                            features.load_region(region);
+                        }
+                        None => {
+                            eprintln!("Unknown region '{}'.", value);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+            }
+            None => {
+                for region in map.regions.values() {
+                    features.load_region(region)
+                }
+            }
+        }
+
+        let features = match features.finalize() {
+            Ok(features) => features,
+            Err(err) => {
+                eprintln!("{}", err);
+                std::process::exit(1);
+            }
+        };
+
+        let server = Server::new(theme, features, self.style);
+        eprintln!("Server ready after {:.03}s.", start.elapsed().as_secs_f32());
+        server.run(self.listen).await;
+    }
 }
 
 #[tokio::main]
 async fn main() {
-    let matches = Command::new("railmap")
-        .version(crate_version!())
-        .author(crate_authors!())
-        .about("renders a railway map")
-        .arg(Arg::new("config")
-            .short('c')
-            .long("config")
-            .value_name("FILE")
-            .help("the map configuration file")
-            .action(ArgAction::Set)
-            .required(true)
-        )
-        .arg(Arg::new("region")
-            .short('r')
-            .long("region")
-            .value_name("NAME")
-            .help("select a region to render")
-            .num_args(1..)
-            .action(ArgAction::Append)
-        )
-        .arg(Arg::new("listen")
-            .short('l')
-            .long("listen")
-            .value_name("ADDR")
-            .help("the addr to listen on")
-            .action(ArgAction::Set)
-            .default_value("127.0.0.1:8080")
-        )
-        .arg(Arg::new("style")
-            .short('s')
-            .long("style")
-            .value_name("STYLE")
-            .help("the style to use in the test map")
-            .action(ArgAction::Set)
-            .default_value("lx")
-        )
-        .get_matches();
-
-    let config = match Config::load(
-        matches.get_one::<String>("config").unwrap()
-    ) {
+    let config = match Config::get() {
         Ok(config) => config,
-        Err(err) => {
-            eprintln!(
-                "Failed to load map config {}: {}",
-                matches.get_one::<String>("config").unwrap(),
-                err
-            );
-            std::process::exit(1)
-        }
+        Err(_) =>  return,
     };
 
-    run(config, matches, railmap::map::Railwayhistory::default()).await
+    config.run().await
 }

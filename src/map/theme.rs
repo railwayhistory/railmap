@@ -4,7 +4,7 @@ use femtomap::path::Distance;
 use femtomap::feature::FeatureSetBuilder;
 use femtomap::render::Canvas;
 use hyper::Body;
-use crate::config::Config;
+use crate::config::MapConfig;
 use crate::import::Failed;
 use crate::import::{ast, eval};
 use crate::theme;
@@ -30,7 +30,7 @@ impl theme::Theme for Railwayhistory {
     type Feature = Feature;
     type Stage = Stage;
 
-    fn config(&mut self, config: &Config) {
+    fn config(&mut self, config: &MapConfig) {
         let mut colors = ColorSet::default();
         colors.update(&config.colors);
         self.colors = Arc::new(colors);

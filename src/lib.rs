@@ -1,4 +1,4 @@
-pub use self::config::Config;
+pub use self::config::MapConfig;
 pub use self::import::LoadFeatures;
 pub use self::server::Server;
 
