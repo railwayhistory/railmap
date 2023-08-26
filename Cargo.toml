@@ -1,6 +1,6 @@
 [package]
 name = "railmap"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Martin Hoffmann <hn@nvnc.de>"]
 edition = "2021"
 rust-version = "1.65"
@@ -30,7 +30,6 @@ toml = "0.7.2"
 name = "railmap"
 doc = false
 
-
 [profile.release]
 panic = "abort"
 
@@ -41,3 +40,5 @@ assets = [
     ["target/release/railmap", "usr/sbin/", "755"],
     ["README.md", "usr/share/doc/cargo-deb/README", "644"],
 ]
+systemd-units = { unit-name = "routinator", enable = true }
+
