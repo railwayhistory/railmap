@@ -1,0 +1,13 @@
+[Unit]
+Description=railmap
+After=network.target
+
+[Service]
+ExecStart=/usr/local/sbin/railmap /var/lib/railwayhistory/map-rules
+Type=exec
+Restart=on-failure
+User=www-data
+
+[Install]
+WantedBy=multi-user.target
+
