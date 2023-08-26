@@ -266,6 +266,7 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 [[package]]
 name = "femtomap"
 version = "0.1.0"
+source = "git+https://github.com/partim/femtomap.git#85cc15c1c901b5c446df0ba317ab6f6e38ac8441"
 dependencies = [
  "cairo-rs",
  "kurbo",
