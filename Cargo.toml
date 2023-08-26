@@ -1,6 +1,6 @@
 [package]
 name = "railmap"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Martin Hoffmann <hn@nvnc.de>"]
 edition = "2021"
 rust-version = "1.65"
@@ -10,7 +10,8 @@ rust-version = "1.65"
 [dependencies]
 cairo-rs = { version = "0.17", features = ["png", "svg", "v1_16"] }
 clap = { version = "4.3.19", features = ["cargo"] }
-femtomap = { git = "https://github.com/partim/femtomap.git", features = [ "serde" ] }
+#femtomap = { git = "https://github.com/partim/femtomap.git", features = [ "serde" ] }
+femtomap = { path = "../femtomap", features = [ "serde" ] }
 hyper = { version = "0.14.26", features = ["server", "http1", "http2", "tcp"] }
 ignore = "0.4.14"
 kurbo = "0.9.0"
@@ -32,3 +33,10 @@ doc = false
 
 [profile.release]
 panic = "abort"
+
+[package.metadata.deb]
+maintainer-scripts = "pkg/debian"
+assets = [
+    ["target/release/railmap", "usr/sbin/", "755"],
+    ["README.md", "usr/share/doc/cargo-deb/README", "644"],
+]
