@@ -240,10 +240,10 @@ impl RenderParams {
             Some((x, y)) => {
                 Ok(match self.zoom {
                     Some(Zoom::Low) => {
-                        (x - 0.1, y + 0.6)
+                        (x - 0.1, y + 0.4)
                     }
                     Some(Zoom::High) => {
-                        (x + 0.6, y + 0.9)
+                        (x + 0.4, y + 0.9)
                     }
                     None => {
                         (x - 0.1, y + 0.9)
