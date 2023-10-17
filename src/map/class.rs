@@ -413,6 +413,7 @@ impl ElectricCat {
     const SYSTEMS: &'static [(&'static str, u16, ElectricSystem)] = &[
         ("ac0k725", 725, Ac),
         ("ac6k6", 6600, Ac),
+        ("ac65", 6500, Ac),
         ("ac15", 15000, Ac),
         ("ac11", 11000, Ac),
         ("ac25", 25000, Ac),
