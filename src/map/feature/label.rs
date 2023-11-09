@@ -27,6 +27,8 @@ const ROMAN_FAMILY: FontFamily = FontFamily::from_static(
 const SANS_FEATURES: FontFeatures = FontFeatures::from_static("pnum");
 const ROMAN_FEATURES: FontFeatures = FontFeatures::from_static("");
 
+const LINE_HEIGHT: f64 = 0.9;
+
 
 //------------ Feature -------------------------------------------------------
 
@@ -253,7 +255,8 @@ impl LayoutProperties {
         Self {
             font: FontBuilder::new()
                 .family(SANS_FAMILY)
-                .features(SANS_FEATURES) ,
+                .features(SANS_FEATURES)
+                .line_height(LINE_HEIGHT),
             .. Default::default()
         }
     }
@@ -501,6 +504,15 @@ impl FontSize {
     pub fn size(self, style: &Style) -> f64 {
         use self::FontSize::*;
 
+        let base = match self {
+            Xsmall => 5.,
+            Small => 6.,
+            Medium => 7.,
+            Large => 9.,
+            Xlarge => 11.,
+            Badge => 5.4,
+        };
+        /*
         let base = if style.detail() >= 3.0 {
             match self {
                 Xsmall => 5.,
@@ -521,6 +533,7 @@ impl FontSize {
                 Badge => 5.4,
             }
         };
+        */
         base * style.canvas_bp()
     }
 
