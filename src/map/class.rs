@@ -427,6 +427,7 @@ impl ElectricCat {
         ("dc75", 750, Dc),
         ("dc7", 700, Dc),
         ("dc6", 600, Dc),
+        ("dc55", 550, Dc),
     ];
 
     pub fn voltage_group(self) -> VoltageGroup {
