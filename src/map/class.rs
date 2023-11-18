@@ -419,11 +419,13 @@ impl ElectricCat {
         ("ac25", 25000, Ac),
         ("dc30", 3000, Dc),
         ("dc3", 3000, Dc), // XXX Temporary. Fix in data!
+        ("dc18", 1800, Dc),
         ("dc15", 1500, Dc),
         ("dc12", 1200, Dc),
         ("dc10", 1000, Dc),
         ("dc9", 900, Dc),
         ("dc85", 850, Dc),
+        ("dc8", 800, Dc),
         ("dc75", 750, Dc),
         ("dc7", 700, Dc),
         ("dc6", 600, Dc),
