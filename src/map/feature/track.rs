@@ -12,14 +12,18 @@
 //! * `:leftsame` if the track has another track of the same line on its left.
 //! * `:leftother` if the track has another track of a different line on its
 //!   left.
-//! * `:rightsame`if the track has another track of the same line of its
+//! * `:rightsame` if the track has another track of the same line of its
 //!   right.
 //! * `:rightother` if the track has another track of a different line on its
 //!   right.
 //!
-//! * In detail levels 3 and up, `:double` is a shortcut for two tracks offset
-//!   half a dt to the left and right and with `:rightsame` and `:leftsame`.
-//! * In detail levels 0 to 3, `:double` marks a track as double track.
+//! * In detail levels 3 and up, `:double` indicates two tracks of the same
+//!   line offset half a dt to the left and right. The `:leftsame` and
+//!   `:leftother` symbols apply to the left track only, while
+//!   `:rightsame` and `:rightother` apply to the right track.
+//!
+//! * In detail levels 0 to 2, `:double` marks a track as double track.
+//!
 //! * `:tight` is a deprecated shortcut for `:leftother:rightother`.
 //!
 //! Placement within a sequence of segments that whose markings should look
@@ -27,7 +31,7 @@
 //!
 //! * `:start` if the segment is at the start of the sequence, i.e., extra
 //!   spacing can be added at its beginning.
-//! * `:end` if the segement is at the end of the sequence, i.e., extra
+//! * `:end` if the segment is at the end of the sequence, i.e., extra
 //!   spacing can be added at its end.
 //! * `:inner` if the segment is in the middle and markings need to be
 //!   “justified.”
@@ -62,6 +66,12 @@ pub struct TrackClass {
     /// Is this double tracked?
     double: bool,
 
+    /// What is to our left?
+    left: Neighbor,
+
+    /// What is to our left?
+    right: Neighbor,
+
     /// Should this track be combined with the underlying track?
     combined: bool,
 
@@ -70,9 +80,6 @@ pub struct TrackClass {
 
     /// Are markings flipped?
     flip: bool,
-
-    /// Should markings be smaller?
-    tight: bool,
 }
 
 impl TrackClass {
@@ -87,14 +94,16 @@ impl TrackClass {
     }
 
     pub fn from_symbols(symbols: &mut SymbolSet) -> Self {
+        let tight = symbols.take("tight");
         TrackClass {
             class: Class::from_symbols(symbols),
             gauge: Gauge::from_symbols(symbols),
             double: symbols.take("double"),
+            left: Neighbor::left_from_symbols(symbols, tight),
+            right: Neighbor::right_from_symbols(symbols, tight),
             combined: symbols.take("combined"),
             station: symbols.take("station"),
             flip: symbols.take("flip"),
-            tight: symbols.take("tight"),
         }
     }
 
@@ -118,6 +127,55 @@ impl TrackClass {
         }
     }
 }
+
+
+//------------ Neighbor ------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, Default)]
+pub enum Neighbor {
+    /// There is no neighbor at all.
+    #[default]
+    None,
+
+    /// The neighboring track is part of the same line.
+    Same,
+
+    /// The neighboring track is part of a different line.
+    Other,
+}
+
+impl Neighbor {
+    fn left_from_symbols(symbols: &mut SymbolSet, tight: bool) -> Self {
+        if tight {
+            Self::Other
+        }
+        else if symbols.take("leftsame") {
+            Self::Same
+        }
+        else if symbols.take("leftother") {
+            Self::Other
+        }
+        else {
+            Self::None
+        }
+    }
+
+    fn right_from_symbols(symbols: &mut SymbolSet, tight: bool) -> Self {
+        if tight {
+            Self::Other
+        }
+        else if symbols.take("rightsame") {
+            Self::Same
+        }
+        else if symbols.take("rightother") {
+            Self::Other
+        }
+        else {
+            Self::None
+        }
+    }
+}
+
 
 
 //------------ TrackContour --------------------------------------------------
@@ -365,6 +423,8 @@ impl<'a> ContourShape2<'a> {
 
 struct ContourShape4<'a> {
     class: &'a TrackClass,
+    left: Neighbor,
+    right: Neighbor,
     casing: bool,
     track: Outline,
     seg: Option<f64>,
@@ -376,11 +436,13 @@ impl<'a> ContourShape4<'a> {
         let has_inside = Self::will_have_inside(&contour.class);
         if contour.class.double {
             let off = style.dimensions().dt * 0.5;
-            let left = contour.trace.outline_offset(-off, style);
+            let left = contour.trace.outline_offset(off, style);
             let seg = Self::calc_seg(&contour.class, &left, style);
             Box::new([
                 Self {
                     class: &contour.class,
+                    left: contour.class.left,
+                    right: Neighbor::Same,
                     casing: contour.casing,
                     track: left,
                     seg,
@@ -388,8 +450,10 @@ impl<'a> ContourShape4<'a> {
                 },
                 Self {
                     class: &contour.class,
+                    left: Neighbor::Same,
+                    right: contour.class.right,
                     casing: contour.casing,
-                    track: contour.trace.outline_offset(off, style),
+                    track: contour.trace.outline_offset(-off, style),
                     seg,
                     has_inside,
                 }
@@ -401,6 +465,8 @@ impl<'a> ContourShape4<'a> {
             Box::new(
                 Self {
                     class: &contour.class,
+                    left: contour.class.left,
+                    right: contour.class.right,
                     casing: contour.casing,
                     track,
                     seg,
@@ -413,9 +479,11 @@ impl<'a> ContourShape4<'a> {
     fn calc_seg(
         class: &TrackClass, outline: &Outline, style: &Style
     ) -> Option<f64> {
+        /*
         if class.station {
             return None
         }
+        */
         let len = outline.base_arclen();
         let base_seg = style.dimensions().seg;
         if len < base_seg {
@@ -532,12 +600,16 @@ impl<'a> ContourShape4<'a> {
         let rail_color = style.rail_color(&self.class.class);
 
         let dt = style.dimensions().dt;
-        let dr = if self.class.tight { 0.5 * dt } else { 0.75 * dt };
-        /*
-        let dl = -0.5 * dt;
-        */
-        let dl = -dr;
-        let (dl, dr) = if self.class.flip { (dr, dl) } else { (dl, dr) };
+        let dr = match self.right {
+            Neighbor::None => 0.75 * dt,
+            Neighbor::Same => 0.55 * dt, // Wee bit overlap.
+            Neighbor::Other => 0.40 * dt,
+        };
+        let dl = match self.left {
+            Neighbor::None => -0.75 * dt,
+            Neighbor::Same => -0.55 * dt, // Wee bit overlap.
+            Neighbor::Other => -0.40 * dt,
+        };
 
         match (cat_color, rail_color) {
             (Some(cat_color), None) => {
