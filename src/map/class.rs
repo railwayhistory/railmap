@@ -625,7 +625,11 @@ impl Pax {
         else if symbols.take("pax") {
             Some(Pax::Full)
         }
-        else if symbols.take("heritage") || symbols.take("museum") {
+        else if
+               symbols.take("heritage")
+            || symbols.take("museum")
+            || symbols.take("tourist")
+        {
             Some(Pax::Heritage)
         }
         else if symbols.take("seasonal") {
