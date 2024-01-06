@@ -599,6 +599,15 @@ markers! {
             canvas.stroke();
             canvas.arc(0., 3. * r, 0.5 * r, 0., 2. * PI);
             canvas.fill()
+        },
+        |canvas: &mut Group, u: Dimensions| {
+            let r = 0.25 * u.sh;
+            canvas.arc(0., 3. * r, r, 0., 2. * PI);
+            canvas.fill();
+            canvas.apply_line_width(u.bp);
+            canvas.move_to(0., -0.5 * u.dt);
+            canvas.line_to(0., 2. * r);
+            canvas.stroke();
         }
     ),
 
