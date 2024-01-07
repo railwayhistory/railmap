@@ -397,14 +397,20 @@ impl layout::Properties for LayoutProperties {
     }
 
     fn margins(&self, style: &Self::Style) -> Margins {
-        if matches!(self.layout_type, LayoutType::BadgeFrame) {
-            Margins::vh(
-                style.dimensions().dt * 0.1,
-                style.dimensions().dt * 0.5,
-            )
-        }
-        else {
-            Margins::default()
+        match self.layout_type {
+            LayoutType::BadgeFrame => {
+                Margins::vh(
+                    style.dimensions().dt * 0.1,
+                    style.dimensions().dt * 0.5,
+                )
+            }
+            LayoutType::Framed => {
+                Margins::vh(
+                    self.size().size(style) * 0.15,
+                    self.size().size(style) * 0.2,
+                )
+            }
+            _ => Margins::default()
         }
     }
 
@@ -483,6 +489,9 @@ pub enum LayoutType {
     Rule,
     TextFrame,
     BadgeFrame,
+
+    /// The layout lives inside a frame and needs to grow a bit of margin.
+    Framed,
 }
 
 

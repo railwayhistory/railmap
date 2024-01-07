@@ -1,6 +1,6 @@
 /// The units we understand.
 
-use femtomap::path::{Distance, MapDistance};
+use femtomap::path::{Distance, MapDistance, MapDistanceVec};
 
 // Various canvas units in bp.
 /*
@@ -70,23 +70,23 @@ pub fn resolve_unit(
     for (unit, factor) in WORLD_DISTANCES {
         if unit_name == *unit {
             return Some(Distance::new(
-                Some(number * factor), Vec::new(),
+                Some(number * factor), MapDistanceVec::new(),
             ))
         }
     }
     for (unit, factor) in ABSOLUTE_MAP_DISTANCES.iter() {
         if unit_name == *unit {
-            return Some(Distance::new(
-                None, vec![MapDistance::new(number * factor, 0)]
-            ))
+            let mut map = MapDistanceVec::new();
+            map.push(MapDistance::new(number * factor, 0));
+            return Some(Distance::new(None, map))
         }
     }
 
     for (index, (unit, _)) in MAP_DISTANCES.iter().enumerate() {
         if unit_name == *unit {
-            return Some(Distance::new(
-                None, vec![MapDistance::new(number, index)]
-            ))
+            let mut map = MapDistanceVec::new();
+            map.push(MapDistance::new(number, index));
+            return Some(Distance::new(None, map))
         }
     }
     None
