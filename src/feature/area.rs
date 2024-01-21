@@ -1,36 +1,38 @@
 //! Rendering an area.
 
+use femtomap::world;
 use femtomap::path::Trace;
 use femtomap::render::Canvas;
-use kurbo::{BezPath,Rect};
-use super::Shape;
-use super::super::class::Class;
-use super::super::style::Style;
+use crate::class::Railway;
+use crate::style::Style;
+use super::{AnyShape, Feature};
 
 //------------ AreaContour ---------------------------------------------------
 
 /// A contour drawing an area.
 pub struct AreaContour {
-    class: Class,
+    class: Railway,
     trace: Trace,
 }
 
 impl AreaContour {
-    pub fn new(class: Class, trace: Trace) -> Self {
+    pub fn new(class: Railway, trace: Trace) -> Self {
         AreaContour { class, trace }
     }
+}
 
-    pub fn storage_bounds(&self) -> Rect {
+impl Feature for AreaContour {
+    fn storage_bounds(&self) -> world::Rect {
         self.trace.storage_bounds()
     }
 
-    pub fn shape(
+    fn shape(
         &self, style: &Style, _canvas: &Canvas
-    ) -> Box<dyn Shape> {
+    ) -> AnyShape {
         let color = style.track_color(&self.class);
         let outline = self.trace.outline(style);
 
-        Box::new(move |_style: &Style, canvas: &mut Canvas| {
+        AnyShape::single_stage(move |_style: &Style, canvas: &mut Canvas| {
             let mut canvas = canvas.sketch();
             canvas.apply(&outline);
             canvas.apply(color);
@@ -44,26 +46,28 @@ impl AreaContour {
 
 /// A contour drawing an area.
 pub struct PlatformContour {
-    class: Class,
+    class: Railway,
     trace: Trace,
 }
 
 impl PlatformContour {
-    pub fn new(class: Class, trace: Trace) -> Self {
+    pub fn new(class: Railway, trace: Trace) -> Self {
         PlatformContour { class, trace }
     }
+}
 
-    pub fn storage_bounds(&self) -> Rect {
+impl Feature for PlatformContour {
+    fn storage_bounds(&self) -> world::Rect {
         self.trace.storage_bounds()
     }
 
-    pub fn shape(
+    fn shape(
         &self, style: &Style, _canvas: &Canvas
-    ) -> Box<dyn Shape> {
+    ) -> AnyShape {
         let color = style.track_color(&self.class);
         let outline = self.trace.outline(style);
 
-        Box::new(move |_style: &Style, canvas: &mut Canvas| {
+        AnyShape::single_stage(move |_style: &Style, canvas: &mut Canvas| {
             let mut canvas = canvas.sketch();
             canvas.apply(&outline);
             canvas.apply(color);

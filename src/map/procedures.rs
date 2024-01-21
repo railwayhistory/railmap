@@ -5,8 +5,8 @@
 use femtomap::layout::Align;
 use femtomap::path::{Edge, Position, Trace};
 use femtomap::feature::FeatureSetBuilder;
-use crate::import::{ast, eval};
-use crate::import::Failed;
+use crate::oldimport::{ast, eval};
+use crate::oldimport::Failed;
 use super::class::Class;
 use super::feature::Feature;
 use super::feature::area::{AreaContour, PlatformContour};
@@ -148,18 +148,20 @@ const PROCEDURES: &[(
     // line_badge(class: symbol-set, position: position, text: Text)
     // ```
     ("line_badge", &|pos, args, scope, features, err| {
-        let (label_props, mut layout_props, position, layout) = label_args(
+        let (label_props, mut layout_props, position, mut layout) = label_args(
             true, args, err,
         )?;
         layout_props.set_layout_type(
             label::LayoutType::BadgeFrame
         );
         layout_props.set_packed(true);
+        layout.properties_mut().set_layout_type(label::LayoutType::Framed);
 
-        let layout = label::Layout::hbox(
+        let mut layout = label::Layout::hbox(
             Align::Center, Align::Center, layout_props,
             vec![layout]
         );
+        layout.properties_mut().set_layout_type(label::LayoutType::TextFrame);
         
         features.insert(
             label::Feature::new(
@@ -390,9 +392,10 @@ const PROCEDURES: &[(
         else {
             None
         };
-        let layout = label::layout_from_expr(
+        let mut layout = label::layout_from_expr(
             args.next().unwrap(), err
         )?;
+        layout.properties_mut().set_layout_type(label::LayoutType::Framed);
 
         // Tear symbols apart.
         let left = if symbols.take("left") {
@@ -413,16 +416,22 @@ const PROCEDURES: &[(
             }
         };
         let double = symbols.take("double");
-        let properties = label::LayoutProperties::from_symbols(&mut symbols);
+        let mut properties = label::LayoutProperties::from_symbols(
+            &mut symbols
+        );
         symbols.check_exhausted(err)?;
+        properties.set_layout_type(label::LayoutType::TextFrame);
+        properties.set_packed(true);
 
         // Get the positions for things.
         let pos1 = position.sideways(
             resolve_unit(
                 if left {
-                    if double { 1.0 } else { 0.8 }
+                    //if double { 1.0 } else { 0.8 }
+                    if double { 0.2 } else { 0. }
                 } else {
-                    if double { -1.0 } else { -0.8 }
+                    //if double { -1.0 } else { -0.8 }
+                    if double { -0.2 } else { 0. }
                 },
                 "dt"
             ).unwrap()
@@ -430,7 +439,7 @@ const PROCEDURES: &[(
         let pos2 = position.sideways(
             resolve_unit(if left { 3.0 } else { -3.0 }, "dt").unwrap()
         );
-        let pos3 = {
+        let pos3 = 3.0; /*{
             use self::Anchor::*;
 
             match anchor {
@@ -438,7 +447,7 @@ const PROCEDURES: &[(
                 East | West => 3.5,
                 _ => 3.8,
             }
-        };
+        };*/
         let mut pos3 = position.sideways(
             resolve_unit(if left { pos3 } else { -pos3 }, "dt").unwrap()
         );
@@ -450,10 +459,20 @@ const PROCEDURES: &[(
             use self::Align::*;
 
             match anchor {
+            /*
                 North => (Center, Start),
                 NorthEast | East | SouthEast => (End, Center),
                 South => (Center, End),
                 SouthWest | West | NorthWest => (Start, Center)
+            */
+                North => (Center, Start),
+                NorthEast => (End, Start),
+                East => (End, Center),
+                SouthEast => (End, End),
+                South => (Center, End),
+                SouthWest => (Start, End),
+                West => (Start, Center),
+                NorthWest => (Start, Start),
             }
         };
 
@@ -515,22 +534,6 @@ const PROCEDURES: &[(
                 );
             }
         }
-        Ok(())
-    }),
-
-    // Draws a platform.
-    //
-    ("platform", &|pos, args, scope, features, err| {
-        let [class, trace] = args.into_positionals(err)?;
-        let class = Class::from_arg(class, err)?;
-        let layer_offset = class.layer_offset();
-        let trace = trace.into_path(err)?.0;
-        features.insert(
-            Feature::Platform(PlatformContour::new(class, trace)),
-            scope.params().detail(pos, err)?,
-            scope.params().layer(),
-            -100 + layer_offset,
-        );
         Ok(())
     }),
 
@@ -752,7 +755,7 @@ impl Procedure {
 }
 
 
-//------------ HelperFunctions ----------------------------------------------
+//------------ Helper Functions ----------------------------------------------
 
 /// Converts an argument list into the standard 2/3 label args.
 ///

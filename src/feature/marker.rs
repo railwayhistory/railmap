@@ -13,18 +13,16 @@
 
 use std::collections::HashMap;
 use std::f64::consts::PI;
+use femtomap::world;
+use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
 use femtomap::path::Position;
 use femtomap::render::{
     Canvas, Color, DashPattern, Group, LineCap, Matrix, Operator
 };
-use kurbo::Rect;
 use lazy_static::lazy_static;
-use crate::import::eval;
-use crate::import::Failed;
-use crate::theme::{Style as _};
-use super::super::class::Class;
-use super::super::style::{Dimensions, Style};
-use super::Shape;
+use crate::class::Railway;
+use crate::style::{Units, Style};
+use super::{AnyShape, Feature};
 
 
 const CASING_COLOR: Color = Color::rgba(1., 1., 1., 0.7);
@@ -45,7 +43,7 @@ pub struct StandardMarker {
     orientation: f64,
 
     /// The feature class.
-    class: Class,
+    class: Railway,
 
     /// The marker to use.
     marker: Marker,
@@ -54,12 +52,12 @@ pub struct StandardMarker {
 
 impl StandardMarker {
     pub fn from_arg(
-        mut symbols: eval::SymbolSet,
+        mut symbols: SymbolSet,
         position: Position,
-        err: &mut eval::Error,
+        err: &mut EvalErrors,
     ) -> Result<Self, Failed> {
         let orientation = Self::rotation_from_symbols(&mut symbols, err)?;
-        let class = Class::from_symbols(&mut symbols);
+        let class = Railway::from_symbols(&mut symbols);
         let pos = symbols.pos();
         let marker = match symbols.take_final(err)? {
             Some(marker) => marker,
@@ -79,8 +77,8 @@ impl StandardMarker {
     }
 
     fn rotation_from_symbols(
-        symbols: &mut eval::SymbolSet,
-        _err: &mut eval::Error
+        symbols: &mut SymbolSet,
+        _err: &mut EvalErrors
     ) -> Result<f64, Failed> {
         if symbols.take("top") {
             Ok(1.5 * PI)
@@ -103,20 +101,8 @@ impl StandardMarker {
         }
     }
 
-    pub fn class(&self) -> &Class {
+    pub fn class(&self) -> &Railway {
         &self.class
-    }
-
-    pub fn storage_bounds(&self) -> Rect {
-        self.position.storage_bounds()
-    }
-
-    pub fn shape(
-        &self, style: &Style, canvas: &Canvas
-    ) -> Box<dyn Shape + '_> {
-        Box::new(|style: &Style, canvas: &mut Canvas| {
-            self.render(style, canvas)
-        })
     }
 
     fn render(&self, style: &Style, canvas: &mut Canvas) {
@@ -128,12 +114,26 @@ impl StandardMarker {
             ).rotate(angle + self.orientation)
         );
         canvas.apply(style.primary_marker_color(&self.class));
-        if style.detail() >= 4. {
-            (self.marker.large)(&mut canvas, style.dimensions())
+        if style.detail() >= 4 {
+            (self.marker.large)(&mut canvas, style.units())
         }
         else {
-            (self.marker.small)(&mut canvas, style.dimensions())
+            (self.marker.small)(&mut canvas, style.units())
         }
+    }
+}
+
+impl Feature for StandardMarker {
+    fn storage_bounds(&self) -> world::Rect {
+        self.position.storage_bounds()
+    }
+
+    fn shape(
+        &self, _style: &Style, _canvas: &Canvas
+    ) -> AnyShape {
+        AnyShape::single_stage(|style: &Style, canvas: &mut Canvas| {
+            self.render(style, canvas)
+        })
     }
 }
 
@@ -147,7 +147,7 @@ struct Marker {
 }
 
 type RenderFn = &'static (
-    dyn Fn(&mut Group, Dimensions) + Sync
+    dyn Fn(&mut Group, Units) + Sync
 );
 
 
@@ -187,7 +187,7 @@ macro_rules! make_marker {
 
 markers! {
     ("de.abzw", "junction") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             chevron(canvas,
                 0.5 * u.sw - 0.5 * u.sp,
                 0.25 * u.sh + 0.5 * u.sp, 0.75 * u.sh - 0.5 * u.sp
@@ -203,13 +203,13 @@ markers! {
             canvas.apply_line_width(u.sp);
             stroke_round(canvas)
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             chevron(canvas, 0.4 * u.sw, 0.5 * u.sp, u.sh);
             canvas.fill()
         }
     ),
     ("de.abzw.casing", "junction.casing") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             chevron(canvas,
                 0.5 * u.sw - 0.5 * u.sp,
                 0.25 * u.sh + 0.5 * u.sp, 0.75 * u.sh - 0.5 * u.sp
@@ -222,17 +222,17 @@ markers! {
             canvas.line_to(0., 0.25 * u.sh);
             canvas.move_to(0., 0.5 * u.sh + u.sp);
             canvas.line_to(0., u.sh - 0.5 * u.sp);
-            canvas.apply_line_width(u.csp);
+            canvas.apply_line_width(u.sp * 2.);
             canvas.apply(CASING_COLOR);
             //canvas.apply(Operator::DestinationOut);
             stroke_round(canvas);
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             junction_small_casing(canvas, u)
         }
     ),
     ("de.abzw.first", "junction.first") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, 0.75 * u.sh - 0.5 * u.sp);
             canvas.line_to(0., 0.25 * u.sh + 0.5 * u.sp);
             canvas.line_to(0., 0.);
@@ -244,7 +244,7 @@ markers! {
         }
     ),
     ("de.abzw.second", "junction.second") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.move_to(0.5 * u.sw - 0.5 * u.sp, 0.75 * u.sh - 0.5 * u.sp);
             canvas.line_to(0., 0.25 * u.sh + 0.5 * u.sp);
             canvas.line_to(0., 0.);
@@ -257,7 +257,7 @@ markers! {
     ),
 
     ("de.anst") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.move_to(0., 0.);
             canvas.line_to(0., u.sh - 0.5 * u.sp);
             canvas.move_to(-0.3 * u.sw, u.sh - 0.5 * u.sp);
@@ -265,7 +265,7 @@ markers! {
             canvas.apply_line_width(u.sp);
             stroke_round(canvas)
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.move_to(0., 0.);
             canvas.line_to(0., u.sh - 0.75 * u.sp);
             canvas.move_to(-0.3 * u.sw, u.sh - 0.75 * u.sp);
@@ -276,7 +276,7 @@ markers! {
     ),
 
     ("de.aw") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.apply_line_width(2. * u.sp);
             canvas.new_path();
             canvas.arc(0., 0.5 * u.sh, 0.5 * u.sh - u.sp, 0., 2. * PI);
@@ -292,7 +292,7 @@ markers! {
     ),
 
     ("de.awanst") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.move_to(0., 0.);
             canvas.line_to(0., u.sh - 0.5 * u.sp);
 
@@ -303,7 +303,7 @@ markers! {
             canvas.apply_line_width(u.sp);
             stroke_round(canvas)
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.move_to(0., 0.);
             canvas.line_to(0., u.sh - 0.75 * u.sp);
             canvas.move_to(-0.3 * u.sw, u.sh - 0.75 * u.sp);
@@ -314,7 +314,7 @@ markers! {
     ),
 
     ("de.bbf", "servicestation") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let hsp = 0.5 * u.sp;
             canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
             canvas.line_to(-0.5 * u.sw + hsp, u.sh - 0.5 * u.sp);
@@ -331,7 +331,7 @@ markers! {
             canvas.close_path();
             canvas.fill()
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             stop_small(canvas, u);
 
             let hsp = 0.5 * u.sp;
@@ -344,7 +344,7 @@ markers! {
     ),
 
     ("de.bf", "de.kbf", "station") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let hsp = 0.5 * u.sp;
             canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
             canvas.line_to(-0.5 * u.sw + hsp, u.sh - hsp);
@@ -363,12 +363,12 @@ markers! {
             canvas.close_path();
             canvas.fill()
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             station_small(canvas, u)
         }
     ),
     ("de.kbf") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let hsp = 0.5 * u.sp;
             canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
             canvas.line_to(-0.5 * u.sw + hsp, u.sh - hsp);
@@ -387,20 +387,20 @@ markers! {
             canvas.close_path();
             canvas.fill()
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             station_xsmall(canvas, u)
         }
     ),
     ("de.bf.casing", "station.casing") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             station_casing(canvas, u)
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             station_small_casing(canvas, u)
         }
     ),
     ("de.bf.first", "station.first") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let hsp = 0.5 * u.sp;
             canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
             canvas.line_to(-0.5 * u.sw + hsp, u.sh - hsp);
@@ -421,7 +421,7 @@ markers! {
         }
     ),
     ("de.bf.second", "station.second") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let hsp = 0.5 * u.sp;
             canvas.move_to(0.5 * u.sw - hsp, 2.5 * u.sp);
             canvas.line_to(0.5 * u.sw - hsp, u.sh - hsp);
@@ -443,7 +443,7 @@ markers! {
     ),
 
     ("de.bft") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             chevron(canvas,
                 0.5 * u.sw - 0.5 * u.sp,
                 0.25 * u.sh + 0.5 * u.sp, 0.75 * u.sh - 0.5 * u.sp
@@ -462,7 +462,7 @@ markers! {
         }
     ),
     ("de.bft.casing") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             chevron(canvas,
                 0.5 * u.sw - 0.5 * u.sp,
                 0.25 * u.sh + 0.5 * u.sp, 0.75 * u.sh - 0.5 * u.sp
@@ -475,13 +475,13 @@ markers! {
             canvas.line_to(0., 0.25 * u.sh);
             canvas.move_to(0., 0.5 * u.sh + u.sp);
             canvas.line_to(0., u.sh - 0.5 * u.sp);
-            canvas.apply_line_width(u.csp);
+            canvas.apply_line_width(u.sp * 2.);
             canvas.apply(CASING_COLOR);
             stroke_round(canvas)
         }
     ),
     ("de.bft.first") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.move_to(0., 0.);
             canvas.line_to(0., 0.25 * u.sh);
             canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, 0.75 * u.sh - 0.5 * u.sp);
@@ -497,7 +497,7 @@ markers! {
         }
     ),
     ("de.bft.second") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.move_to(0., 0.);
             canvas.line_to(0., 0.25 * u.sh);
             canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.75 * u.sh - 0.5 * u.sp);
@@ -514,7 +514,7 @@ markers! {
     ),
 
     ("de.bk", "block") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             chevron(canvas,
                 0.5 * u.sw - 0.5 * u.sp,
                 0.3 * u.sh + 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp
@@ -524,7 +524,7 @@ markers! {
             canvas.apply_line_width(u.sp);
             stroke_round(canvas)
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             chevron(canvas,
                 0.4 * u.sw - 0.5 * u.sp, 0.5 * u.sp, u.sh - 0.5 * u.sp,
             );
@@ -533,26 +533,26 @@ markers! {
         }
     ),
     ("de.bk.casing", "block.casing") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             chevron(canvas,
                 0.5 * u.sw - 0.5 * u.sp,
                 0.3 * u.sh + 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp
             );
             canvas.move_to(0., 0.);
             canvas.line_to(0., 0.3 * u.sh);
-            canvas.apply_line_width(u.csp);
+            canvas.apply_line_width(u.sp * 2.);
             stroke_round(canvas)
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             chevron(canvas,
                 0.4 * u.sw - 0.5 * u.sp, 0.5 * u.sp, u.sh - 0.5 * u.sp,
             );
-            canvas.apply_line_width(u.csp);
+            canvas.apply_line_width(u.sp * 2.);
             stroke_round(canvas)
         }
     ),
     ("de.bk.first", "block.first") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.move_to(0., 0.);
             canvas.line_to(0., 0.3 * u.sh);
             canvas.line_to(-0.5 * u.sw + 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp);
@@ -561,7 +561,7 @@ markers! {
         }
     ),
     ("de.bk.second", "block.second") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.move_to(0., 0.);
             canvas.line_to(0., 0.3 * u.sh);
             canvas.line_to(0.5 * u.sw - 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp);
@@ -571,7 +571,7 @@ markers! {
     ),
 
     ("de.bw") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.apply_line_width(2. * u.sp);
             canvas.new_path();
             canvas.arc(0., 0.5 * u.sh, 0.5 * u.sh - u.sp, 0., 2. * PI);
@@ -589,9 +589,9 @@ markers! {
     ),
 
     ("de.dirgr") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let r = 0.8 * u.dt;
-            canvas.apply_line_width(u.bp);
+            canvas.apply_line_width(u.sp);
             canvas.move_to(0., -0.5 * u.dt);
             canvas.line_to(0., 2. * r);
             canvas.stroke();
@@ -600,11 +600,11 @@ markers! {
             canvas.arc(0., 3. * r, 0.5 * r, 0., 2. * PI);
             canvas.fill()
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let r = 0.25 * u.sh;
             canvas.arc(0., 3. * r, r, 0., 2. * PI);
             canvas.fill();
-            canvas.apply_line_width(u.bp);
+            canvas.apply_line_width(u.sp);
             canvas.move_to(0., -0.5 * u.dt);
             canvas.line_to(0., 2. * r);
             canvas.stroke();
@@ -612,7 +612,7 @@ markers! {
     ),
 
     ("de.dkst") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             chevron(canvas,
                 0.5 * u.sw - 0.5 * u.sp,
                 0.3 * u.sh + 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp
@@ -622,7 +622,7 @@ markers! {
             canvas.apply_line_width(u.sp);
             stroke_round(canvas)
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             chevron(canvas,
                 0.4 * u.sw - 0.5 * u.sp, 0.5 * u.sp, u.sh - 0.5 * u.sp,
             );
@@ -632,7 +632,7 @@ markers! {
     ),
 
     ("de.est") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.apply_line_width(2. * u.sp);
             canvas.new_path();
             canvas.arc(0., 0.5 * u.sh, 0.5 * u.sh - u.sp, 0., 2. * PI);
@@ -648,7 +648,7 @@ markers! {
     ),
 
     ("de.exbf") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, u.sh + 1.5 * u.sp);
             canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh + 1.5 * u.sp);
             canvas.apply_line_width(u.sp);
@@ -657,7 +657,7 @@ markers! {
     ),
 
     ("de.gbf", "goodsstation") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let hsp = 0.5 * u.sp;
             canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
             canvas.line_to(-0.5 * u.sw + hsp, 0.7 * u.sh);
@@ -678,7 +678,7 @@ markers! {
             canvas.close_path();
             canvas.fill()
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let hsp = 0.5 * u.sp;
             canvas.move_to(-0.5 * u.sw, 1.75 * u.sp - hsp);
             canvas.line_to(-0.5 * u.sw, 0.7 * u.sh);
@@ -691,31 +691,31 @@ markers! {
     ),
 
     ("de.hp", "de.khp", "stop") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             stop(canvas, u)
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             stop_small(canvas, u)
         }
     ),
     ("de.khp") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             stop(canvas, u)
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             stop_xsmall(canvas, u)
         }
     ),
     ("de.hp.casing", "stop.casing") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             station_casing(canvas, u)
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             station_small_casing(canvas, u)
         }
     ),
     ("de.hp.first", "stop.first") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let hsp = 0.5 * u.sp;
             canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
             canvas.line_to(-0.5 * u.sw + hsp, u.sh - 0.5 * u.sp);
@@ -727,7 +727,7 @@ markers! {
         }
     ),
     ("de.hp.second", "stop.second") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let hsp = 0.5 * u.sp;
             canvas.move_to(0.5 * u.sw - hsp, 2.5 * u.sp);
             canvas.line_to(0.5 * u.sw - hsp, u.sh - 0.5 * u.sp);
@@ -740,7 +740,7 @@ markers! {
     ),
 
     ("de.hp.bft") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             stop(canvas, u);
             chevron(canvas,
                 0.5 * u.sw - 0.5 * u.sp,
@@ -758,7 +758,7 @@ markers! {
     ),
 
     ("de.hst") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let hsp = 0.5 * u.sp;
             canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
             canvas.line_to(-0.5 * u.sw + hsp, u.sh - 0.5 * u.sp);
@@ -771,7 +771,7 @@ markers! {
             canvas.apply_line_width(u.sp);
             canvas.stroke()
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             stop_small(canvas, u);
             canvas.move_to(0., 1.75 * u.sp);
             canvas.line_to(0., u.sh - 0.5 * u.sp);
@@ -781,7 +781,7 @@ markers! {
     ),
 
     ("de.inbf") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let hsp = 0.5 * u.sp;
             canvas.move_to(-0.5 * u.sw + hsp, 0.5 * u.dt + hsp);
             canvas.line_to(-0.5 * u.sw + hsp, 2.5 * u.dt - hsp);
@@ -798,7 +798,7 @@ markers! {
             canvas.close_path();
             canvas.fill()
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let hsp = 0.5 * u.sp;
             canvas.move_to(-0.5 * u.sw, 1.75 * u.sp - hsp);
             canvas.line_to(-0.5 * u.sw, u.sh - 1.75 * u.sp + hsp);
@@ -810,7 +810,7 @@ markers! {
     ),
 
     ("de.ldst") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let hsp = 0.5 * u.sp;
             canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
             canvas.line_to(-0.5 * u.sw + hsp, 0.7 * u.sh);
@@ -821,7 +821,7 @@ markers! {
             canvas.apply_line_width(u.sp);
             canvas.stroke()
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let hsp = 0.5 * u.sp;
             canvas.move_to(-0.5 * u.sw + hsp, 1.75 * u.sp);
             canvas.line_to(-0.5 * u.sw + hsp, 0.6 * u.sh);
@@ -835,20 +835,20 @@ markers! {
     ),
 
     ("de.lgr") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let r = 0.8 * u.dt;
             canvas.arc(0., 3. * r, r, 0., 2. * PI);
             canvas.fill();
-            canvas.apply_line_width(u.bp);
+            canvas.apply_line_width(u.sp);
             canvas.move_to(0., -0.5 * u.dt);
             canvas.line_to(0., 2. * r);
             canvas.stroke();
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let r = 0.25 * u.sh;
             canvas.arc(0., 3. * r, r, 0., 2. * PI);
             canvas.fill();
-            canvas.apply_line_width(u.bp);
+            canvas.apply_line_width(u.sp);
             canvas.move_to(0., -0.5 * u.dt);
             canvas.line_to(0., 2. * r);
             canvas.stroke();
@@ -856,7 +856,7 @@ markers! {
     ),
 
     ("de.stw", "signalbox") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.apply_line_width(u.sp);
             canvas.move_to(0., 0.);
             canvas.line_to(0., 2. * u.dt);
@@ -867,7 +867,7 @@ markers! {
     ),
 
     ("de.stw.casing", "signalbox.casing") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.apply_line_width(1.5 * u.sp);
             canvas.move_to(0., 0.);
             canvas.line_to(0., 2. * u.dt);
@@ -879,7 +879,7 @@ markers! {
     ),
 
     ("de.uest", "crossover") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             chevron(canvas,
                 0.5 * u.sw - 0.5 * u.sp,
                 0.3 * u.sh + 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp
@@ -889,7 +889,7 @@ markers! {
             canvas.apply_line_width(u.sp);
             stroke_round(canvas)
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             chevron(canvas,
                 0.4 * u.sw - 0.5 * u.sp, 0.5 * u.sp, u.sh - 0.5 * u.sp,
             );
@@ -899,23 +899,23 @@ markers! {
         }
     ),
     ("de.uest.casing", "crossover.casing") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             chevron(canvas,
                 0.5 * u.sw - 0.5 * u.sp,
                 0.3 * u.sh + 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp
             );
             canvas.move_to(0., 0.);
             canvas.line_to(0., u.sh - u.sp);
-            canvas.apply_line_width(u.csp);
+            canvas.apply_line_width(u.sp * 2.);
             canvas.apply(Operator::DestinationOut);
             stroke_round(canvas);
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             junction_small_casing(canvas, u)
         }
     ),
     ("de.uest.first", "crossover.first") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.move_to(
                 -0.5 * u.sw + 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp
             );
@@ -927,7 +927,7 @@ markers! {
         }
     ),
     ("de.uest.second", "crossover.second") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.move_to(
                 0.5 * u.sw - 0.5 * u.sp, 0.8 * u.sh - 0.5 * u.sp
             );
@@ -940,7 +940,7 @@ markers! {
     ),
 
     ("de.zst", "de.kzst") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             stop(canvas, u);
             canvas.arc(
                 0., u.sh - 0.5 * (u.sh - 2. * u.sp),
@@ -949,13 +949,13 @@ markers! {
             );
             canvas.fill()
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             stop_small(canvas, u)
         }
     ),
 
     ("ltd-stop") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             let hsp = 0.5 * u.sp;
             stop(canvas, u);
             canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
@@ -963,29 +963,29 @@ markers! {
             canvas.apply_line_width(u.sp);
             stroke_round(canvas)
         },
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             stop_small(canvas, u)
         }
     ),
 
     ("ref") => (
-        |canvas: &mut Group, u: Dimensions| {
-            canvas.apply_line_width(u.bp);
+        |canvas: &mut Group, u: Units| {
+            canvas.apply_line_width(u.sp);
             canvas.move_to(0., 0.);
             canvas.line_to(0., 0.5 * u.sh);
             canvas.stroke()
         }
     ),
     ("refdt") => (
-        |canvas: &mut Group, u: Dimensions| {
-            canvas.apply_line_width(u.bp);
+        |canvas: &mut Group, u: Units| {
+            canvas.apply_line_width(u.sp);
             canvas.move_to(0., 0.);
             canvas.line_to(0., u.dt);
             canvas.stroke()
         }
     ),
     ("statdt") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.apply_line_width(u.sp);
             canvas.move_to(0., 0.);
             canvas.line_to(0., u.dt);
@@ -994,27 +994,27 @@ markers! {
     ),
 
     ("tunnel.l") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.move_to(0., 0.);
             canvas.move_to(0., 0.);
             canvas.line_to(1.0 * u.dt, 0.0);
             canvas.line_to(1.75 * u.dt, -0.75 * u.dt);
-            canvas.apply_line_width(u.bp);
+            canvas.apply_line_width(u.sp);
             canvas.stroke()
         }
     ),
     ("tunnel.r") => (
-        |canvas: &mut Group, u: Dimensions| {
+        |canvas: &mut Group, u: Units| {
             canvas.move_to(0., 0.);
             canvas.line_to(-1.0 * u.dt, 0.0);
             canvas.line_to(-1.75 * u.dt, -0.75 * u.dt);
-            canvas.apply_line_width(u.bp);
+            canvas.apply_line_width(u.sp);
             canvas.stroke()
         }
     ),
     ("tunnel.dt") => (
-        |canvas: &mut Group, u: Dimensions| {
-            canvas.apply_line_width(u.bp);
+        |canvas: &mut Group, u: Units| {
+            canvas.apply_line_width(u.sp);
             canvas.move_to(0., 0.);
             canvas.line_to(0., u.dt);
             canvas.stroke()
@@ -1026,7 +1026,7 @@ markers! {
 //------------ Component Functions -------------------------------------------
 
 fn station_small(
-    canvas: &mut Group, u: Dimensions
+    canvas: &mut Group, u: Units
 ) {
     let hsp = 0.5 * u.sp;
     canvas.move_to(-0.5 * u.sw, 1.75 * u.sp - hsp);
@@ -1045,7 +1045,7 @@ fn station_small(
 }
 
 fn station_xsmall(
-    canvas: &mut Group, u: Dimensions
+    canvas: &mut Group, u: Units
 ) {
     let sp = 0.8 * u.sp;
     let hsp = 0.5 * u.sp;
@@ -1067,9 +1067,9 @@ fn station_xsmall(
 }
 
 fn station_casing(
-    canvas: &mut Group, u: Dimensions
+    canvas: &mut Group, u: Units
 ) {
-    let hsp = 0.5 * (u.csp - u.sp);
+    let hsp = 0.5 * (u.sp * 2. - u.sp);
     canvas.move_to(-0.5 * u.sw - hsp, 2.5 * u.sp - hsp);
     canvas.line_to(-0.5 * u.sw - hsp, u.sh + hsp);
     canvas.line_to(0.5 * u.sw + hsp, u.sh + hsp);
@@ -1080,7 +1080,7 @@ fn station_casing(
 }
 
 fn station_small_casing(
-    canvas: &mut Group, u: Dimensions
+    canvas: &mut Group, u: Units
 ) {
     let hsp = 0.5 * u.sp;
     canvas.move_to(-0.5 * u.sw, 1.75 * u.sp - hsp);
@@ -1089,7 +1089,7 @@ fn station_small_casing(
     canvas.line_to(0.5 * u.sw, 1.75 * u.sp - hsp);
     canvas.close_path();
     canvas.apply(CASING_COLOR);
-    canvas.apply_line_width(u.csp);
+    canvas.apply_line_width(u.sp * 2.);
     /*
     top_ds_rect(canvas,
         -0.5 * u.sw + 0.5 * u.sp,
@@ -1098,13 +1098,13 @@ fn station_small_casing(
         u.sh - 0.5 * u.sp,
         u.ds,
     );
-    canvas.apply_line_width(u.csp);
+    canvas.apply_line_width(u.sp * 2.);
     */
     stroke_round(canvas)
 }
 
 fn stop(
-    canvas: &mut Group, u: Dimensions
+    canvas: &mut Group, u: Units
 )  {
     let hsp = 0.5 * u.sp;
     canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
@@ -1118,7 +1118,7 @@ fn stop(
 }
 
 fn stop_small(
-    canvas: &mut Group, u: Dimensions
+    canvas: &mut Group, u: Units
 ) {
     let hsp = 0.5 * u.sp;
     canvas.move_to(-0.5 * u.sw + hsp, 1.75 * u.sp);
@@ -1142,7 +1142,7 @@ fn stop_small(
 }
 
 fn stop_xsmall(
-    canvas: &mut Group, u: Dimensions
+    canvas: &mut Group, u: Units
 ) {
     let sp = 0.8 * u.sp;
     let hsp = 0.5 * sp;
@@ -1160,10 +1160,10 @@ fn stop_xsmall(
 }
 
 fn junction_small_casing(
-    canvas: &mut Group, u: Dimensions
+    canvas: &mut Group, u: Units
 )  {
     chevron(canvas, 0.4 * u.sw - 0.5 * u.sp, 0., u.sh - 0.5 * u.sp);
-    canvas.apply_line_width(u.csp);
+    canvas.apply_line_width(u.sp * 2.);
     canvas.stroke()
 }
 
@@ -1182,6 +1182,7 @@ fn stroke_round(canvas: &mut Group) {
     canvas.apply(LineCap::Butt);
 }
 
+/*
 fn top_ds_rect(canvas: &mut Group, x0: f64, x1: f64, y0: f64, y1: f64, ds: f64) {
     let hds = 0.5 * ds; // half ds
 
@@ -1192,4 +1193,5 @@ fn top_ds_rect(canvas: &mut Group, x0: f64, x1: f64, y0: f64, y1: f64, ds: f64) 
     canvas.curve_to(x1 - hds, y1,   x1, y1 - hds,   x1, y1 - ds);
     canvas.line_to(x1, y0);
 }
+*/
 

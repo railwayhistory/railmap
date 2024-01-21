@@ -1,20 +1,20 @@
 //! Making and rendering label features.
 
-use femtomap::layout;
+use femtomap::{layout, world};
+use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
 use femtomap::layout::{Align, Margins, ShapedLayout};
-use femtomap::path::{MapDistance, Position};
+use femtomap::path::Position;
 use femtomap::render::{
     Canvas, Color, Font, FontBuilder, FontFamily, FontFeatures, FontStretch,
-    FontStyle, FontWeight, Group, LineCap, LineJoin, LineWidth, Matrix,
+    FontStyle, FontWeight, LineCap, LineJoin, LineWidth, Matrix,
     Operator, Sketch,
 };
-use kurbo::{Point, Rect, Vec2};
+use kurbo::Vec2;
 use crate::import::eval;
-use crate::import::Failed;
-use super::super::style::Style;
-use super::super::class::Class;
-use super::super::theme::Railwayhistory;
-use super::{Shape, Stage};
+use crate::import::eval::{Custom, Expression};
+use crate::class::Railway;
+use crate::style::Style;
+use super::{AnyShape, Feature, Stage};
 
 
 //------------ Configuration -------------------------------------------------
@@ -30,10 +30,10 @@ const ROMAN_FEATURES: FontFeatures = FontFeatures::from_static("");
 const LINE_HEIGHT: f64 = 0.9;
 
 
-//------------ Feature -------------------------------------------------------
+//------------ Label ---------------------------------------------------------
 
 /// The feature for the label.
-pub struct Feature {
+pub struct Label {
     /// The position the label is attached to.
     position: Position,
 
@@ -42,17 +42,13 @@ pub struct Feature {
     /// If this is `false`, the base direction is to the right.
     on_path: bool,
 
-    /// Properties describing if and how the features should be rendered.
-    properties: LabelProperties,
-
     /// The layout to render
     layout: layout::Block<LayoutProperties>,
 }
 
-impl Feature {
+impl Label {
     pub fn new(
         layout: Layout,
-        properties: LabelProperties,
         position: Position,
         on_path: bool,
         mut base: LayoutProperties,
@@ -62,114 +58,43 @@ impl Feature {
         layout.update_properties(&base, |me, parent| me.update(parent));
 
         Self {
-            position, on_path, properties, layout
+            position, on_path, layout
         }
     }
+}
 
-    pub fn storage_bounds(&self) -> Rect {
+impl Feature for Label {
+    fn storage_bounds(&self) -> world::Rect {
         self.position.storage_bounds()
     }
 
-    pub fn shape(
+    fn shape(
         &self, style: &Style, canvas: &Canvas
-    ) -> Option<Box<dyn Shape + '_>> {
-        if self.properties.linenum && !style.include_line_labels() {
-            return None
-        }
+    ) -> AnyShape {
         let (point, angle) = self.position.resolve_label(style, self.on_path);
-        Some(Box::new(ShapedFeature {
-            matrix: Matrix::identity().translate(point).rotate(angle),
-            layout: self.layout.shape(style, canvas)
-        }))
+        let matrix = Matrix::identity().translate(point).rotate(angle);
+        let layout = self.layout.shape(style, canvas);
+        AnyShape::from(move |stage: Stage, style: &Style, canvas: &mut Canvas| {
+            layout.render(
+                style, Default::default(), &stage,
+                canvas.sketch().apply(matrix)
+            )
+        })
     }
 }
-
-impl From<Feature> for super::Feature {
-    fn from(src: Feature) -> Self {
-        super::Feature::Label(src)
-    }
-}
-
-
-//------------ ShapedFeature -------------------------------------------------
-
-struct ShapedFeature<'a> {
-    matrix: Matrix,
-    layout: ShapedLayout<'a, LayoutProperties>,
-}
-
-impl<'a> Shape for ShapedFeature<'a> {
-    fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
-        self.layout.render(
-            style, Default::default(), &stage,
-            canvas.sketch().apply(self.matrix)
-        )
-    }
-}
-
-
-//------------ LabelProperties -----------------------------------------------
-
-#[derive(Clone, Debug, Default)]
-pub struct LabelProperties {
-    /// Is the label for a line number?
-    linenum: bool,
-}
-
-impl LabelProperties {
-    pub fn new_linenum() -> Self {
-        Self { linenum: true }
-    }
-
-    pub fn from_arg(
-        linenum: bool,
-        arg: eval::Expression<Railwayhistory>,
-        err: &mut eval::Error,
-    ) -> Result<(Self, LayoutProperties), Failed> {
-        let mut symbols = arg.into_symbol_set(err)?;
-        let mut properties = LayoutProperties::from_symbols(&mut symbols);
-        let label_properties = LabelProperties {
-            linenum: symbols.take("linenum") || linenum,
-        };
-        symbols.check_exhausted(err)?;
-        if label_properties.linenum {
-            properties.size = Some(FontSize::Badge)
-        }
-        Ok((label_properties, properties))
-    }
-
-    pub fn default_pair(linenum: bool) -> (Self, LayoutProperties) {
-        (
-            LabelProperties { linenum },
-            if linenum {
-                LayoutProperties::with_size(FontSize::Badge)
-            }
-            else {
-                LayoutProperties::default()
-            }
-        )
-    }
-}
-
 
 
 //------------ Layout --------------------------------------------------------
 
 pub type Layout = layout::Layout<LayoutProperties>;
 
-impl From<Layout> for eval::ExprVal<Railwayhistory> {
-    fn from(src: Layout) -> Self {
-        eval::ExprVal::custom(src)
-    }
-}
-
 pub fn layout_from_expr(
-    expr: eval::Expression<Railwayhistory>,
-    err: &mut eval::Error
+    expr: eval::Expression,
+    err: &mut EvalErrors
 ) -> Result<Layout, Failed> {
     match expr.value {
-        eval::ExprVal::Custom(val) => Ok(val),
-        eval::ExprVal::Text(val) => {
+        eval::Value::Custom(Custom::Layout(val)) => Ok(val),
+        eval::Value::Text(val) => {
             Ok(Layout::span(val, Default::default()))
         }
         _ => {
@@ -182,7 +107,7 @@ pub fn layout_from_expr(
 
 //------------ Creating Layouts ----------------------------------------------
 
-pub fn halign_from_symbols(symbols: &mut eval::SymbolSet) -> Option<Align> {
+pub fn halign_from_symbols(symbols: &mut SymbolSet) -> Option<Align> {
     if symbols.take("left") {
         Some(Align::Start)
     }
@@ -200,7 +125,7 @@ pub fn halign_from_symbols(symbols: &mut eval::SymbolSet) -> Option<Align> {
     }
 }
 
-pub fn valign_from_symbols(symbols: &mut eval::SymbolSet) -> Option<Align> {
+pub fn valign_from_symbols(symbols: &mut SymbolSet) -> Option<Align> {
     if symbols.take("top") {
         Some(Align::Start)
     }
@@ -218,9 +143,8 @@ pub fn valign_from_symbols(symbols: &mut eval::SymbolSet) -> Option<Align> {
     }
 }
 
-pub fn layouts_from_args(
-    args: impl Iterator<Item = eval::Expression<Railwayhistory>>,
-    err: &mut eval::Error,
+pub fn layouts_from_args<'a, I: IntoIterator<Item = Expression<'a>>>(
+    args: I, err: &mut EvalErrors,
 ) -> Result<Vec<Layout>, Failed> {
     let mut res = Vec::new();
     for expr in args {
@@ -247,7 +171,7 @@ pub struct LayoutProperties {
     layout_type: LayoutType,
 
     /// The class for the layout.
-    class: Class,
+    class: Railway,
 }
 
 impl LayoutProperties {
@@ -265,31 +189,31 @@ impl LayoutProperties {
         Self { size: Some(size), .. Default::default() }
     }
 
-    pub fn with_class(class: Class) -> Self {
+    pub fn with_class(class: Railway) -> Self {
         Self { class, .. Default::default() }
     }
 
     pub fn from_arg(
-        arg: eval::Expression<Railwayhistory>,
-        err: &mut eval::Error,
+        arg: Expression,
+        err: &mut EvalErrors,
     ) -> Result<Self, Failed> {
-        let mut symbols = arg.into_symbol_set(err)?;
+        let mut symbols = arg.eval(err)?;
         let res = Self::from_symbols(&mut symbols);
         symbols.check_exhausted(err)?;
         Ok(res)
     }
 
-    pub fn from_symbols(symbols: &mut eval::SymbolSet) -> Self {
+    pub fn from_symbols(symbols: &mut SymbolSet) -> Self {
         Self {
             font: Self::font_from_symbols(symbols),
             size: FontSize::from_symbols(symbols),
             packed: None,
             layout_type: LayoutType::Normal,
-            class: Class::from_symbols(symbols),
+            class: Railway::from_symbols(symbols),
         }
     }
 
-    fn font_from_symbols(symbols: &mut eval::SymbolSet) -> FontBuilder {
+    fn font_from_symbols(symbols: &mut SymbolSet) -> FontBuilder {
         let mut res = FontBuilder::default();
 
         // Family
@@ -336,7 +260,7 @@ impl LayoutProperties {
         res
     }
 
-    pub fn class(&self) -> &Class {
+    pub fn class(&self) -> &Railway {
         &self.class
     }
 
@@ -350,6 +274,12 @@ impl LayoutProperties {
 
     pub fn set_size(&mut self, size: FontSize) {
         self.size = Some(size)
+    }
+
+    pub fn update_size(&mut self, base: FontSize) {
+        if self.size.is_none() {
+            self.size = Some(base)
+        }
     }
 
     pub fn update(&mut self, base: &Self) {
@@ -387,24 +317,30 @@ impl layout::Properties for LayoutProperties {
         // XXX Make this font and size dependent.
         match self.layout_type {
             LayoutType::Rule => {
-                Some(Margins::equal(0.5 * style.dimensions().guide_width))
+                Some(Margins::equal(0.5 * style.units().guide_width))
             }
             LayoutType::TextFrame => {
-                Some(Margins::equal(style.dimensions().guide_width))
+                Some(Margins::equal(style.units().guide_width))
             }
             _ => None,
         }
     }
 
     fn margins(&self, style: &Self::Style) -> Margins {
-        if matches!(self.layout_type, LayoutType::BadgeFrame) {
-            Margins::vh(
-                style.dimensions().dt * 0.1,
-                style.dimensions().dt * 0.5,
-            )
-        }
-        else {
-            Margins::default()
+        match self.layout_type {
+            LayoutType::BadgeFrame => {
+                Margins::vh(
+                    style.units().dt * 0.1,
+                    style.units().dt * 0.5,
+                )
+            }
+            LayoutType::Framed => {
+                Margins::vh(
+                    self.size().size(style) * 0.15,
+                    self.size().size(style) * 0.2,
+                )
+            }
+            _ => Margins::default()
         }
     }
 
@@ -483,6 +419,9 @@ pub enum LayoutType {
     Rule,
     TextFrame,
     BadgeFrame,
+
+    /// The layout lives inside a frame and needs to grow a bit of margin.
+    Framed,
 }
 
 
@@ -537,7 +476,7 @@ impl FontSize {
         base * style.canvas_bp()
     }
 
-    pub fn from_symbols(symbols: &mut eval::SymbolSet) -> Option<Self> {
+    pub fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
         use self::FontSize::*;
 
         if symbols.take("xsmall") { Some(Xsmall) }
@@ -568,7 +507,7 @@ pub enum Anchor {
 
 
 impl Anchor {
-    pub fn from_symbols(symbols: &mut eval::SymbolSet) -> Option<Self> {
+    pub fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
         if symbols.take("n") {
             Some(Anchor::North)
         }
@@ -596,6 +535,26 @@ impl Anchor {
         else {
             None
         }
+    }
+
+    pub fn from_legacy_symbols(symbols: &mut SymbolSet) -> Option<Self> {
+        Self::from_symbols(symbols).or_else(|| {
+            if symbols.take("left") {
+                Some(Anchor::East)
+            }
+            else if symbols.take("right") {
+                Some(Anchor::West)
+            }
+            else if symbols.take("top") {
+                Some(Anchor::South)
+            }
+            else if symbols.take("bottom") {
+                Some(Anchor::North)
+            }
+            else {
+                None
+            }
+        })
     }
 
     /// Converts the anchor into horizontal and vertical align.

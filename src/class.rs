@@ -1,23 +1,23 @@
-//! Classes of features.
+//! Classification of features.
 //!
 //! In order to be able to draw features differently for different styles, we
 //! need to describe them in an abstract fashion. This is what classes do.
 //!
-//! There is one big [`Class`] type that aggregates various sub-classes the
-//! describing various more specific things. In the map source, the class of
-//! a feature is typically given through symbol set.
+//! There are currently two classes, [`Railway`] for the classes of features
+//! related to railways, and [`Border`] for borders.
+//!
+//! Since railways are very comples, there are plenty extra types here that
+//! help with defining the railway class.
 #![allow(dead_code)]
 
-use crate::import::eval;
-use crate::import::Failed;
-use crate::import::eval::{Expression, SymbolSet};
-use super::theme::Railwayhistory;
+use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
+use crate::import::eval::Expression;
 
 
-//------------ Class ---------------------------------------------------------
+//------------ Railway -------------------------------------------------------
 
 #[derive(Clone, Debug, Default)]
-pub struct Class {
+pub struct Railway {
     category: Option<Category>,
     status: Option<Status>,
     surface: Option<Surface>,
@@ -27,19 +27,19 @@ pub struct Class {
     pax: Option<Pax>,
 }
 
-impl Class {
+impl Railway {
     pub fn from_arg(
-        arg: Expression<Railwayhistory>,
-        err: &mut eval::Error,
+        arg: Expression,
+        err: &mut EvalErrors,
     ) -> Result<Self, Failed> {
-        let mut symbols = arg.into_symbol_set(err)?;
+        let mut symbols = arg.eval::<SymbolSet>(err)?;
         let class = Self::from_symbols(&mut symbols);
         symbols.check_exhausted(err)?;
         Ok(class)
     }
 
     pub fn from_symbols(symbols: &mut SymbolSet) -> Self {
-        Class {
+        Self {
             category: Category::from_symbols(symbols),
             status: Status::from_symbols(symbols),
             surface: Surface::from_symbols(symbols),
@@ -50,7 +50,7 @@ impl Class {
         }
     }
 
-    pub fn update(&mut self, class: &Class) {
+    pub fn update(&mut self, class: &Self) {
         if self.category.is_none() {
             self.category = class.category
         }

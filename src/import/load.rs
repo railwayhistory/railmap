@@ -1,25 +1,22 @@
 
 use std::fmt;
-use femtomap::feature::{FeatureSet, FeatureSetBuilder};
+use femtomap::import::eval::{Builtin as _, LoadErrors};
+use femtomap::import::path::{ImportPathSet, PathSetError};
 use crate::config::Region;
-use crate::theme::Theme;
-use super::eval::Scope;
-use super::features::FeatureSetError;
-use super::path::{PathSet, PathSetError};
+use crate::feature::{Store, StoreBuilder};
+use super::eval::Builtin;
 
 
 //------------ LoadFeatures --------------------------------------------------
 
-pub struct LoadFeatures<'a, T: Theme> {
-    theme: &'a T,
-    features: FeatureSetBuilder<T::Feature>,
+pub struct LoadFeatures {
+    features: StoreBuilder,
     err: ImportError,
 }
 
-impl<'a, T: Theme> LoadFeatures<'a, T> {
-    pub fn new(theme: &'a T) -> Self {
+impl LoadFeatures {
+    pub fn new() -> Self {
         LoadFeatures {
-            theme,
             features: Default::default(),
             err: Default::default(),
         }
@@ -29,22 +26,21 @@ impl<'a, T: Theme> LoadFeatures<'a, T> {
         &mut self,
         region: &Region,
     ) {
-        let paths = match PathSet::load(&region.paths) {
-            Ok(paths) => paths,
+        let builtin = match ImportPathSet::load(&region.paths) {
+            Ok(paths) => Builtin::new(paths),
             Err(err) => {
                 self.err.paths.extend(err);
                 return
             }
         };
-        super::features::load_dir::<T>(
-            &region.rules, Scope::new(self.theme.clone(), &paths),
-            &mut self.features, &mut self.err.rules
-        );
+        if let Err(err) = builtin.load(&region.rules) {
+            self.err.rules.extend(err);
+        }
     }
 
     pub fn finalize(
         self
-    ) -> Result<FeatureSet<T::Feature>, ImportError> {
+    ) -> Result<Store, ImportError> {
         self.err.check()?;
         Ok(self.features.finalize())
     }
@@ -56,7 +52,7 @@ impl<'a, T: Theme> LoadFeatures<'a, T> {
 #[derive(Default)]
 pub struct ImportError {
     paths: PathSetError,
-    rules: FeatureSetError,
+    rules: LoadErrors,
 }
 
 impl ImportError {

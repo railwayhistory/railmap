@@ -77,11 +77,27 @@
           new ol.layer.Tile({
             minZoom: 4,
             source: new ol.source.XYZ({
-              url: "/test/{z}/{x}/{y}.png",
+              url: "/border/{z}/{x}/{y}.png",
               opaque: false,
               tilePixelRatio: 2,
             })
-          })
+          }),
+          new ol.layer.Tile({
+            minZoom: 4,
+            source: new ol.source.XYZ({
+              url: "/el/{z}/{x}/{y}.png",
+              opaque: false,
+              tilePixelRatio: 2,
+            })
+          }),
+          new ol.layer.Tile({
+            minZoom: 4,
+            source: new ol.source.XYZ({
+              url: "/el-num/{z}/{x}/{y}.png",
+              opaque: false,
+              tilePixelRatio: 2,
+            })
+          }),
         ],
         view: new ol.View({
           center: ol.proj.transform(init_view.center, "EPSG:4326", "EPSG:3857"),

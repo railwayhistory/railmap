@@ -1,9 +1,9 @@
 /// The function we support during import.
 
 use femtomap::render::Color;
-use crate::import::Failed;
-use crate::import::eval;
-use crate::import::eval::ExprVal;
+use crate::oldimport::Failed;
+use crate::oldimport::eval;
+use crate::oldimport::eval::ExprVal;
 use super::feature::label;
 use super::theme::Railwayhistory;
 
@@ -142,7 +142,6 @@ const FUNCTIONS: &[(
         };
         Ok(ExprVal::Color(Color::rgb(red, green, blue)))
     }),
-
 
     // Resolve a base path.
     //

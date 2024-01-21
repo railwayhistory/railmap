@@ -1,43 +1,37 @@
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
-use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-use femtomap::feature::FeatureSet;
 use hyper::{Body, Request, Response};
 use hyper::body::Bytes;
 use hyper::service::{make_service_fn, service_fn};
 use lru::LruCache;
-use crate::tile::{Tile, TileId, TileFormat};
-use crate::theme::{Style, Theme};
+use crate::colors::ColorSet;
+use crate::feature::Store;
+use crate::tile::{Tile, TileId};
 
 
-pub struct Server<T: Theme> {
-    theme: T,
-    features: Arc<FeatureSet<T::Feature>>,
-    cache: Arc<Mutex<LruCache<TileId<<T::Style as Style>::StyleId>, Bytes>>>,
-    test_style: String,
+#[derive(Clone)]
+pub struct Server {
+    features: Arc<Store>,
+    cache: Arc<Mutex<LruCache<TileId, Bytes>>>,
+    colors: ColorSet,
 }
 
 
-impl<T: Theme> Server<T> {
-    pub fn new(
-        theme: T,
-        features: FeatureSet<T::Feature>,
-        test_style: String,
-    ) -> Self {
+impl Server {
+    pub fn new(features: Store) -> Self {
         Server {
-            theme,
             features: Arc::new(features),
             cache: Arc::new(Mutex::new(
                 LruCache::new(NonZeroUsize::new(10_000).unwrap())
             )),
-            test_style,
+            colors: Default::default(),
         }
     }
 }
 
-impl<T: Theme> Server<T> {
+impl Server {
     pub async fn run(&self, addr: SocketAddr) {
         let make_svc = make_service_fn(move |_conn| {
             let this = self.clone();
@@ -58,7 +52,7 @@ impl<T: Theme> Server<T> {
     }
 }
 
-impl<T: Theme> Server<T> {
+impl Server {
     async fn process(
         &self, request: Request<Body>
     ) -> Result<Response<Body>, Infallible> {
@@ -69,7 +63,7 @@ impl<T: Theme> Server<T> {
                 return Ok(Response::builder()
                     .header("Content-Type", "text/html")
                     .body(From::<&'static [u8]>::from(
-                        self.theme.index_page()
+                        include_bytes!("../html/railwayhistory/index.html")
                     ))
                     .unwrap()
                 )
@@ -95,6 +89,7 @@ impl<T: Theme> Server<T> {
             _ => { }
         }
 
+        /*
         if path.starts_with("/key/") {
             let path = &mut path[5..].split('/');
             let zoom = match path.next() {
@@ -116,7 +111,7 @@ impl<T: Theme> Server<T> {
             let mut name = name.split('.');
             let style = match name.next() {
                 Some(style) => {
-                    match <T::Style as Style>::StyleId::from_str(style) {
+                    match StyleId::from_str(style) {
                         Ok(style) => style,
                         Err(_) => return Ok(not_found()),
                     }
@@ -142,10 +137,10 @@ impl<T: Theme> Server<T> {
                 .unwrap()
             )
         }
+        */
 
         let tile = match TileId::from_path(
             &request.uri().path()[1..],
-            &self.test_style,
         ) {
             Ok(tile) => tile,
             Err(_) => {
@@ -156,8 +151,8 @@ impl<T: Theme> Server<T> {
         let body = match cached {
             Some(bytes) => bytes.into(),
             None => {
-                let bytes: Bytes = Tile::new(&self.theme, tile.clone()).render(
-                    &self.features
+                let bytes: Bytes = Tile::new(tile.clone()).render(
+                    &self.features, &self.colors,
                 ).into();
                 self.cache.lock().unwrap().put(tile.clone(), bytes.clone());
                 bytes.into()
@@ -168,17 +163,6 @@ impl<T: Theme> Server<T> {
             .body(body)
             .unwrap()
         )
-    }
-}
-
-impl<T: Theme> Clone for Server<T> {
-    fn clone(&self) -> Self {
-        Server {
-            theme: self.theme.clone(),
-            features: self.features.clone(),
-            cache: self.cache.clone(),
-            test_style: self.test_style.clone(),
-        }
     }
 }
 

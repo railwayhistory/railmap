@@ -266,14 +266,18 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 [[package]]
 name = "femtomap"
 version = "0.1.0"
-source = "git+https://github.com/partim/femtomap.git#b9debaea4ec2af790e20c765a8afff063976f908"
 dependencies = [
  "cairo-rs",
+ "ignore",
  "kurbo",
+ "nom",
+ "nom_locate",
+ "osmxml",
  "pango",
  "pangocairo",
  "rstar 0.10.0",
  "serde",
+ "smallvec",
 ]
 
 [[package]]

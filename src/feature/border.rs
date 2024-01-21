@@ -1,14 +1,12 @@
 //! Rendering of borders.
 
+use femtomap::world;
+use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
 use femtomap::path::Trace;
 use femtomap::render::{Canvas, DashPattern, Color, Outline, LineWidth};
-use kurbo::{BezPath, Rect};
-use crate::import::Failed;
-use crate::import::eval;
-use crate::theme::Style as _;
-use super::super::style::Style;
-use super::super::theme::Railwayhistory;
-use super::Shape;
+use crate::import::eval::Expression;
+use crate::style::Style;
+use super::{AnyShape, Feature};
 
 //------------ Configuration -------------------------------------------------
 
@@ -72,39 +70,42 @@ pub struct BorderContour {
 
 impl BorderContour {
     pub fn from_arg(
-        arg: eval::Expression<Railwayhistory>,
+        arg: Expression,
         trace: Trace,
-        err: &mut eval::Error,
+        err: &mut EvalErrors,
     ) -> Result<Self, Failed> {
-        let mut symbols = arg.into_symbol_set(err)?;
+        let mut symbols = arg.eval(err)?;
         let category = Category::from_symbols(&mut symbols, err)?;
         let former = symbols.take("former");
         symbols.check_exhausted(err)?;
         Ok(BorderContour { category, former, trace })
     }
+}
 
-    pub fn storage_bounds(&self) -> Rect {
+impl Feature for BorderContour {
+    fn storage_bounds(&self) -> world::Rect {
         self.trace.storage_bounds()
     }
 
-
-    pub fn shape(
+    fn shape(
         &self, style: &Style, _canvas: &Canvas
-    ) -> Box<dyn Shape + '_> {
+    ) -> AnyShape {
         let outline = self.trace.outline(style);
-        if style.detail() < 3. {
-            Box::new(move |style: &Style, canvas: &mut Canvas| {
+        if style.detail() < 3 {
+            AnyShape::single_stage(move |style: &Style, canvas: &mut Canvas| {
                 self.render_low(&outline, style, canvas)
             })
         }
         else {
-            Box::new(move |style: &Style, canvas: &mut Canvas| {
+            AnyShape::single_stage(move |style: &Style, canvas: &mut Canvas| {
                 self.render_high(&outline, style, canvas)
             })
         }
         
     }
+}
 
+impl BorderContour {
     fn render_low(
         &self, outline: &Outline, style: &Style, canvas: &mut Canvas
     ) {
@@ -163,8 +164,7 @@ enum Category {
 
 impl Category {
     fn from_symbols(
-        symbols: &mut eval::SymbolSet,
-        err: &mut eval::Error
+        symbols: &mut SymbolSet, err: &mut EvalErrors
     ) -> Result<Self, Failed> {
         if symbols.take("national") {
             Ok(Category::National)

@@ -1,11 +1,10 @@
-mod class;
-mod feature;
-mod functions;
+pub mod feature;
+pub mod functions;
 mod mapkey;
 mod procedures;
 mod style;
 mod theme;
-mod units;
+pub mod units;
 
 pub use self::theme::Railwayhistory;
 pub use self::style::{Style, StyleId};

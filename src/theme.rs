@@ -7,10 +7,9 @@ use femtomap::render::Canvas;
 use femtomap::feature::{Feature, FeatureSetBuilder};
 use hyper::Body;
 use crate::config::MapConfig;
-use crate::import::{ast, eval};
-use crate::import::Failed;
+use crate::oldimport::{ast, eval};
+use crate::oldimport::Failed;
 use crate::tile::{TileId, TileFormat};
-use crate::transform::Transform;
 
 
 //------------ Theme ---------------------------------------------------------
@@ -74,6 +73,7 @@ pub trait Theme: Sized + Clone + Send + Sync + 'static {
         format: TileFormat
     ) -> Body;
 
+    /*
     fn render_shape<'a>(
         &self,
         shape: &<Self::Feature as Feature>::Shape<'a>,
@@ -81,12 +81,13 @@ pub trait Theme: Sized + Clone + Send + Sync + 'static {
         style: &Self::Style,
         canvas: &mut Canvas,
     );
+    */
 }
 
 
 //------------ Style ---------------------------------------------------------
 
-pub trait Style: femtomap::path::Style {
+pub trait Style {
     type StyleId: Send + Sync + 'static + Clone + Hash + Eq + FromStr;
 
     /// Returns the a multiplier by which to grow the bounds.
@@ -109,6 +110,5 @@ pub trait Style: femtomap::path::Style {
     /// The returned value is a in _bp._
     fn resolve_distance(&self, distance: MapDistance) -> f64;
 
-    fn transform(&self) -> Transform;
 }
 
