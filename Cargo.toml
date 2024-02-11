@@ -1,6 +1,6 @@
 [package]
 name = "railmap"
-version = "0.1.8"
+version = "0.1.9-dev"
 authors = ["Martin Hoffmann <hn@nvnc.de>"]
 edition = "2021"
 rust-version = "1.65"
