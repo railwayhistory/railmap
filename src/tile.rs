@@ -1,9 +1,14 @@
+#![allow(dead_code)]
 use std::{fmt, ops};
 use std::str::FromStr;
-use femtomap::feature::FeatureSet;
 use femtomap::render::Canvas;
 use kurbo::{Point, Rect};
-use crate::theme::{Style, Theme};
+use crate::colors::ColorSet;
+use crate::feature::{FeatureSet, Stage, Store};
+use crate::style::{Style, StyleId};
+
+
+//------------ Configurable Constants ----------------------------------------
 
 /// The maximum zoom level we support.
 ///
@@ -13,54 +18,55 @@ const MAX_ZOOM: u8 = 20;
 
 //------------ Tile ----------------------------------------------------------
 
-pub struct Tile<'a, T: Theme> {
-    theme: &'a T,
-    id: TileId<<T::Style as Style>::StyleId>,
+pub struct Tile {
+    id: TileId,
 }
 
-impl<'a, T: Theme> Tile<'a, T> {
-    pub fn new(
-        theme: &'a T,
-        id: TileId<<T::Style as Style>::StyleId>
-    ) -> Self {
-        Tile { theme, id }
+impl Tile {
+    pub fn new(id: TileId) -> Self {
+        Tile { id }
     }
 
     pub fn content_type(&self) -> &'static str {
         self.id.content_type()
     }
 
-    pub fn render(&mut self, features: &FeatureSet<T::Feature>) -> Vec<u8> {
+    pub fn render(
+        &mut self,
+        features: &Store,
+        colors: &ColorSet,
+    ) -> Vec<u8> {
         let surface = Surface::new(self.id.format);
-        self.render_surface(&surface, features);
+        self.render_surface(&surface, features, colors);
         surface.finalize()
     }
 
     fn render_surface(
-        &mut self, surface: &Surface, features: &FeatureSet<T::Feature>,
+        &mut self,
+        surface: &Surface,
+        features: &Store,
+        colors: &ColorSet,
     ) {
-        let style = self.theme.style(&self.id);
+        let style = Style::new(&self.id, colors);
         let mut canvas = Canvas::new(surface);
         let size = self.id.format.size();
         canvas.set_clip(Rect::new(0., 0., size, size));
-        let shapes = features.shape(
-            style.detail() as f64,
+        let shapes = self.id.layer.features(features).shape(
+            style.store_scale(),
             self.feature_bounds(&style).into(),
             &style, &canvas,
         );
 
         for group in shapes.layer_groups() {
-            for stage in T::Stage::default() {
+            for stage in Stage::default() {
                 group.iter().for_each(|shape| {
-                    self.theme.render_shape(
-                        shape.shape(), &stage, &style, &mut canvas
-                    )
+                    shape.shape().render(stage, &style, &mut canvas)
                 });
             }
         }
     }
 
-    fn feature_bounds(&self, style: &T::Style) -> Rect {
+    fn feature_bounds(&self, style: &Style) -> Rect {
         let size = self.id.format.size();
         let scale = size * self.id.n();
         let feature_size = Point::new(size / scale, size / scale);
@@ -85,33 +91,27 @@ impl<'a, T: Theme> Tile<'a, T> {
 //------------ TileId --------------------------------------------------------
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct TileId<StyleId> {
+pub struct TileId {
+    pub layer: LayerId,
     pub zoom: u8,
     pub x: u32,
     pub y: u32,
     pub format: TileFormat,
-    pub style: StyleId,
 }
 
-impl<StyleId> TileId<StyleId> {
+impl TileId {
     /// Construct the tile ID from a URI path.
     ///
     /// The format of the path is expected to be:
     ///
     /// ```text
-    /// {style}/{zoom}/{x}/{y}.{fmt}
+    /// {layer}/{zoom}/{x}/{y}.{fmt}
     /// ```
-    pub fn from_path(
-        path: &str, test_style: &str,
-    ) -> Result<Self, TileIdError>
-    where StyleId: FromStr {
+    pub fn from_path(path: &str) -> Result<Self, TileIdError> {
         let mut path = path.split('/');
 
-        let style = match path.next().ok_or(TileIdError)? {
-            "test" => test_style,
-            other => other,
-        };
-        let style = StyleId::from_str(style).map_err(|_| TileIdError)?;
+        let layer = path.next().ok_or(TileIdError)?;
+        let layer = LayerId::from_str(layer).map_err(|_| TileIdError)?;
 
         let zoom = u8::from_str(
             path.next().ok_or(TileIdError)?
@@ -143,7 +143,7 @@ impl<StyleId> TileId<StyleId> {
             return Err(TileIdError)
         }
 
-        Ok(TileId { zoom, x, y, format, style })
+        Ok(TileId { layer, zoom, x, y, format })
     }
 
     /// The upper bound for a coordinate in a zoom level.
@@ -162,6 +162,10 @@ impl<StyleId> TileId<StyleId> {
             f64::from(self.x) / self.n(),
             f64::from(self.y) / self.n(),
         )
+    }
+
+    pub fn scale(&self) -> f64 {
+        self.format.size() * self.n()
     }
 
     pub fn content_type(&self) -> &'static str {
@@ -183,12 +187,69 @@ impl<StyleId> TileId<StyleId> {
     */
 }
 
-impl<StyleId: fmt::Display> fmt::Display for TileId<StyleId> {
+impl fmt::Display for TileId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}/{}/{}.{}", self.zoom, self.x, self.y, self.format)
     }
 }
 
+
+//------------ LayerId -------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum LayerId {
+    /// Electrification base map.
+    El,
+
+    /// Electrification line number map.
+    ElNum,
+
+    /// Passenger base map.
+    Pax,
+
+    /// Passenger timetable number map.
+    PaxNum,
+
+    /// Border map.
+    Border,
+}
+
+impl LayerId {
+    pub fn style_id(self) -> StyleId {
+        use self::LayerId::*;
+
+        match self {
+            El | ElNum | Border => StyleId::El,
+            Pax | PaxNum => StyleId::Pax
+        }
+    }
+
+    pub fn features(self, store: &Store) -> &FeatureSet {
+        use self::LayerId::*;
+
+        match self {
+            El | Pax => &store.railway,
+            ElNum => &store.line_labels,
+            PaxNum => &store.tt_labels,
+            Border => &store.borders,
+        }
+    }
+}
+
+impl FromStr for LayerId {
+    type Err = TileIdError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "el" => Ok(LayerId::El),
+            "el-num" => Ok(LayerId::ElNum),
+            "pax" => Ok(LayerId::Pax),
+            "pax-num" => Ok(LayerId::PaxNum),
+            "border" => Ok(LayerId::Border),
+            _ => Err(TileIdError)
+        }
+    }
+}
 
 
 //------------ TileFormat ----------------------------------------------------

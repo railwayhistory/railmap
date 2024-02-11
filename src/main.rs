@@ -7,9 +7,8 @@ use clap::{
     Arg, ArgAction, ArgMatches, Command, crate_version, crate_authors,
     value_parser,
 };
-use railmap::{MapConfig, LoadFeatures, Server};
-use railmap::import::Failed;
-use railmap::theme::Theme;
+use railmap::{LoadFeatures, MapConfig, Server};
+use femtomap::import::eval::Failed;
 
 const DEFAULT_CONFIG_PATH: &str = "/etc/railmap.conf";
 
@@ -18,7 +17,6 @@ struct Config {
     map: PathBuf,
     regions: Option<Vec<String>>,
     listen: SocketAddr,
-    style: String,
 }
 
 #[derive(serde::Deserialize)]
@@ -26,7 +24,6 @@ struct ConfigFile {
     map: Option<PathBuf>,
     regions: Option<Vec<String>>,
     listen: Option<SocketAddr>,
-    style: Option<String>,
 }
 
 impl Default for Config {
@@ -35,7 +32,6 @@ impl Default for Config {
             map: PathBuf::new(),
             regions: None,
             listen: SocketAddr::from_str("127.0.0.1:8080").unwrap(),
-            style: String::from("lx"),
         }
     }
 }
@@ -129,14 +125,6 @@ impl Config {
                 .action(ArgAction::Set)
                 .default_value("127.0.0.1:8080")
             )
-            .arg(Arg::new("style")
-                .short('s')
-                .long("style")
-                .value_name("STYLE")
-                .help("the style to use in the test map")
-                .action(ArgAction::Set)
-                .default_value("lx")
-            )
             .get_matches()
     }
 
@@ -150,9 +138,6 @@ impl Config {
         if let Some(addr) = matches.remove_one("listen") {
             self.listen = addr;
         }
-        if let Some(style) = matches.remove_one("style") {
-            self.style = style;
-        }
     }
 
     fn apply_toml(&mut self, toml: ConfigFile) {
@@ -164,9 +149,6 @@ impl Config {
         }
         if let Some(listen) = toml.listen {
             self.listen = listen;
-        }
-        if let Some(style) = toml.style {
-            self.style = style;
         }
     }
 
@@ -183,9 +165,7 @@ impl Config {
         };
 
         let start = Instant::now();
-        let mut theme = railmap::map::Railwayhistory::default();
-        theme.config(&map);
-        let mut features = LoadFeatures::new(&theme);
+        let mut features = LoadFeatures::new();
         match self.regions {
             Some(mut values) => {
                 values.sort();
@@ -217,7 +197,19 @@ impl Config {
             }
         };
 
-        let server = Server::new(theme, features, self.style);
+        eprintln!(
+            "Features:\n  \
+               railway: {}\n  \
+               line labels: {}\n  \
+               timetable labels: {}\n  \
+               borders: {}",
+            features.railway.len(),
+            features.line_labels.len(),
+            features.tt_labels.len(),
+            features.borders.len(),
+        );
+
+        let server = Server::new(features);
         eprintln!("Server ready after {:.03}s.", start.elapsed().as_secs_f32());
         server.run(self.listen).await;
     }
