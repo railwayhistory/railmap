@@ -1,5 +1,6 @@
 
 use std::fmt;
+use std::sync::{Arc, Mutex};
 use femtomap::import::eval::{Builtin as _, LoadErrors};
 use femtomap::import::path::{ImportPathSet, PathSetError};
 use crate::config::Region;
@@ -10,7 +11,7 @@ use super::eval::Builtin;
 //------------ LoadFeatures --------------------------------------------------
 
 pub struct LoadFeatures {
-    features: StoreBuilder,
+    features: Arc<Mutex<StoreBuilder>>,
     err: ImportError,
 }
 
@@ -27,7 +28,7 @@ impl LoadFeatures {
         region: &Region,
     ) {
         let builtin = match ImportPathSet::load(&region.paths) {
-            Ok(paths) => Builtin::new(paths),
+            Ok(paths) => Builtin::new(paths, self.features.clone()),
             Err(err) => {
                 self.err.paths.extend(err);
                 return
@@ -42,7 +43,11 @@ impl LoadFeatures {
         self
     ) -> Result<Store, ImportError> {
         self.err.check()?;
-        Ok(self.features.finalize())
+        Ok(
+            Arc::into_inner(
+                self.features
+            ).unwrap().into_inner().unwrap().finalize()
+        )
     }
 }
 

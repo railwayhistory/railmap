@@ -14,7 +14,7 @@ use crate::import::eval;
 use crate::import::eval::{Custom, Expression};
 use crate::class::Railway;
 use crate::style::Style;
-use super::{AnyShape, Feature, Stage};
+use super::{AnyShape, Category, Group, Feature, Stage};
 
 
 //------------ Configuration -------------------------------------------------
@@ -66,6 +66,10 @@ impl Label {
 impl Feature for Label {
     fn storage_bounds(&self) -> world::Rect {
         self.position.storage_bounds()
+    }
+
+    fn group(&self) -> Group {
+        Group::with_category(Category::Label)
     }
 
     fn shape(
@@ -473,7 +477,7 @@ impl FontSize {
             }
         };
         */
-        base * style.canvas_bp()
+        base * style.units().bp
     }
 
     pub fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
@@ -570,6 +574,49 @@ impl Anchor {
             Anchor::SouthWest => (Start, End),
             Anchor::West => (Start, Center),
             Anchor::NorthWest => (Start, Start),
+        }
+    }
+}
+
+
+//------------ TextAnchor ----------------------------------------------------
+
+/// The compass direction where to anchor a label.
+#[derive(Clone, Copy, Debug)]
+pub struct TextAnchor {
+    pub h: Align,
+    pub v: Align,
+}
+
+impl TextAnchor {
+    pub fn new(h: Align, v: Align) -> Self {
+        Self { h, v }
+    }
+
+    pub fn from_pair((h, v): (Align, Align)) -> Self {
+        Self::new(h, v)
+    }
+
+    pub fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
+        use self::Align::*;
+
+        if let Some(anchor) = Anchor::from_symbols(symbols) {
+            Some(Self::from_pair(anchor.into_aligns()))
+        }
+        else if symbols.take("left") {
+            Some(Self::new(End, Base))
+        }
+        else if symbols.take("right") {
+            Some(Self::new(Start, Base))
+        }
+        else if symbols.take("top") {
+            Some(Self::new(Center, End))
+        }
+        else if symbols.take("bottom") {
+            Some(Self::new(Center, Start))
+        }
+        else {
+            None
         }
     }
 }

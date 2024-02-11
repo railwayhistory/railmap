@@ -1,5 +1,4 @@
 //! The rendering style.
-#![allow(dead_code)]
 
 use std::ops;
 use femtomap::path::{MapDistance, Transform};
@@ -52,29 +51,13 @@ const ZOOM: &[Zoom] = &[
     Zoom::new(5.5, 5, 2.5),
 ];
 
-/// The mapping of zoom levels to store scale.
-const STORE_SCALE: &[f64] = &[
-    0.0, 0.0, 0.0, 0.0, 0.0,
-    0.0, 0.5, 1.0, 1.5, 2.0,
-    2.5, 3.0, 3.5, 4.0, 4.5,
-    5.0, 5.5, 5.5, 5.5, 5.5,
-];
-
-/// The mapping of zoom levels to detail level.
-const DETAIL: &[u8] = &[
-    0,   0,   0,   0,   0,
-    0,   0,   1,   1,   2,
-    2,   3,   3,   4,   4,
-    5,   5,   5,   5,   5,
-];
-
-/// The mapping of zoom levels to magnification.
-const MAG: &[f64] = &[
-    1.0, 1.0, 1.0, 1.0, 1.0, 
-    1.0, 1.0, 1.0, 1.3, 1.0, 
-    1.3, 1.3, 1.6, 1.3, 1.6,
-    1.3, 1.6, 1.9, 2.2, 2.5,
-];
+/// Size correction for feature bounds.
+///
+/// This value will be multiplied with detail level, then length and height of
+/// the bounding box and then added on each side.
+///
+/// Increase if features are missing.
+const BOUNDS_CORRECTION: f64 = 0.3;
 
 
 //============ Distances =====================================================
@@ -93,6 +76,12 @@ const MAG: &[f64] = &[
 /// Named map distance units.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Units {
+    /// The size of a bp.
+    ///
+    /// This needs to be included here because the values of this struct
+    /// are scaled to canvas coordinates.
+    pub bp: f64,
+
     /// The distance between two parallel tracks.
     ///
     /// This serves as a base unit for everything else.
@@ -134,8 +123,19 @@ pub struct Units {
 
 
 impl Units {
+    fn new(detail: u8, mag: f64) -> Self {
+        (match detail {
+            0 => Self::d0(),
+            1 => Self::d1(),
+            2 => Self::d2(),
+            3 => Self::d3(),
+            4 => Self::d4(),
+            _ => Self::d5(),
+        }) * mag
+    }
+
     /// Creates the value for detail level 0.
-    fn d0(mag: f64) -> Self {
+    fn d0() -> Self {
         Self {
             line_width: 0.8,
             other_width: 0.5,
@@ -143,21 +143,21 @@ impl Units {
             guide_width: 0.3,
             border_width: 0.4,
             .. Self::standard(0.75 * MM, 1.2 * MM, 1.125 * MM)
-        } * mag
+        }
     }
 
     /// Creates the value for detail level 1.
-    fn d1(mag: f64) -> Self {
-        Self::d0(mag)
+    fn d1() -> Self {
+        Self::d0()
     }
 
     /// Creates the value for detail level 2.
-    fn d2(mag: f64) -> Self {
-        Self::d0(mag)
+    fn d2() -> Self {
+        Self::d0()
     }
 
     /// Creates the value for detail level 3.
-    fn d3(mag: f64) -> Self {
+    fn d3() -> Self {
         Self {
             line_width: 1.,
             other_width: 0.7,
@@ -165,11 +165,11 @@ impl Units {
             guide_width: 0.3,
             border_width: 0.4,
             .. Self::standard(0.6 * MM, 1.2 * MM, 1.35 * MM)
-        } * mag
+        }
     }
 
     /// Creates the value for detail level 4.
-    fn d4(mag: f64) -> Self {
+    fn d4() -> Self {
         Self {
             line_width: 1.1,
             other_width: 0.8,
@@ -177,17 +177,18 @@ impl Units {
             guide_width: 0.3,
             border_width: 0.6,
             .. Self::standard(0.6 * MM, 2.4 * MM, 2.25 * MM)
-        } * mag
+        }
     }
 
     /// Creates the value for detail level 2.
-    fn d5(mag: f64) -> Self {
-        Self::d4(mag)
+    fn d5() -> Self {
+        Self::d4()
     }
 
     /// Creates a value based on the value of _dt_ and _sw._
     fn standard(dt: f64, sw: f64, sh: f64) -> Self {
         Self {
+            bp: 1.,
             dt,
             dl: 0.66 * dt,
             seg: 6. * dt,
@@ -198,28 +199,16 @@ impl Units {
         }
     }
 
-    fn new(detail: u8, mag: f64) -> Self {
-        match detail {
-            0 => Self::d0(mag),
-            1 => Self::d1(mag),
-            2 => Self::d2(mag),
-            3 => Self::d3(mag),
-            4 => Self::d4(mag),
-            _ => Self::d5(mag),
-        }
-    }
-
     /// Creates the map unit array.
     fn map_units(self) -> [f64; 6] {
-        let res = [
-            1.,
+        [
+            self.bp,
             self.dt,
             self.dl,
             self.line_width, // "st"
             self.sw,
             self.sh,
-        ];
-        res
+        ]
     }
 }
 
@@ -228,6 +217,7 @@ impl ops::Mul<f64> for Units {
 
     fn mul(self, mag: f64) -> Self {
         Self {
+            bp: self.bp * mag,
             dt: self.dt * mag,
             dl: self.dl * mag,
             line_width: self.line_width * mag,
@@ -277,11 +267,6 @@ pub struct Style {
     /// The detail level.
     detail: u8,
 
-    /// The magnification level.
-    ///
-    /// This is the size of a single point in canvas co-ordinates.
-    mag: f64,
-
     /// Is this a pax-only map?
     pax_only: bool,
 
@@ -324,7 +309,6 @@ impl Style {
         Self {
             store_scale: zoom.store_scale,
             detail: zoom.detail,
-            mag: zoom.mag,
             pax_only: matches!(style_id, StyleId::Pax),
             map_units: units.map_units(),
             units,
@@ -379,6 +363,10 @@ impl Style {
 
     pub fn primary_marker_color(&self, class: &class::Railway) -> Color {
         self.colors.primary_marker_color(class)
+    }
+
+    pub fn bounds_correction(&self) -> f64 {
+        BOUNDS_CORRECTION * (self.detail as f64)
     }
 }
 

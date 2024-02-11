@@ -7,7 +7,7 @@ use femtomap::render::{Canvas, LineWidth, Operator};
 use kurbo::Circle;
 use crate::class::Railway;
 use crate::style::Style;
-use super::{AnyShape, Feature};
+use super::{AnyShape, Category, Group, Feature};
 
 
 //------------ DotMarker -----------------------------------------------------
@@ -134,6 +134,10 @@ impl DotMarker {
 impl Feature for DotMarker {
     fn storage_bounds(&self) -> world::Rect {
         self.position.storage_bounds()
+    }
+
+    fn group(&self) -> Group {
+        Group::with_railway(Category::Marker, &self.class)
     }
 
     fn shape(

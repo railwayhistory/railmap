@@ -10,14 +10,6 @@ use crate::style::{Style, StyleId};
 
 //------------ Configurable Constants ----------------------------------------
 
-/// Size correction for feature bounds.
-///
-/// This value will be multiplied with detail level, then length and height of
-/// the bounding box and then added on each side.
-///
-/// Increase if features are missing.
-const BOUNDS_CORRECTION: f64 = 0.3;
-
 /// The maximum zoom level we support.
 ///
 /// This **must** be less than 32 or stuff will break.
@@ -61,7 +53,7 @@ impl Tile {
         canvas.set_clip(Rect::new(0., 0., size, size));
         let shapes = self.id.layer.features(features).shape(
             style.store_scale(),
-            self.feature_bounds().into(),
+            self.feature_bounds(&style).into(),
             &style, &canvas,
         );
 
@@ -74,15 +66,16 @@ impl Tile {
         }
     }
 
-    fn feature_bounds(&self) -> Rect {
+    fn feature_bounds(&self, style: &Style) -> Rect {
         let size = self.id.format.size();
         let scale = size * self.id.n();
         let feature_size = Point::new(size / scale, size / scale);
         let nw = self.id.nw();
 
+        let correct = style.bounds_correction();
         let correct = Point::new(
-            feature_size.x * BOUNDS_CORRECTION,
-            feature_size.y * BOUNDS_CORRECTION,
+            feature_size.x * correct,
+            feature_size.y * correct,
         );
 
         Rect::new(

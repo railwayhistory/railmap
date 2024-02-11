@@ -16,6 +16,11 @@ pub const WORLD_DISTANCES: &[(&str, f64)] = &[
 
     // A kilometre.
     ("km", 1000. * M),
+
+    // A switch length.
+    //
+    // XXX Deprecated
+    ("wl", 30. * M),
 ];
 
 /// The length of a metre in _bp._
@@ -65,6 +70,11 @@ pub const MAP_DISTANCES: &[(&str, usize, f64)] = &[
 
     // Width of the station symbol (“station width”).
     ("sw", 4, 1.),
+
+    // Width of the station symbol (“station width”).
+    //
+    // XXX Deprecated.
+    ("ssw", 4, 1.),
 
     // Height of the station symbol (“station height”).
     ("sh", 5, 1.),

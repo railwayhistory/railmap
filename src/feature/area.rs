@@ -5,7 +5,7 @@ use femtomap::path::Trace;
 use femtomap::render::Canvas;
 use crate::class::Railway;
 use crate::style::Style;
-use super::{AnyShape, Feature};
+use super::{AnyShape, Category, Group, Feature};
 
 //------------ AreaContour ---------------------------------------------------
 
@@ -24,6 +24,10 @@ impl AreaContour {
 impl Feature for AreaContour {
     fn storage_bounds(&self) -> world::Rect {
         self.trace.storage_bounds()
+    }
+
+    fn group(&self) -> Group {
+        Group::with_railway(Category::Back, &self.class)
     }
 
     fn shape(
@@ -59,6 +63,10 @@ impl PlatformContour {
 impl Feature for PlatformContour {
     fn storage_bounds(&self) -> world::Rect {
         self.trace.storage_bounds()
+    }
+
+    fn group(&self) -> Group {
+        Group::with_railway(Category::Back, &self.class)
     }
 
     fn shape(

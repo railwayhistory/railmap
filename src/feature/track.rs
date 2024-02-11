@@ -47,7 +47,7 @@ use kurbo::{PathEl, Vec2};
 use crate::import::eval::Expression;
 use crate::class::{Railway, Gauge, Pax};
 use crate::style::Style;
-use super::{AnyShape, Feature, Shape, Stage};
+use super::{AnyShape, Category, Feature, Shape, Stage};
 
 
 //------------ TrackClass ----------------------------------------------------
@@ -177,6 +177,10 @@ impl Feature for TrackContour {
         self.trace.storage_bounds()
     }
 
+    fn group(&self) -> super::Group {
+        super::Group::with_railway(Category::Track, &self.class.class)
+    }
+
     fn shape(
         &self, style: &Style, _canvas: &Canvas
     ) -> AnyShape {
@@ -262,6 +266,12 @@ struct ContourShape2<'a> {
     base_dash: Option<DashPattern<2>>,
     trace: Outline,
     has_inside: bool,
+
+    /// Should we render the base during `Stage::InsideBase`?
+    ///
+    /// This is necessary so that non-open lines don’t draw over the inside
+    /// of open lines.
+    use_inside_base: bool,
 }
 
 impl<'a> ContourShape2<'a> {
@@ -269,6 +279,7 @@ impl<'a> ContourShape2<'a> {
         contour: &'a TrackContour,
         style: &Style,
     ) -> Self {
+        let has_inside = Self::will_have_inside(&contour.class, style);
         Self {
             class: &contour.class,
             casing: contour.casing,
@@ -306,7 +317,8 @@ impl<'a> ContourShape2<'a> {
                 None
             },
             trace: contour.trace.outline(style),
-            has_inside: Self::will_have_inside(&contour.class, style),
+            has_inside,
+            use_inside_base: has_inside || !contour.class.class.is_open(),
         }
     }
 }
@@ -326,7 +338,7 @@ impl<'a> Shape<'a> for ContourShape2<'a> {
                 }
             }
             Stage::InsideBase => {
-                if self.has_inside {
+                if self.use_inside_base {
                     self.render_base(style, canvas);
                 }
             }
@@ -336,7 +348,7 @@ impl<'a> Shape<'a> for ContourShape2<'a> {
                 }
             }
             Stage::Base => {
-                if !self.has_inside {
+                if !self.use_inside_base {
                     self.render_base(style, canvas);
                 }
             }
@@ -406,11 +418,18 @@ struct ContourShape4<'a> {
     track: Outline,
     seg: Option<f64>,
     has_inside: bool,
+
+    /// Should we render the base during `Stage::InsideBase`?
+    ///
+    /// This is necessary so that non-open lines don’t draw over the inside
+    /// of open lines.
+    use_inside_base: bool,
 }
 
 impl<'a> ContourShape4<'a> {
     fn new(contour: &'a TrackContour, style: &Style) -> AnyShape<'a> {
         let has_inside = Self::will_have_inside(&contour.class);
+        let use_inside_base = has_inside || !contour.class.class.is_open();
         if contour.class.double {
             let off = style.units().dt * 0.5;
             let left = contour.trace.outline_offset(off, style);
@@ -424,6 +443,7 @@ impl<'a> ContourShape4<'a> {
                 track: left,
                 seg,
                 has_inside,
+                use_inside_base,
             };
             let right_shape = Self {
                 class: &contour.class,
@@ -433,6 +453,7 @@ impl<'a> ContourShape4<'a> {
                 track: contour.trace.outline_offset(-off, style),
                 seg,
                 has_inside,
+                use_inside_base,
             };
             AnyShape::from(move |stage, style: &_, canvas: &mut _| {
                 left_shape.render(stage, style, canvas);
@@ -451,6 +472,7 @@ impl<'a> ContourShape4<'a> {
                     track,
                     seg,
                     has_inside,
+                    use_inside_base,
                 }
             )
         }
@@ -495,7 +517,7 @@ impl<'a> Shape<'a> for ContourShape4<'a> {
                 }
             }
             Stage::InsideBase => {
-                if self.has_inside {
+                if self.use_inside_base {
                     self.render_base(style, &mut canvas.sketch());
                 }
             }
@@ -505,7 +527,7 @@ impl<'a> Shape<'a> for ContourShape4<'a> {
                 }
             }
             Stage::Base => {
-                if !self.has_inside {
+                if !self.use_inside_base {
                     self.render_base(style, &mut canvas.sketch());
                 }
             }
@@ -848,6 +870,10 @@ impl TrackCasing {
 impl Feature for TrackCasing {
     fn storage_bounds(&self) -> world::Rect {
         self.trace.storage_bounds()
+    }
+
+    fn group(&self) -> super::Group {
+        super::Group::with_railway(Category::Track, &self.class.class)
     }
 
     fn shape(

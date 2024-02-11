@@ -4,9 +4,10 @@ use femtomap::world;
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
 use femtomap::path::Trace;
 use femtomap::render::{Canvas, DashPattern, Color, Outline, LineWidth};
+use crate::class;
 use crate::import::eval::Expression;
 use crate::style::Style;
-use super::{AnyShape, Feature};
+use super::{AnyShape, Category, Group, Feature};
 
 //------------ Configuration -------------------------------------------------
 
@@ -59,7 +60,7 @@ const DASH_BASE: f64 = 8.0;
 /// The rendering rule for a border contour.
 pub struct BorderContour {
     /// The category of the border.
-    category: Category,
+    category: BorderCategory,
 
     /// Whether this is a former border.
     former: bool,
@@ -75,7 +76,7 @@ impl BorderContour {
         err: &mut EvalErrors,
     ) -> Result<Self, Failed> {
         let mut symbols = arg.eval(err)?;
-        let category = Category::from_symbols(&mut symbols, err)?;
+        let category = BorderCategory::from_symbols(&mut symbols, err)?;
         let former = symbols.take("former");
         symbols.check_exhausted(err)?;
         Ok(BorderContour { category, former, trace })
@@ -85,6 +86,17 @@ impl BorderContour {
 impl Feature for BorderContour {
     fn storage_bounds(&self) -> world::Rect {
         self.trace.storage_bounds()
+    }
+
+    fn group(&self) -> Group {
+        Group::with_status(Category::Back,
+            if self.former {
+                class::Status::Removed
+            }
+            else {
+                class::Status::Open
+            }
+        )
     }
 
     fn shape(
@@ -153,24 +165,24 @@ impl BorderContour {
 }
 
 
-//------------ Category ------------------------------------------------------
+//------------ BorderCategory ------------------------------------------------
 
 /// The category of a border.
 #[derive(Clone, Copy, Debug)]
-enum Category {
+enum BorderCategory {
     National,
     State,
 }
 
-impl Category {
+impl BorderCategory {
     fn from_symbols(
         symbols: &mut SymbolSet, err: &mut EvalErrors
     ) -> Result<Self, Failed> {
         if symbols.take("national") {
-            Ok(Category::National)
+            Ok(Self::National)
         }
         else if symbols.take("state") {
-            Ok(Category::State)
+            Ok(Self::State)
         }
         else {
             err.add(symbols.pos(), "missing border category");
@@ -180,10 +192,10 @@ impl Category {
 
     fn casing_width_high(self, style: &Style) -> f64 {
         match self {
-            Category::National => {
+            Self::National => {
                 CASING_WIDTH * style.canvas_bp()
             }
-            Category::State => {
+            Self::State => {
                 0.5 * CASING_WIDTH * style.canvas_bp()
             }
         }
@@ -191,7 +203,7 @@ impl Category {
 
     fn dash_high(self, style: &Style) -> DashPattern<4> {
         match self {
-            Category::National => {
+            Self::National => {
                 DashPattern::new(
                     [
                         DASH_BASE * style.canvas_bp(),
@@ -202,7 +214,7 @@ impl Category {
                     (DASH_BASE * 1.45 * DASH_BASE) * style.canvas_bp()
                 )
             }
-            Category::State => {
+            Self::State => {
                 DashPattern::new(
                     [
                         DASH_BASE * style.canvas_bp(),

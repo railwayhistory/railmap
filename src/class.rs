@@ -241,10 +241,22 @@ impl Default for Category {
 //------------ Status --------------------------------------------------------
 
 /// The status of the feature.
-#[derive(Clone, Copy, Debug)]
+///
+/// The variants ordered for use in [`Group`][crate::feature::Group] with the
+/// one draw atop everything else last.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Status {
+    /// The feature has been removed a long time ago.
+    Gone = 0,
+
     /// The feature was planned but abandoned.
     Explanned,
+
+    /// The feature has been removed.
+    Removed,
+
+    /// The feature is closed but still present.
+    Closed,
 
     /// The feature is planned or under construction.
     Planned,
@@ -253,15 +265,6 @@ pub enum Status {
     ///
     /// This is the default if the status is not explicitly given.
     Open,
-
-    /// The feature is closed but still present.
-    Closed,
-
-    /// The feature has been removed.
-    Removed,
-
-    /// The feature has been removed a long time ago.
-    Gone
 }
 
 impl Status {
@@ -602,10 +605,10 @@ impl Default for Speed {
 
 //------------ Pax -----------------------------------------------------------
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Pax {
     /// There is no passenger service.
-    None,
+    None = 0,
 
     /// There is heritage passenger service.
     Heritage,

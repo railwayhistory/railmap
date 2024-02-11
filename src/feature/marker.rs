@@ -22,7 +22,7 @@ use femtomap::render::{
 use lazy_static::lazy_static;
 use crate::class::Railway;
 use crate::style::{Units, Style};
-use super::{AnyShape, Feature};
+use super::{AnyShape, Category, Feature};
 
 
 const CASING_COLOR: Color = Color::rgba(1., 1., 1., 0.7);
@@ -58,6 +58,7 @@ impl StandardMarker {
     ) -> Result<Self, Failed> {
         let orientation = Self::rotation_from_symbols(&mut symbols, err)?;
         let class = Railway::from_symbols(&mut symbols);
+        let _ = symbols.take("casing");
         let pos = symbols.pos();
         let marker = match symbols.take_final(err)? {
             Some(marker) => marker,
@@ -126,6 +127,10 @@ impl StandardMarker {
 impl Feature for StandardMarker {
     fn storage_bounds(&self) -> world::Rect {
         self.position.storage_bounds()
+    }
+
+    fn group(&self) -> super::Group {
+        super::Group::with_railway(Category::Marker, &self.class)
     }
 
     fn shape(

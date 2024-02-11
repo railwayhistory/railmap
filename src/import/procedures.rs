@@ -11,7 +11,9 @@ use crate::feature::border::BorderContour;
 use crate::feature::area::{AreaContour, PlatformContour};
 use crate::feature::dot::DotMarker;
 use crate::feature::guide::GuideContour;
-use crate::feature::label::{Anchor, FontSize, Label, Layout, LayoutProperties};
+use crate::feature::label::{
+    Anchor, FontSize, Label, Layout, LayoutProperties, TextAnchor,
+};
 use crate::feature::marker::StandardMarker;
 use crate::feature::track::{TrackCasing, TrackClass, TrackContour};
 use super::units;
@@ -60,7 +62,7 @@ const PROCEDURES: &[(
                 AreaContour::new(class, trace),
                 scope.detail(pos, err)?,
                 scope.layer(),
-                -100,
+                //-100,
             );
             Ok(())
         })
@@ -83,7 +85,6 @@ const PROCEDURES: &[(
                 ),
                 scope.detail(pos, err)?,
                 scope.layer(),
-                100,
             );
             Ok(())
         })
@@ -102,7 +103,6 @@ const PROCEDURES: &[(
                 BorderContour::from_arg(class, trace, err)?,
                 scope.detail(pos, err)?,
                 scope.layer(),
-                -500,
             );
             Ok(())
         })
@@ -116,14 +116,12 @@ const PROCEDURES: &[(
     ("casing", &|pos, args, scope, err| {
         let [class, trace] = args.into_array(err)?;
         let class = TrackClass::from_arg(class, err)?;
-        let layer_offset = class.class().layer_offset();
         let trace = trace.eval(err)?;
         scope.builtin().with_store(|store| {
             store.railway.insert(
                 TrackCasing::new(class, trace),
                 scope.detail(pos, err)?,
                 scope.layer(),
-                -2000 + layer_offset,
             );
             Ok(())
         })
@@ -153,7 +151,6 @@ const PROCEDURES: &[(
                 contour,
                 scope.detail(pos, err)?,
                 scope.layer(),
-                200,
             );
             Ok(())
         })
@@ -176,7 +173,6 @@ const PROCEDURES: &[(
                 ),
                 scope.detail(pos, err)?,
                 scope.layer(),
-                200,
             );
             Ok(())
         })
@@ -212,7 +208,6 @@ const PROCEDURES: &[(
                 ),
                 scope.detail(pos, err)?,
                 scope.layer(),
-                100,
             );
             Ok(())
         })
@@ -288,7 +283,6 @@ const PROCEDURES: &[(
                     ),
                     scope.detail(pos, err)?,
                     scope.layer(),
-                    200,
                 );
             }
             store.line_labels.insert(
@@ -298,7 +292,6 @@ const PROCEDURES: &[(
                 ),
                 scope.detail(pos, err)?,
                 scope.layer(),
-                200,
             );
 
             // Build the guide
@@ -313,7 +306,6 @@ const PROCEDURES: &[(
                 ),
                 scope.detail(pos, err)?,
                 scope.layer(),
-                200,
             );
 
             // Build the label.
@@ -327,7 +319,6 @@ const PROCEDURES: &[(
                 ),
                 scope.detail(pos, err)?,
                 scope.layer(),
-                200,
             );
 
             Ok(())
@@ -380,23 +371,10 @@ const PROCEDURES: &[(
             units::dt(if args.left { pos3 } else { -pos3 })
         ).shift(args.shift);
 
-        let (halign, valign) = {
-            use self::Anchor::*;
-            use self::Align::*;
+        let (halign, valign) = args.anchor.into_aligns();
 
-            match args.anchor {
-                North => (Center, Start),
-                NorthEast => (End, Start),
-                East => (End, Center),
-                SouthEast => (End, End),
-                South => (Center, End),
-                SouthWest => (Start, End),
-                West => (Start, Center),
-                NorthWest => (Start, Start),
-            }
-        };
-
-        args.properties.update_size(FontSize::Badge);
+        args.properties.set_packed(true);
+        args.properties.set_layout_type(label::LayoutType::TextFrame);
         args.layout.properties_mut().set_layout_type(
             label::LayoutType::Framed
         );
@@ -411,7 +389,6 @@ const PROCEDURES: &[(
                 ),
                 scope.detail(pos, err)?,
                 scope.layer(),
-                200,
             );
 
             // Build the label.
@@ -420,11 +397,10 @@ const PROCEDURES: &[(
                     label::Layout::hbox(
                         halign, valign, args.properties, vec![args.layout],
                     ),
-                    pos3, false, Default::default()
+                    pos3, false, LayoutProperties::with_size(FontSize::Badge),
                 ),
                 scope.detail(pos, err)?,
                 scope.layer(),
-                200,
             );
             Ok(())
         })
@@ -444,24 +420,20 @@ const PROCEDURES: &[(
         scope.builtin().with_store(|store| {
             match DotMarker::try_from_arg(&mut class, position.clone(), err)? {
                 Some(marker) => {
-                    let layer_offset = marker.class().layer_offset();
                     store.railway.insert(
                         marker,
                         scope.detail(pos, err)?,
                         scope.layer(),
-                        100 + layer_offset,
                     );
                 }
                 None => {
                     let marker = StandardMarker::from_arg(
                         class, position, err
                     )?;
-                    let layer_offset = marker.class().layer_offset();
                     store.railway.insert(
                         marker,
                         scope.detail(pos, err)?,
                         scope.layer(),
-                        -200 + layer_offset,
                     );
                 }
             }
@@ -474,14 +446,12 @@ const PROCEDURES: &[(
     ("platform", &|pos, args, scope, err| {
         let [class, trace] = args.into_array(err)?;
         let class = Railway::from_arg(class, err)?;
-        let layer_offset = class.layer_offset();
         let trace = trace.eval(err)?;
         scope.builtin().with_store(|store| {
             store.railway.insert(
                 PlatformContour::new(class, trace),
                 scope.detail(pos, err)?,
                 scope.layer(),
-                -100 + layer_offset,
             );
             Ok(())
         })
@@ -495,8 +465,9 @@ const PROCEDURES: &[(
     ("slabel", &|pos, args, scope, err| {
         let mut args = LabelArgs::from_args(args, err)?;
         args.properties.update_size(FontSize::Small);
-        let (h, v) = args.anchor.into_aligns();
-        let layout = Layout::hbox(h, v, args.properties, vec![args.layout]);
+        let layout = Layout::hbox(
+            args.anchor.h, args.anchor.v, args.properties, vec![args.layout]
+        );
 
         scope.builtin().with_store(|store| {
             if args.linenum {
@@ -508,7 +479,6 @@ const PROCEDURES: &[(
                 Label::new(layout, args.position, false, Default::default()),
                 scope.detail(pos, err)?,
                 scope.layer(),
-                1000,
             );
             Ok(())
         })
@@ -524,13 +494,11 @@ const PROCEDURES: &[(
         let class = class.eval(err)?;
         let position = position.eval(err)?;
         let marker = DotMarker::from_arg(class, position, err)?;
-        let layer_offset = marker.class().layer_offset();
         scope.builtin().with_store(|store| {
             store.railway.insert(
                 marker,
                 scope.detail(pos, err)?,
                 scope.layer(),
-                layer_offset + 100,
             );
             Ok(())
         })
@@ -621,7 +589,6 @@ const PROCEDURES: &[(
                 ),
                 scope.detail(pos, err)?,
                 scope.layer(),
-                200,
             );
             Ok(())
         })
@@ -638,7 +605,6 @@ const PROCEDURES: &[(
         let class = TrackClass::from_symbols(&mut class_symbols);
         let casing = class_symbols.take("casing");
         class_symbols.check_exhausted(err)?;
-        let layer_offset = class.class().layer_offset();
         let trace = trace.eval(err)?;
 
         scope.builtin().with_store(|store| {
@@ -646,7 +612,6 @@ const PROCEDURES: &[(
                 TrackContour::new(class, casing, trace),
                 scope.detail(pos, err)?,
                 scope.layer(),
-                layer_offset,
             );
             Ok(())
         })
@@ -752,7 +717,7 @@ struct LabelArgs {
     linenum: bool,
 
     /// Anchor of the box.
-    anchor: Anchor,
+    anchor: TextAnchor,
 
     /// The layout properties for the label.
     properties: LayoutProperties,
@@ -783,7 +748,7 @@ impl LabelArgs {
         let position = position?;
 
         let linenum = class.take("linenum");
-        let anchor = match Anchor::from_legacy_symbols(&mut class) {
+        let anchor = match TextAnchor::from_symbols(&mut class) {
             Some(anchor) => anchor,
             None => {
                 err.add(class.pos(), "missing text anchor");
@@ -902,7 +867,6 @@ impl TextBoxArgs {
         // every else from class
         let mut properties = LayoutProperties::from_symbols(&mut class);
         properties.set_layout_type(label::LayoutType::TextFrame);
-        properties.set_size(label::FontSize::Small);
 
         // :double and then we should be empty.
         let double = class.take("double");

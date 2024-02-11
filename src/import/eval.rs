@@ -1,6 +1,6 @@
 //! The connection to femtomap’s eval machinery.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use femtomap::import::eval;
 use femtomap::import::ast::Pos;
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
@@ -17,24 +17,17 @@ pub type Value<'s> = eval::Value<'s, Builtin>;
 
 pub struct Builtin {
     paths: ImportPathSet,
-    store: Mutex<StoreBuilder>,
+    store: Arc<Mutex<StoreBuilder>>,
 }
 
 impl Builtin {
-    pub fn new(paths: ImportPathSet) -> Self {
-        Self {
-            paths,
-            store: Default::default(),
-        }
+    pub fn new(paths: ImportPathSet, store: Arc<Mutex<StoreBuilder>>) -> Self {
+        Self { paths, store }
     }
 
     pub fn with_store<F, T>(&self, op: F) -> T
     where F: FnOnce(&mut StoreBuilder) -> T {
         op(&mut self.store.lock().unwrap())
-    }
-
-    pub fn into_store(self) -> StoreBuilder {
-        self.store.into_inner().unwrap()
     }
 }
 
@@ -131,6 +124,7 @@ impl RenderParams {
             "layer" => self.update_layer(value, err),
             "link" => self.update_link(value, err),
             "zoom" => self.update_zoom(value, err),
+            "style" => { } // XXX Deprecated
             _ => {
                 err.add(pos, format!("unknown render param {}", target));
                 return Err(Failed)

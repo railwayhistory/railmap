@@ -197,6 +197,18 @@ impl Config {
             }
         };
 
+        eprintln!(
+            "Features:\n  \
+               railway: {}\n  \
+               line labels: {}\n  \
+               timetable labels: {}\n  \
+               borders: {}",
+            features.railway.len(),
+            features.line_labels.len(),
+            features.tt_labels.len(),
+            features.borders.len(),
+        );
+
         let server = Server::new(features);
         eprintln!("Server ready after {:.03}s.", start.elapsed().as_secs_f32());
         server.run(self.listen).await;

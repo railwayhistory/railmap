@@ -1,5 +1,6 @@
 use femtomap::render::Canvas;
 use femtomap::world::Rect;
+use crate::class;
 use crate::style::Style;
 
 
@@ -62,6 +63,8 @@ pub type FeatureSetBuilder = femtomap::feature::FeatureSetBuilder<AnyFeature>;
 pub trait Feature {
     fn storage_bounds(&self) -> Rect;
 
+    fn group(&self) -> Group;
+
     fn shape(
         &self, style: &Style, canvas: &Canvas
     ) -> AnyShape;
@@ -85,11 +88,16 @@ impl<'a, F: Fn(Stage, &Style, &mut Canvas) + 'a> Shape<'a> for F {
 pub struct AnyFeature(Box<dyn Feature + Send + Sync>);
 
 impl femtomap::feature::Feature for AnyFeature {
+    type Group = Group;
     type Style = Style;
     type Shape<'a> = AnyShape<'a>;
 
     fn storage_bounds(&self) -> Rect {
         self.0.storage_bounds()
+    }
+
+    fn group(&self, _: &Self::Style) -> Self::Group {
+        self.0.group()
     }
 
     fn shape(
@@ -185,4 +193,71 @@ impl Iterator for StageIter {
     }
 }
 
+
+//------------ Category ------------------------------------------------------
+
+/// The category of features.
+///
+/// This is used in [`Group`] so that features are drawn in the correct order.
+/// Lowest value categories are drawn first.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum Category {
+    Back = 0,
+    Track,
+    Marker,
+    Label,
+}
+
+
+//------------ Group ---------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct Group {
+    category: Category,
+    status: class::Status,
+    pax: class::Pax,
+}
+
+impl Group {
+    fn new(
+        category: Category, status: class::Status, pax: class::Pax
+    ) -> Self {
+        Self { category, status, pax }
+    }
+
+    pub fn with_category(category: Category) -> Self {
+        Self::new(category, class::Status::Open, class::Pax::Full)
+    }
+
+    pub fn with_railway(
+        category: Category, railway: &class::Railway
+    ) -> Self {
+        Self::new(category, railway.status(), railway.pax())
+    }
+
+    pub fn with_status(
+        category: Category, status: class::Status
+    ) -> Self {
+        Self::new(category, status, class::Pax::Full)
+    }
+}
+
+
+//============ Testing =======================================================
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn group_ord() {
+        assert!(
+            Group::new(
+                Category::Track, class::Status::Open, class::Pax::None
+            ) > Group::new(
+                Category::Track, class::Status::Removed, class::Pax::Full
+            )
+        );
+    }
+}
 

@@ -8,7 +8,7 @@ use femtomap::path::Trace;
 use femtomap::render::{Canvas, Color, LineWidth};
 use crate::class::Railway;
 use crate::style::Style;
-use super::{AnyShape, Feature};
+use super::{AnyShape, Category, Group, Feature};
 
 //------------ GuideContour --------------------------------------------------
 
@@ -45,6 +45,10 @@ impl GuideContour {
 impl Feature for GuideContour {
     fn storage_bounds(&self) -> world::Rect {
         self.trace.storage_bounds()
+    }
+
+    fn group(&self) -> Group {
+        Group::with_category(Category::Label)
     }
 
     fn shape(

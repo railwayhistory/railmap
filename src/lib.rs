@@ -8,9 +8,7 @@ pub mod colors;
 pub mod import;
 pub mod feature;
 pub mod server;
-pub mod tile;
-//pub mod theme;
 pub mod style;
+pub mod tile;
 pub mod transform;
 
-//pub mod oldimport;
