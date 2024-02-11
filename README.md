@@ -50,3 +50,7 @@ The following layers are currently available:
 *  `pax-num`: timetable line numbers,
 *  `border`: borders contours.
 
+The rendered map publishes these layers at
+`https://map.railwayhistory.org/rail/`. E.g., if you want to use the
+_el_ layer, the usual configuration string is
+`https://map.railwayhistory.org/rail/el/{z}/{x}/{y}.png`.
