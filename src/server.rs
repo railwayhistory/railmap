@@ -63,7 +63,7 @@ impl Server {
                 return Ok(Response::builder()
                     .header("Content-Type", "text/html")
                     .body(From::<&'static [u8]>::from(
-                        include_bytes!("../html/railwayhistory/index.html")
+                        include_bytes!("../html/index.html")
                     ))
                     .unwrap()
                 )

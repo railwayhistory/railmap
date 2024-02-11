@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="ol.css" type="text/css">
+    <style>
+      body {
+        margin: 0;
+      }
+      .map {
+        height: 100%;
+        width: 100%;
+        position: absolute;
+        padding: 0;
+      }
+      #layers {
+        position: absolute;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        top: 0;
+        right: 0;
+      }
+      #layers > li {
+        padding: 2px 0;
+        margin: 2px;
+        width: 4.5em;
+        border: 1px solid black;
+        border-radius: 3px;
+        text-align: center;
+        cursor: pointer;
+      }
+      #layers > li.active {
+        color: white;
+        background-color: black;
+      }
+    </style>
+    <script src="ol.js"></script>
+    <title>Railway History Map &ndash; Development Version</title>
+  </head>
+  <body>
+    <div id="map" class="map"></div>
+    <ul id="layers">
+      <li id="el" onclick="toggleActive('el')">el</li>
+      <li id="el-num" onclick="toggleActive('el-num')">el-num</li>
+      <li id="pax" onclick="toggleActive('pax')">pax</li>
+      <li id="pax-num" onclick="toggleActive('pax-num')">pax-num</li>
+    </ul>
+    <script type="text/javascript">
+      const allLayers = [
+          { name: "el",      code: "e", start: true },
+          { name: "pax",     code: "p", start: false },
+          { name: "el-num",  code: "n", start: true },
+          { name: "pax-num", code: "t", start: false },
+      ];
+
+      function getLayerCode() {
+          let res = "";
+          for (item of allLayers) {
+              if (
+                document.getElementById(item.name).className == "active"
+              ) {
+                  res = res + item.code;
+              }
+          }
+          return res
+      }
+
+      function initLayerToggles(layers) {
+          for (item of allLayers) {
+              if (layers.includes(item.code)) {
+                  document.getElementById(item.name).className = "active";
+              }
+          }
+      }
+
+      function toggleActive(elid) {
+        let el = document.getElementById(elid);
+        if (el.className == "active") {
+            el.className = "";
+        }
+        else {
+            el.className = "active"
+        }
+        setMapLayers();
+      }
+
+      function updateHistory(view) {
+          let zoom = Math.round(view.getZoom());
+          let center = ol.proj.transform(
+            view.getCenter(), "EPSG:3857", "EPSG:4326"
+          );
+          let x = (Math.round(center[1] * 10000) / 10000);
+          let y = (Math.round(center[0] * 10000) / 10000);
+          let layers = getLayerCode();
+
+          let arg = layers + "@" + zoom + "/" + x + "/" + y;
+          window.history.replaceState(
+              window.history.state, document.title,
+              "#" + arg
+          );
+      }
+
+      function setMapLayers() {
+        var layers = [
+          new ol.layer.Tile({
+            source: new ol.source.XYZ({
+              url: "https://map.railwayhistory.org/base/{z}/{x}/{y}.png",
+              tilePixelRatio: 2,
+            })
+          }),
+          new ol.layer.Tile({
+            source: new ol.source.XYZ({
+              url: "https://hillshading.waymarkedtrails.org/srtm/{z}/{x}/{-y}.png",
+              tilePixelRatio: 2,
+            }),
+            opacity: 0.13,
+          }),
+          new ol.layer.Tile({
+            minZoom: 4,
+            source: new ol.source.XYZ({
+              url: "/border/{z}/{x}/{y}.png",
+              opaque: false,
+              tilePixelRatio: 2,
+            })
+          }),
+        ];
+
+        for (item of allLayers) {
+          if (document.getElementById(item.name).className == "active") {
+            layers.push(
+              new ol.layer.Tile({
+                minZoom: 4,
+                source: new ol.source.XYZ({
+                  url: "/" + item.name + "/{z}/{x}/{y}.png",
+                  opaque: false,
+                  tilePixelRatio: 2,
+                })
+              })
+            );
+          }
+        }
+        map.setLayers(layers);
+        updateHistory(map.getView());
+      }
+
+      function getInitView() {
+          let initView = {
+              layers: "en", center: [9.538, 54.0728], zoom: 9
+          };
+
+          let parseLocation = function(value) {
+              if (value === null || value.length === 0) {
+                  return
+              }
+              var parts = value.split("@");
+              if (parts.length === 2) {
+                  var mapparts = parts[1].split("/");
+                  if (mapparts.length === 3) {
+                      initView = {
+                          layers: parts[0],
+                          zoom: parseInt(mapparts[0], 10),
+                          center: [
+                              parseFloat(mapparts[2]),
+                              parseFloat(mapparts[1]),
+                          ]
+                      };
+                  }
+              }
+          }
+          parseLocation(window.location.hash.slice(1));
+          return initView;
+      }
+
+
+      let initView = getInitView();
+
+      let map = new ol.Map({
+        target: 'map',
+        view: new ol.View({
+          center: ol.proj.transform(initView.center, "EPSG:4326", "EPSG:3857"),
+          zoom: initView.zoom,
+          maxZoom: 17,
+          constrainResolution: true
+        }),
+      });
+      initLayerToggles(initView.layers);
+      setMapLayers();
+      map.on('moveend', (evt) => {
+          updateHistory(evt.map.getView());
+      });
+    </script>
+  </body>
+</html>
