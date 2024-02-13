@@ -70,7 +70,10 @@ impl Server {
             }
             "/ol.js" => {
                 return Ok(Response::builder()
-                    .header("Content-Type", "application/javascript")
+                    .header(
+                        "Content-Type",
+                        "application/javascript;charset=utf-8"
+                    )
                     .body(From::<&'static [u8]>::from(
                             include_bytes!("../html/ol.js").as_ref()
                     ))
