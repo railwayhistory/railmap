@@ -101,7 +101,7 @@ impl DotMarker {
         if self.casing {
             let mut sketch = canvas.sketch();
             sketch.apply(
-                Circle::new(point, radius + 1.5 * sp)
+                Circle::new(point, radius + 2. * sp)
             );
             sketch.apply(Operator::DestinationOut);
             sketch.fill();
