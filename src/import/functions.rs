@@ -64,7 +64,7 @@ const FUNCTIONS: &[(
     //     alignment, layout *[, layout]
     // )
     // ```
-    ("hbox", &|args, _, _,  err| {
+    ("hbox", &|args, scope, _,  err| {
         let ([align], layouts) = args.into_var_array::<1>(err)?;
         let mut align = align.eval(err)?;
         let halign = match label::halign_from_symbols(&mut align) {
@@ -81,7 +81,9 @@ const FUNCTIONS: &[(
                 return Err(Failed)
             }
         };
-        let mut properties = label::LayoutProperties::from_symbols(&mut align);
+        let mut properties = label::LayoutProperties::from_symbols(
+            &mut align, scope
+        );
         if align.take("frame") {
             properties.set_layout_type(label::LayoutType::TextFrame);
         }
@@ -99,13 +101,13 @@ const FUNCTIONS: &[(
     // ```text
     // hrule([style])
     // ```
-    ("hrule", &|args, _, _, err| {
+    ("hrule", &|args, scope, _, err| {
         let mut props = if args.is_empty() {
             label::LayoutProperties::default()
         }
         else {
             let [props] = args.into_array(err)?;
-            label::LayoutProperties::from_arg(props, err)?
+            label::LayoutProperties::from_arg(props, scope, err)?
         };
         props.set_layout_type(label::LayoutType::Rule);
         Ok(Value::Custom(label::Layout::hrule(props).into()))
@@ -150,9 +152,11 @@ const FUNCTIONS: &[(
     // ```text
     // span(font: symbol-set, text)
     // ```
-    ("span", &|args, _, _, err| {
+    ("span", &|args, scope, _, err| {
         let [properties, text] = args.into_array(err)?;
-        let properties = label::LayoutProperties::from_arg(properties, err)?;
+        let properties = label::LayoutProperties::from_arg(
+            properties, scope, err
+        )?;
         Ok(Value::Custom(
             label::Layout::span(text.eval(err)?, properties).into()
         ))
@@ -165,7 +169,7 @@ const FUNCTIONS: &[(
     //     alignment, layout *[, layout]
     // )
     // ```
-    ("vbox", &|args, _, _,  err| {
+    ("vbox", &|args, scope, _,  err| {
         let ([align], layouts) = args.into_var_array::<1>(err)?;
         let mut align = align.eval(err)?;
         let halign = match label::halign_from_symbols(&mut align) {
@@ -182,7 +186,9 @@ const FUNCTIONS: &[(
                 return Err(Failed)
             }
         };
-        let mut properties = label::LayoutProperties::from_symbols(&mut align);
+        let mut properties = label::LayoutProperties::from_symbols(
+            &mut align, scope
+        );
         if align.take("frame") {
             properties.set_layout_type(label::LayoutType::TextFrame);
         }
@@ -200,13 +206,13 @@ const FUNCTIONS: &[(
     // ```text
     // vrule([style])
     // ```
-    ("vrule", &|args, _, _, err| {
+    ("vrule", &|args, scope, _, err| {
         let mut props = if args.is_empty() {
             label::LayoutProperties::default()
         }
         else {
             let [props] = args.into_array(err)?;
-            label::LayoutProperties::from_arg(props, err)?
+            label::LayoutProperties::from_arg(props, scope, err)?
         };
         props.set_layout_type(label::LayoutType::Rule);
         Ok(Value::Custom(label::Layout::vrule(props).into()))

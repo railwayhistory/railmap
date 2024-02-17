@@ -7,6 +7,7 @@ use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
 use femtomap::path::Trace;
 use femtomap::render::{Canvas, Color, LineWidth};
 use crate::class::Railway;
+use crate::import::eval::Scope;
 use crate::style::Style;
 use super::{AnyShape, Category, Group, Feature};
 
@@ -33,9 +34,10 @@ impl GuideContour {
     pub fn from_symbols(
         mut class: SymbolSet,
         trace: Trace,
+        scope: &Scope,
         err: &mut EvalErrors,
     ) -> Result<Self, Failed> {
-        let railway = Railway::from_symbols(&mut class);
+        let railway = Railway::from_symbols(&mut class, scope);
         let casing = class.take("casing");
         class.check_exhausted(err)?;
         Ok(GuideContour { class: railway, casing, trace })

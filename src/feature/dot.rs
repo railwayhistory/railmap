@@ -6,6 +6,7 @@ use femtomap::path::Position;
 use femtomap::render::{Canvas, LineWidth, Operator};
 use kurbo::Circle;
 use crate::class::Railway;
+use crate::import::eval::{Scope, ScopeExt};
 use crate::style::Style;
 use super::{AnyShape, Category, Group, Feature};
 
@@ -43,6 +44,7 @@ impl DotMarker {
     pub fn try_from_arg(
         arg: &mut SymbolSet,
         position: Position,
+        scope: &Scope,
         err: &mut EvalErrors,
     ) -> Result<Option<Self>, Failed> {
         let (size, inner, casing) = if arg.take("statdot") {
@@ -57,7 +59,7 @@ impl DotMarker {
         else {
             return Ok(None)
         };
-        let class = Railway::from_symbols(arg);
+        let class = Railway::from_symbols(arg, scope);
         arg.check_exhausted(err)?;
         Ok(Some(DotMarker { position, class, size, inner, casing }))
     }
@@ -65,14 +67,28 @@ impl DotMarker {
     pub fn from_arg(
         mut arg: SymbolSet,
         position: Position,
+        scope: &Scope,
         err: &mut EvalErrors,
     ) -> Result<Self, Failed> {
         let size = Size::from_symbols(&mut arg);
-        let class = Railway::from_symbols(&mut arg);
+        let class = Railway::from_symbols(&mut arg, scope);
         let inner = Inner::from_symbols(&class, &mut arg);
         let casing = Self::casing_from_symbols(&mut arg);
         arg.check_exhausted(err)?;
         Ok(DotMarker { position, class, size, inner, casing })
+    }
+
+    pub fn from_position(
+        position: Position,
+        scope: &Scope,
+    ) -> Result<Self, Failed> {
+        Ok(DotMarker {
+            position,
+            class: scope.railway(),
+            size: Size::default(),
+            inner: Inner::default(),
+            casing: true
+        })
     }
 
     fn casing_from_symbols(
@@ -152,9 +168,10 @@ impl Feature for DotMarker {
 
 //------------ Size ----------------------------------------------------------
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 enum Size {
     Small,
+    #[default]
     Medium,
     Large,
 

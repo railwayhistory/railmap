@@ -291,7 +291,7 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 [[package]]
 name = "femtomap"
 version = "0.1.0"
-source = "git+https://github.com/partim/femtomap.git#b9c9a76433ad8163fc853d03837f3f6cba02dce1"
+source = "git+https://github.com/partim/femtomap.git#c58af9569ad3c102b5ea2a8ddf300d98f46ff568"
 dependencies = [
  "cairo-rs",
  "ignore",

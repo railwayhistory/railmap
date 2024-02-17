@@ -44,8 +44,8 @@ use femtomap::render::{
     Canvas, Color, DashPattern, Group, LineWidth, Outline, Sketch,
 };
 use kurbo::{PathEl, Vec2};
-use crate::import::eval::Expression;
-use crate::class::{Railway, Gauge, Pax};
+use crate::import::eval::{Expression, Scope};
+use crate::class::{Railway, Pax};
 use crate::style::Style;
 use super::{AnyShape, Category, Feature, Shape, Stage};
 
@@ -57,12 +57,6 @@ use super::{AnyShape, Category, Feature, Shape, Stage};
 pub struct TrackClass {
     /// The feature class.
     class: Railway,
-
-    /// The gauge of the track.
-    gauge: Gauge,
-
-    /// Is this double tracked?
-    double: bool,
 
     /// What is to our left?
     left: Neighbor,
@@ -80,21 +74,20 @@ pub struct TrackClass {
 impl TrackClass {
     pub fn from_arg(
         arg: Expression,
+        scope: &Scope,
         err: &mut EvalErrors,
     ) -> Result<Self, Failed> {
         let mut symbols = arg.eval(err)?;
-        let class = Self::from_symbols(&mut symbols);
+        let class = Self::from_symbols(&mut symbols, scope);
         symbols.check_exhausted(err)?;
         Ok(class)
     }
 
-    pub fn from_symbols(symbols: &mut SymbolSet) -> Self {
+    pub fn from_symbols(symbols: &mut SymbolSet, scope: &Scope) -> Self {
         let tight = symbols.take("tight");
         let _ = symbols.take("flip"); // XXX Deprecated.
         TrackClass {
-            class: Railway::from_symbols(symbols),
-            gauge: Gauge::from_symbols(symbols),
-            double: symbols.take("double"),
+            class: Railway::from_symbols(symbols, scope),
             left: Neighbor::left_from_symbols(symbols, tight),
             right: Neighbor::right_from_symbols(symbols, tight),
             combined: symbols.take("combined"),
@@ -104,6 +97,10 @@ impl TrackClass {
 
     pub fn class(&self) -> &Railway {
         &self.class
+    }
+
+    pub fn double(&self) -> bool {
+        self.class.double()
     }
 }
 
@@ -234,7 +231,7 @@ impl<'a> ContourShape<'a> {
         let line_width = if style.detail() < 1 {
             style.units().line_width
         }
-        else if self.class.double {
+        else if self.class.double() {
             style.units().line_width * 1.4
         }
         else {
@@ -285,7 +282,7 @@ impl<'a> ContourShape2<'a> {
             casing: contour.casing,
             color: style.track_color(&contour.class.class),
             width: if contour.class.class.category().is_main() {
-                if contour.class.double {
+                if contour.class.double() {
                     style.units().line_width * 2.0
                 }
                 else {
@@ -430,7 +427,7 @@ impl<'a> ContourShape4<'a> {
     fn new(contour: &'a TrackContour, style: &Style) -> AnyShape<'a> {
         let has_inside = Self::will_have_inside(&contour.class);
         let use_inside_base = has_inside || !contour.class.class.is_open();
-        if contour.class.double {
+        if contour.class.double() {
             let off = style.units().dt * 0.5;
             let left = contour.trace.outline_offset(off, style);
             let seg = Self::calc_seg(&contour.class, &left, style);
@@ -680,9 +677,9 @@ impl<'a> ContourShape4<'a> {
             Some(seg) => seg,
             None => return
         };
-        let group = match self.class.gauge.group() {
-            Some(group) => group,
-            None => return,
+        let group = self.class.class.gauge_group();
+        if matches!(group, Standard) {
+            return
         };
         let radius = style.units().dt * 0.5;
         let width = style.units().guide_width;
@@ -695,6 +692,7 @@ impl<'a> ContourShape4<'a> {
             Narrow | Broad => {
                 canvas.apply(LineWidth(width));
             }
+            Standard => { }
         }
 
         self.track.iter_positions(
@@ -712,6 +710,7 @@ impl<'a> ContourShape4<'a> {
                     canvas.apply(style.track_color(&self.class.class));
                     canvas.stroke();
                 }
+                Standard => { }
                 Broad => {
                     let fwd = Vec2::from_angle(dir) * radius;
                     let side = Vec2::from_angle(dir + FRAC_PI_2) * radius;
@@ -879,7 +878,7 @@ impl Feature for TrackCasing {
     fn shape(
         &self, style: &Style, _canvas: &Canvas
     ) -> AnyShape {
-        let line_width = if self.class.double {
+        let line_width = if self.class.double() {
             2.2 * style.units().dt
         }
         else {

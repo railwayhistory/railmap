@@ -55,7 +55,7 @@ const PROCEDURES: &[(
     //
     ("area", &|pos, args, scope, err| {
         let [class, trace] = args.into_array(err)?;
-        let class = Railway::from_arg(class, err)?;
+        let class = Railway::from_arg(class, scope, err)?;
         let trace = trace.eval(err)?;
         scope.builtin().with_store(|store| {
             store.railway.insert(
@@ -74,7 +74,7 @@ const PROCEDURES: &[(
     // badge([properties: symbol-set,] position: position, layout: layout)
     // ```
     ("badge", &|pos, args, scope, err| {
-        let args = BadgeArgs::from_args(args, err)?;
+        let args = BadgeArgs::from_args(args, scope, err)?;
         scope.builtin().with_store(|store| {
             args.features(store).insert(
                 label::Label::new(
@@ -115,7 +115,7 @@ const PROCEDURES: &[(
     // ```
     ("casing", &|pos, args, scope, err| {
         let [class, trace] = args.into_array(err)?;
-        let class = TrackClass::from_arg(class, err)?;
+        let class = TrackClass::from_arg(class, scope, err)?;
         let trace = trace.eval(err)?;
         scope.builtin().with_store(|store| {
             store.railway.insert(
@@ -139,7 +139,7 @@ const PROCEDURES: &[(
         let mut class = class?;
 
         let linenum = class.take("linenum");
-        let contour = GuideContour::from_symbols(class, trace, err)?;
+        let contour = GuideContour::from_symbols(class, trace, scope, err)?;
 
         scope.builtin().with_store(move |store| {
             if linenum {
@@ -162,7 +162,7 @@ const PROCEDURES: &[(
     // label([properties: symbol-set,] position: position, layout: layout)
     // ```
     ("label", &|pos, args, scope, err| {
-        let args = BadgeArgs::from_args(args, err)?;
+        let args = BadgeArgs::from_args(args, scope, err)?;
         scope.builtin().with_store(|store| {
             args.features(store).insert(
                 label::Label::new(
@@ -184,7 +184,7 @@ const PROCEDURES: &[(
     // line_badge(class: symbol-set, position: position, text: Text)
     // ```
     ("line_badge", &|pos, args, scope, err| {
-        let label = line_badge(args, err)?;
+        let label = line_badge(args, scope, err)?;
         scope.builtin().with_store(|store| {
             store.line_labels.insert(
                 label,
@@ -211,7 +211,7 @@ const PROCEDURES: &[(
     // * `:n`, `:e`, `:s`, `:w`: the compass direction where the label is
     //   anchored.
     ("line_box", &|pos, args, scope, err| {
-        let (args, layout) = TextBoxArgs::from_args(args, err)?;
+        let (args, layout) = TextBoxArgs::from_args(args, scope, err)?;
 
         // Get the positions for things.
         let (pos0, pos1) = if args.double {
@@ -323,7 +323,7 @@ const PROCEDURES: &[(
     // * `:n`, `:e`, `:s`, `:w`: the compass direction where the label is
     //   anchored.
     ("line_label", &|pos, args, scope, err| {
-        let (args, layout) = TextBoxArgs::from_args(args, err)?;
+        let (args, layout) = TextBoxArgs::from_args(args, scope, err)?;
         let (contour, label) = line_label(args, layout);
         scope.builtin().with_store(|store| {
             store.line_labels.insert(
@@ -342,7 +342,7 @@ const PROCEDURES: &[(
 
     ("line_tt_label", &|pos, args, scope, err| {
         let (args, line_layout, tt_layout) = TextBoxArgs::double_from_args(
-            args, err
+            args, scope, err
         )?;
         let (l_contour, l_label) = line_label(args.clone(), line_layout);
         let (tt_contour, tt_label) = line_label(args, tt_layout);
@@ -383,7 +383,9 @@ const PROCEDURES: &[(
         let mut class = class?;
 
         scope.builtin().with_store(|store| {
-            match DotMarker::try_from_arg(&mut class, position.clone(), err)? {
+            match DotMarker::try_from_arg(
+                &mut class, position.clone(), scope, err
+            )? {
                 Some(marker) => {
                     store.railway.insert(
                         marker,
@@ -393,7 +395,7 @@ const PROCEDURES: &[(
                 }
                 None => {
                     let marker = StandardMarker::from_arg(
-                        class, position, err
+                        class, position, scope, err
                     )?;
                     store.railway.insert(
                         marker,
@@ -410,7 +412,7 @@ const PROCEDURES: &[(
     //
     ("platform", &|pos, args, scope, err| {
         let [class, trace] = args.into_array(err)?;
-        let class = Railway::from_arg(class, err)?;
+        let class = Railway::from_arg(class, scope, err)?;
         let trace = trace.eval(err)?;
         scope.builtin().with_store(|store| {
             store.railway.insert(
@@ -428,7 +430,7 @@ const PROCEDURES: &[(
     // slabel([class: symbol-set,] position, text: text|layout)
     // ```
     ("slabel", &|pos, args, scope, err| {
-        let (mut args, layout) = LabelArgs::from_args(args, err)?;
+        let (mut args, layout) = LabelArgs::from_args(args, scope, err)?;
         args.properties.update_size(FontSize::Small);
         let layout = Layout::hbox(
             args.anchor.h, args.anchor.v, args.properties, vec![layout]
@@ -452,13 +454,28 @@ const PROCEDURES: &[(
     // Renders a station dot.
     //
     // ```text
-    // statdot(marker: symbol-set, position: position)
+    // statdot([marker: symbol-set,] position: position)
     // ```
     ("statdot", &|pos, args, scope, err| {
-        let [class, position] = args.into_array(err)?;
-        let class = class.eval(err)?;
-        let position = position.eval(err)?;
-        let marker = DotMarker::from_arg(class, position, err)?;
+        let marker = match args.try_into_array() {
+            Ok([class, position]) => {
+                let class = class.eval(err)?;
+                let position = position.eval(err)?;
+                DotMarker::from_arg(
+                    class, position, scope, err
+                )?
+            }
+            Err(args) => match args.try_into_array() {
+                Ok([position]) => {
+                    let position = position.eval(err)?;
+                    DotMarker::from_position(position, scope)?
+                }
+                Err(_) => {
+                    err.add(pos, "expected 1 or 2 arguments");
+                    return Err(Failed)
+                }
+            }
+        };
         scope.builtin().with_store(|store| {
             store.railway.insert(
                 marker,
@@ -494,7 +511,7 @@ const PROCEDURES: &[(
             &label::LayoutProperties::with_size(label::FontSize::Xsmall)
         );
         let properties = label::LayoutProperties::with_class(
-            Railway::from_symbols(&mut class)
+            Railway::from_symbols(&mut class, scope)
         );
 
         let halign = if class.take("left_align") {
@@ -562,15 +579,17 @@ const PROCEDURES: &[(
     // Renders a track.
     //
     // ```text
-    // track(class: symbol-set, path: path)
+    // track([class: symbol-set, ]path: path)
     // ```
-    ("track", &|pos, args, scope, err| {
-        let [class_symbols, trace] = args.into_array(err)?;
-        let mut class_symbols = class_symbols.eval(err)?;
-        let class = TrackClass::from_symbols(&mut class_symbols);
+    ("track", &|pos, mut args, scope, err| {
+        let mut class_symbols = args.take_first_if_matches(
+            err
+        )?.unwrap_or_default();
+        let [trace] = args.into_array(err)?;
+        let trace = trace.eval(err)?;
+        let class = TrackClass::from_symbols(&mut class_symbols, scope);
         let casing = class_symbols.take("casing");
         class_symbols.check_exhausted(err)?;
-        let trace = trace.eval(err)?;
 
         scope.builtin().with_store(|store| {
             store.railway.insert(
@@ -588,7 +607,7 @@ const PROCEDURES: &[(
     // tt_badge(class: symbol-set, position: position, text: Text)
     // ```
     ("tt_badge", &|pos, args, scope, err| {
-        let label = line_badge(args, err)?;
+        let label = line_badge(args, scope, err)?;
         scope.builtin().with_store(|store| {
             store.tt_labels.insert(
                 label,
@@ -615,7 +634,7 @@ const PROCEDURES: &[(
     // * `:n`, `:e`, `:s`, `:w`: the compass direction where the label is
     //   anchored.
     ("tt_label", &|pos, args, scope, err| {
-        let (args, layout) = TextBoxArgs::from_args(args, err)?;
+        let (args, layout) = TextBoxArgs::from_args(args, scope, err)?;
         let (contour, label) = line_label(args, layout);
         scope.builtin().with_store(|store| {
             store.tt_labels.insert(
@@ -640,9 +659,10 @@ const PROCEDURES: &[(
 
 fn line_badge(
     args: ArgumentList,
+    scope: &Scope,
     err: &mut EvalErrors,
 ) -> Result<label::Label, Failed> {
-    let mut args = BadgeArgs::from_args(args, err)?;
+    let mut args = BadgeArgs::from_args(args, scope, err)?;
     args.properties.set_layout_type(
         label::LayoutType::BadgeFrame
     );
@@ -749,7 +769,7 @@ impl BadgeArgs {
     /// ([class: symbol-set,] position: position, layout: Layout)
     /// ```
     fn from_args(
-        args: ArgumentList, err: &mut EvalErrors
+        args: ArgumentList, scope: &Scope, err: &mut EvalErrors
     ) -> Result<Self, Failed> {
         let args = match args.try_into_array() {
             Ok([class, position, layout]) => {
@@ -763,7 +783,7 @@ impl BadgeArgs {
 
                 let linenum = class.take("linenum");
                 let mut properties = label::LayoutProperties::from_symbols(
-                    &mut class
+                    &mut class, scope
                 );
                 class.check_exhausted(err)?;
 
@@ -835,7 +855,7 @@ impl LabelArgs {
     /// (class: symbol-set, position: position, layout: Layout)
     /// ```
     fn from_args(
-        args: ArgumentList, err: &mut EvalErrors
+        args: ArgumentList, scope: &Scope, err: &mut EvalErrors
     ) -> Result<(Self, Layout), Failed> {
         let [class, position, layout] = args.into_array(err)?;
         let class = class.eval::<SymbolSet>(err);
@@ -852,7 +872,7 @@ impl LabelArgs {
                 return Err(Failed)
             }
         };
-        let properties = LayoutProperties::from_symbols(&mut class);
+        let properties = LayoutProperties::from_symbols(&mut class, scope);
         class.check_exhausted(err)?;
 
         Ok((Self { linenum, anchor, properties, position }, layout))
@@ -902,7 +922,7 @@ impl TextBoxArgs {
     ///   anchored.
     /// 
     fn from_args(
-        args: ArgumentList, err: &mut EvalErrors
+        args: ArgumentList, scope: &Scope, err: &mut EvalErrors
     ) -> Result<(Self, Layout), Failed> {
         let args = match args.try_into_array() {
             Ok([class, position, shift, layout]) => {
@@ -911,7 +931,7 @@ impl TextBoxArgs {
                 let shift = shift.eval(err);
                 return Ok((
                     Self::from_all_args(
-                        class?, position?, shift?, err
+                        class?, position?, shift?, scope, err
                     )?,
                     label::layout_from_expr(layout, err)?,
                 ))
@@ -925,7 +945,7 @@ impl TextBoxArgs {
                 let position = position.eval(err);
                 return Ok((
                     Self::from_all_args(
-                        class?, position?, Default::default(), err
+                        class?, position?, Default::default(), scope, err
                     )?,
                     label::layout_from_expr(layout, err)?,
                 ))
@@ -938,7 +958,7 @@ impl TextBoxArgs {
     }
 
     fn double_from_args(
-        args: ArgumentList, err: &mut EvalErrors
+        args: ArgumentList, scope: &Scope, err: &mut EvalErrors
     ) -> Result<(Self, Layout, Layout), Failed> {
         let args = match args.try_into_array() {
             Ok([class, position, shift, l1, l2]) => {
@@ -947,7 +967,7 @@ impl TextBoxArgs {
                 let shift = shift.eval(err);
                 return Ok((
                     Self::from_all_args(
-                        class?, position?, shift?, err
+                        class?, position?, shift?, scope, err
                     )?,
                     label::layout_from_expr(l1, err)?,
                     label::layout_from_expr(l2, err)?,
@@ -962,7 +982,7 @@ impl TextBoxArgs {
                 let position = position.eval(err);
                 return Ok((
                     Self::from_all_args(
-                        class?, position?, Default::default(), err
+                        class?, position?, Default::default(), scope, err
                     )?,
                     label::layout_from_expr(l1, err)?,
                     label::layout_from_expr(l2, err)?,
@@ -979,6 +999,7 @@ impl TextBoxArgs {
         mut class: SymbolSet,
         position: Position,
         shift: (Distance, Distance),
+        scope: &Scope,
         err: &mut EvalErrors,
     ) -> Result<Self, Failed> {
         // :left or :right
@@ -1003,7 +1024,7 @@ impl TextBoxArgs {
         };
 
         // every else from class
-        let mut properties = LayoutProperties::from_symbols(&mut class);
+        let mut properties = LayoutProperties::from_symbols(&mut class, scope);
         properties.set_layout_type(label::LayoutType::TextFrame);
 
         // :double and then we should be empty.

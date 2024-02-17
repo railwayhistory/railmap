@@ -11,7 +11,7 @@ use femtomap::render::{
 };
 use kurbo::Vec2;
 use crate::import::eval;
-use crate::import::eval::{Custom, Expression};
+use crate::import::eval::{Custom, Expression, Scope};
 use crate::class::Railway;
 use crate::style::Style;
 use super::{AnyShape, Category, Group, Feature, Stage};
@@ -199,21 +199,24 @@ impl LayoutProperties {
 
     pub fn from_arg(
         arg: Expression,
+        scope: &Scope,
         err: &mut EvalErrors,
     ) -> Result<Self, Failed> {
         let mut symbols = arg.eval(err)?;
-        let res = Self::from_symbols(&mut symbols);
+        let res = Self::from_symbols(&mut symbols, scope);
         symbols.check_exhausted(err)?;
         Ok(res)
     }
 
-    pub fn from_symbols(symbols: &mut SymbolSet) -> Self {
+    pub fn from_symbols(
+        symbols: &mut SymbolSet, scope: &Scope,
+    ) -> Self {
         Self {
             font: Self::font_from_symbols(symbols),
             size: FontSize::from_symbols(symbols),
             packed: None,
             layout_type: LayoutType::Normal,
-            class: Railway::from_symbols(symbols),
+            class: Railway::from_symbols(symbols, scope),
         }
     }
 

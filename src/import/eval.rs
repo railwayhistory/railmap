@@ -6,6 +6,7 @@ use femtomap::import::ast::Pos;
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
 use femtomap::import::path::{ImportPathSet};
 use femtomap::path::Distance;
+use crate::class::Railway;
 use crate::feature::StoreBuilder;
 use crate::feature::label::Layout;
 use super::{functions, procedures, units};
@@ -110,6 +111,7 @@ pub struct RenderParams {
     detail: Option<(f64, f64)>,
     zoom: Option<Zoom>,
     layer: Option<i16>,
+    railway: Option<Railway>,
 }
 
 impl RenderParams {
@@ -124,6 +126,7 @@ impl RenderParams {
             "layer" => self.update_layer(value, err),
             "link" => self.update_link(value, err),
             "zoom" => self.update_zoom(value, err),
+            "railway" => self.update_railway(value, err),
             "style" => { } // XXX Deprecated
             _ => {
                 err.add(pos, format!("unknown render param {}", target));
@@ -200,6 +203,16 @@ impl RenderParams {
         }
     }
 
+    fn update_railway(
+        &mut self,
+        value: Expression,
+        err: &mut EvalErrors
+    ) {
+        if let Ok(value) = Railway::from_arg_only(value, err) {
+            self.railway = Some(value)
+        }
+    }
+
     fn detail(scope: &Scope) -> Option<(f64, f64)> {
         if let Some(detail) = scope.custom().detail {
             return Some(detail)
@@ -229,6 +242,16 @@ impl RenderParams {
             None => None
         }
     }
+
+    fn railway<'s>(scope: &'s Scope) -> Option<&'s Railway> {
+        if let Some(res) = scope.custom().railway.as_ref() {
+            return Some(res)
+        }
+        match scope.parent() {
+            Some(parent) =>  Self::railway(parent),
+            None => None
+        }
+    }
 }
 
 
@@ -240,6 +263,8 @@ pub trait ScopeExt {
     ) -> Result<(f64, f64), Failed>;
 
     fn layer(&self) -> i16;
+
+    fn railway(&self) -> Railway;
 }
 
 impl<'s> ScopeExt for Scope<'s> {
@@ -270,6 +295,10 @@ impl<'s> ScopeExt for Scope<'s> {
 
     fn layer(&self) -> i16 {
         RenderParams::layer(self).unwrap_or(0)
+    }
+
+    fn railway(&self) -> Railway {
+        RenderParams::railway(self).cloned().unwrap_or_default()
     }
 }
 

@@ -21,6 +21,7 @@ use femtomap::render::{
 };
 use lazy_static::lazy_static;
 use crate::class::Railway;
+use crate::import::eval::Scope;
 use crate::style::{Units, Style};
 use super::{AnyShape, Category, Feature};
 
@@ -54,10 +55,11 @@ impl StandardMarker {
     pub fn from_arg(
         mut symbols: SymbolSet,
         position: Position,
+        scope: &Scope,
         err: &mut EvalErrors,
     ) -> Result<Self, Failed> {
         let orientation = Self::rotation_from_symbols(&mut symbols, err)?;
-        let class = Railway::from_symbols(&mut symbols);
+        let class = Railway::from_symbols(&mut symbols, scope);
         let _ = symbols.take("casing");
         let pos = symbols.pos();
         let marker = match symbols.take_final(err)? {

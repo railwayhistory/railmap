@@ -11,7 +11,7 @@
 #![allow(dead_code)]
 
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
-use crate::import::eval::Expression;
+use crate::import::eval::{Expression, Scope, ScopeExt};
 
 
 //------------ Railway -------------------------------------------------------
@@ -25,28 +25,71 @@ pub struct Railway {
     rail: Option<ElectricRail>,
     speed: Option<Speed>,
     pax: Option<Pax>,
+    gauge_group: Option<GaugeGroup>,
+    gauge: Option<Gauge>,
+    double: Option<bool>,
 }
 
 impl Railway {
-    pub fn from_arg(
+    pub fn from_arg_only(
         arg: Expression,
         err: &mut EvalErrors,
     ) -> Result<Self, Failed> {
         let mut symbols = arg.eval::<SymbolSet>(err)?;
-        let class = Self::from_symbols(&mut symbols);
+        let mut class = Self::default();
+        class.apply_symbols(&mut symbols);
         symbols.check_exhausted(err)?;
         Ok(class)
     }
 
-    pub fn from_symbols(symbols: &mut SymbolSet) -> Self {
-        Self {
-            category: Category::from_symbols(symbols),
-            status: Status::from_symbols(symbols),
-            surface: Surface::from_symbols(symbols),
-            cat: ElectricCat::from_symbols(symbols),
-            rail: ElectricRail::from_symbols(symbols),
-            speed: Speed::from_symbols(symbols),
-            pax: Pax::from_symbols(symbols),
+    pub fn from_arg(
+        arg: Expression,
+        scope: &Scope,
+        err: &mut EvalErrors,
+    ) -> Result<Self, Failed> {
+        let mut symbols = arg.eval::<SymbolSet>(err)?;
+        let mut class = scope.railway();
+        class.apply_symbols(&mut symbols);
+        symbols.check_exhausted(err)?;
+        Ok(class)
+    }
+
+    pub fn from_symbols(symbols: &mut SymbolSet, scope: &Scope) -> Self {
+        let mut class = scope.railway();
+        class.apply_symbols(symbols);
+        class
+    }
+
+    fn apply_symbols(&mut self, symbols: &mut SymbolSet) {
+        if let Some(category) = Category::from_symbols(symbols) {
+            self.category = Some(category)
+        }
+        if let Some(status) = Status::from_symbols(symbols) {
+            self.status = Some(status)
+        }
+        if let Some(cat) = ElectricCat::from_symbols(symbols) {
+            self.cat = Some(cat)
+        }
+        if let Some(rail) = ElectricRail::from_symbols(symbols) {
+            self.rail = Some(rail)
+        }
+        if let Some(speed) = Speed::from_symbols(symbols) {
+            self.speed = Some(speed)
+        }
+        if let Some(pax) = Pax::from_symbols(symbols) {
+            self.pax = Some(pax)
+        }
+        if let Some(gauge) = Gauge::from_symbols(symbols) {
+            self.gauge = Some(gauge)
+        }
+        if let Some(gauge_group) = GaugeGroup::from_symbols(symbols) {
+            self.gauge_group = Some(gauge_group)
+        }
+        if symbols.take("double") {
+            self.double = Some(true)
+        }
+        else if symbols.take("single") {
+            self.double = Some(false)
         }
     }
 
@@ -71,6 +114,15 @@ impl Railway {
         }
         if self.pax.is_none() {
             self.pax = class.pax
+        }
+        if self.gauge.is_none() {
+            self.gauge = class.gauge
+        }
+        if self.gauge_group.is_none() {
+            self.gauge_group = class.gauge_group
+        }
+        if self.double.is_none() {
+            self.double = class.double
         }
     }
 
@@ -151,20 +203,16 @@ impl Railway {
         self.pax.unwrap_or_default()
     }
 
-    /// Returns the layer offset for this class.
-    ///
-    /// Add this to your layer to correctly order features of the same type
-    /// with different classes.
-    ///
-    /// Class layer offsets are in the range of -0.005 to 0.
-    pub fn layer_offset(&self) -> i16 {
-        let base = if self.pax().is_full() { 0 }
-        else if self.category().is_tram() { -3 }
-        else { -6 };
-        let electric = if self.has_active_cat() { 0 }
-                       else if self.has_active_rail() { -1 }
-                       else { -2 };
-        base + self.status().layer_offset() + electric
+    pub fn gauge(&self) -> Gauge {
+        self.gauge.unwrap_or_default()
+    }
+
+    pub fn gauge_group(&self) -> GaugeGroup {
+        self.gauge_group.unwrap_or_default()
+    }
+
+    pub fn double(&self) -> bool {
+        self.double.unwrap_or_default()
     }
 }
 
@@ -663,40 +711,32 @@ pub struct Gauge {
     /// The main gauge in mm.
     ///
     /// If this `None` when finally evaluating, it is actually 1435.
-    main: Option<u16>,
+    main: u16,
 
     /// The secondary gauge in mm if present.
     ///
     /// This is only present for three or four rail track.
     secondary: Option<u16>,
-
-    /// The gauge group.
-    group: Option<GaugeGroup>,
 }
 
 impl Gauge {
-    pub fn from_symbols(symbols: &mut SymbolSet) -> Self {
-        let mut res = Gauge {
-            main: None,
-            secondary: None,
-            group: GaugeGroup::from_symbols(symbols),
-        };
+    pub fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
+        let mut main = None;
         for &(name, gauge) in Self::MAIN_GAUGES {
             if symbols.take(name) {
-                res.main = Some(gauge);
+                main = Some(gauge);
                 break;
             }
         }
-        if res.main.is_none() {
-            return res
-        }
+        let main = main?;
+        let mut secondary = None;
         for &(name, gauge) in Self::SECONDARY_GAUGES {
             if symbols.take(name) {
-                res.secondary = Some(gauge);
+                secondary = Some(gauge);
                 break;
             }
         }
-        res
+        Some(Gauge { main, secondary })
     }
 
     const MAIN_GAUGES: &'static [(&'static str, u16)] = &[
@@ -722,11 +762,7 @@ impl Gauge {
     ];
 
     pub fn main(self) -> u16 {
-        self.main.unwrap_or(1435)
-    }
-
-    pub fn group(self) -> Option<GaugeGroup> {
-        self.group
+        self.main
     }
 
     pub fn secondary(self) -> Option<u16> {
@@ -734,13 +770,21 @@ impl Gauge {
     }
 }
 
+impl Default for Gauge {
+    fn default() -> Self {
+        Gauge { main: 1435, secondary: None }
+    }
+}
+
 
 //------------ GaugeGroup ----------------------------------------------------
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum GaugeGroup {
     Narrower,
     Narrow,
+    #[default]
+    Standard,
     Broad,
     Broader,
 }
@@ -752,6 +796,9 @@ impl GaugeGroup {
         }
         else if symbols.take("narrow") {
             Some(GaugeGroup::Narrow)
+        }
+        else if symbols.take("standard") {
+            Some(GaugeGroup::Standard)
         }
         else if symbols.take("broad") {
             Some(GaugeGroup::Broad)
