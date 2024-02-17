@@ -17,7 +17,7 @@ use crate::feature::label::{
 use crate::feature::marker::StandardMarker;
 use crate::feature::track::{TrackCasing, TrackClass, TrackContour};
 use super::units;
-use super::eval::{ArgumentList, Expression, Scope, ScopeExt};
+use super::eval::{ArgumentList, Scope, ScopeExt};
 
 //------------ eval ----------------------------------------------------------
 
@@ -184,28 +184,10 @@ const PROCEDURES: &[(
     // line_badge(class: symbol-set, position: position, text: Text)
     // ```
     ("line_badge", &|pos, args, scope, err| {
-        let mut args = BadgeArgs::from_args(args, err)?;
-        args.properties.set_layout_type(
-            label::LayoutType::BadgeFrame
-        );
-        args.properties.update_size(FontSize::Badge);
-        args.properties.set_packed(true);
-        args.layout.properties_mut().set_layout_type(label::LayoutType::Framed);
-
-        let mut layout = label::Layout::hbox(
-            Align::Center, Align::Center, args.properties,
-            vec![args.layout]
-        );
-        layout.properties_mut().set_layout_type(label::LayoutType::TextFrame);
-        
+        let label = line_badge(args, err)?;
         scope.builtin().with_store(|store| {
             store.line_labels.insert(
-                label::Label::new(
-                    layout, 
-                    args.position,
-                    true,
-                    Default::default(),
-                ),
+                label,
                 scope.detail(pos, err)?,
                 scope.layer(),
             );
@@ -229,7 +211,7 @@ const PROCEDURES: &[(
     // * `:n`, `:e`, `:s`, `:w`: the compass direction where the label is
     //   anchored.
     ("line_box", &|pos, args, scope, err| {
-        let args = TextBoxArgs::from_args(args, err)?;
+        let (args, layout) = TextBoxArgs::from_args(args, err)?;
 
         // Get the positions for things.
         let (pos0, pos1) = if args.double {
@@ -312,7 +294,7 @@ const PROCEDURES: &[(
             store.line_labels.insert(
                 Label::new(
                     Layout::hbox(
-                        halign, valign, args.properties, vec![args.layout],
+                        halign, valign, args.properties, vec![layout],
                     ),
                     pos3, false,
                     Default::default(),
@@ -341,64 +323,47 @@ const PROCEDURES: &[(
     // * `:n`, `:e`, `:s`, `:w`: the compass direction where the label is
     //   anchored.
     ("line_label", &|pos, args, scope, err| {
-        let mut args = TextBoxArgs::from_args(args, err)?;
-
-        // Get the positions for things.
-        let pos1 = args.position.sideways(
-            units::dt(
-                if args.left {
-                    //if double { 1.0 } else { 0.8 }
-                    if args.double { 0.2 } else { 0. }
-                } else {
-                    //if double { -1.0 } else { -0.8 }
-                    if args.double { -0.2 } else { 0. }
-                },
-            )
-        );
-        let pos2 = args.position.sideways(
-            units::dt(if args.left { 3.0 } else { -3.0 })
-        );
-        let pos3 = 3.0; /*{
-            use self::Anchor::*;
-
-            match anchor {
-                North | South => 3.0,
-                East | West => 3.5,
-                _ => 3.8,
-            }
-        };*/
-        let pos3 = args.position.sideways(
-            units::dt(if args.left { pos3 } else { -pos3 })
-        ).shift(args.shift);
-
-        let (halign, valign) = args.anchor.into_aligns();
-
-        args.properties.set_packed(true);
-        args.properties.set_layout_type(label::LayoutType::TextFrame);
-        args.layout.properties_mut().set_layout_type(
-            label::LayoutType::Framed
-        );
-
+        let (args, layout) = TextBoxArgs::from_args(args, err)?;
+        let (contour, label) = line_label(args, layout);
         scope.builtin().with_store(|store| {
-            // Build the guide.
-            let mut trace = Trace::new();
-            trace.push_edge(1., 1., Edge::new(pos1, pos2));
             store.line_labels.insert(
-                GuideContour::new(
-                    args.properties.class().clone(), true, trace
-                ),
+                contour,
                 scope.detail(pos, err)?,
                 scope.layer(),
             );
-
-            // Build the label.
             store.line_labels.insert(
-                label::Label::new(
-                    label::Layout::hbox(
-                        halign, valign, args.properties, vec![args.layout],
-                    ),
-                    pos3, false, LayoutProperties::with_size(FontSize::Badge),
-                ),
+                label,
+                scope.detail(pos, err)?,
+                scope.layer(),
+            );
+            Ok(())
+        })
+    }),
+
+    ("line_tt_label", &|pos, args, scope, err| {
+        let (args, line_layout, tt_layout) = TextBoxArgs::double_from_args(
+            args, err
+        )?;
+        let (l_contour, l_label) = line_label(args.clone(), line_layout);
+        let (tt_contour, tt_label) = line_label(args, tt_layout);
+        scope.builtin().with_store(|store| {
+            store.line_labels.insert(
+                l_contour,
+                scope.detail(pos, err)?,
+                scope.layer(),
+            );
+            store.line_labels.insert(
+                l_label,
+                scope.detail(pos, err)?,
+                scope.layer(),
+            );
+            store.tt_labels.insert(
+                tt_contour,
+                scope.detail(pos, err)?,
+                scope.layer(),
+            );
+            store.tt_labels.insert(
+                tt_label,
                 scope.detail(pos, err)?,
                 scope.layer(),
             );
@@ -463,10 +428,10 @@ const PROCEDURES: &[(
     // slabel([class: symbol-set,] position, text: text|layout)
     // ```
     ("slabel", &|pos, args, scope, err| {
-        let mut args = LabelArgs::from_args(args, err)?;
+        let (mut args, layout) = LabelArgs::from_args(args, err)?;
         args.properties.update_size(FontSize::Small);
         let layout = Layout::hbox(
-            args.anchor.h, args.anchor.v, args.properties, vec![args.layout]
+            args.anchor.h, args.anchor.v, args.properties, vec![layout]
         );
 
         scope.builtin().with_store(|store| {
@@ -616,10 +581,145 @@ const PROCEDURES: &[(
             Ok(())
         })
     }),
+
+    // Renders a badge containing a timetable label.
+    //
+    // ```text
+    // tt_badge(class: symbol-set, position: position, text: Text)
+    // ```
+    ("tt_badge", &|pos, args, scope, err| {
+        let label = line_badge(args, err)?;
+        scope.builtin().with_store(|store| {
+            store.tt_labels.insert(
+                label,
+                scope.detail(pos, err)?,
+                scope.layer(),
+            );
+            Ok(())
+        })
+    }),
+
+    // Draws a timetable label connected with a guide.
+    //
+    // ```text
+    // tt_label(
+    //     class: symbol-set, position: position,
+    //     [text-shift: distance,]
+    //     text: Text
+    // )
+    // ```
+    //
+    // Classes:
+    //
+    // * `:left`, `:right` for the direction of the guide.
+    // * `:n`, `:e`, `:s`, `:w`: the compass direction where the label is
+    //   anchored.
+    ("tt_label", &|pos, args, scope, err| {
+        let (args, layout) = TextBoxArgs::from_args(args, err)?;
+        let (contour, label) = line_label(args, layout);
+        scope.builtin().with_store(|store| {
+            store.tt_labels.insert(
+                contour,
+                scope.detail(pos, err)?,
+                scope.layer(),
+            );
+            store.tt_labels.insert(
+                label,
+                scope.detail(pos, err)?,
+                scope.layer(),
+            );
+            Ok(())
+        })
+    }),
 ];
 
 
-//============ Helper Types ==================================================
+//============ Helpers =======================================================
+
+//------------ line_badge, line_label ----------------------------------------
+
+fn line_badge(
+    args: ArgumentList,
+    err: &mut EvalErrors,
+) -> Result<label::Label, Failed> {
+    let mut args = BadgeArgs::from_args(args, err)?;
+    args.properties.set_layout_type(
+        label::LayoutType::BadgeFrame
+    );
+    args.properties.update_size(FontSize::Badge);
+    args.properties.set_packed(true);
+    args.layout.properties_mut().set_layout_type(label::LayoutType::Framed);
+
+    let mut layout = label::Layout::hbox(
+        Align::Center, Align::Center, args.properties,
+        vec![args.layout]
+    );
+    layout.properties_mut().set_layout_type(label::LayoutType::TextFrame);
+    
+    Ok(label::Label::new(
+        layout, 
+        args.position,
+        true,
+        Default::default(),
+    ))
+}
+
+fn line_label(
+    mut args: TextBoxArgs,
+    mut layout: Layout,
+) -> (GuideContour, label::Label) {
+    // Get the positions for things.
+    let pos1 = args.position.sideways(
+        units::dt(
+            if args.left {
+                //if double { 1.0 } else { 0.8 }
+                if args.double { 0.2 } else { 0. }
+            } else {
+                //if double { -1.0 } else { -0.8 }
+                if args.double { -0.2 } else { 0. }
+            },
+        )
+    );
+    let pos2 = args.position.sideways(
+        units::dt(if args.left { 3.0 } else { -3.0 })
+    );
+    let pos3 = 3.0; /*{
+        use self::Anchor::*;
+
+        match anchor {
+            North | South => 3.0,
+            East | West => 3.5,
+            _ => 3.8,
+        }
+    };*/
+    let pos3 = args.position.sideways(
+        units::dt(if args.left { pos3 } else { -pos3 })
+    ).shift(args.shift);
+
+    let (halign, valign) = args.anchor.into_aligns();
+
+    args.properties.set_packed(true);
+    args.properties.set_layout_type(label::LayoutType::TextFrame);
+    layout.properties_mut().set_layout_type(
+        label::LayoutType::Framed
+    );
+
+    let mut trace = Trace::new();
+    trace.push_edge(1., 1., Edge::new(pos1, pos2));
+
+    (
+        GuideContour::new(
+            args.properties.class().clone(), true, trace
+        ),
+        label::Label::new(
+            label::Layout::hbox(
+                halign, valign, args.properties, vec![layout],
+            ),
+            pos3, false, LayoutProperties::with_size(FontSize::Badge),
+        ),
+    )
+}
+
 
 //------------ BadgeArgs -----------------------------------------------------
 
@@ -724,9 +824,6 @@ struct LabelArgs {
 
     /// The position of the label.
     position: Position,
-
-    /// The actual layout.
-    layout: Layout
 }
 
 impl LabelArgs {
@@ -739,7 +836,7 @@ impl LabelArgs {
     /// ```
     fn from_args(
         args: ArgumentList, err: &mut EvalErrors
-    ) -> Result<Self, Failed> {
+    ) -> Result<(Self, Layout), Failed> {
         let [class, position, layout] = args.into_array(err)?;
         let class = class.eval::<SymbolSet>(err);
         let position = position.eval::<Position>(err);
@@ -758,7 +855,7 @@ impl LabelArgs {
         let properties = LayoutProperties::from_symbols(&mut class);
         class.check_exhausted(err)?;
 
-        Ok(Self { linenum, anchor, properties, position, layout })
+        Ok((Self { linenum, anchor, properties, position }, layout))
     }
 }
 
@@ -766,6 +863,7 @@ impl LabelArgs {
 //------------ TextBoxArgs ---------------------------------------------------
 
 /// The arguments for the various text box-making procedures.
+#[derive(Clone)]
 struct TextBoxArgs {
     /// Is the box attached to the left?
     left: bool,
@@ -784,9 +882,6 @@ struct TextBoxArgs {
 
     /// The text shift distance.
     shift: (Distance, Distance),
-
-    /// The text layout.
-    layout: Layout,
 }
 
 impl TextBoxArgs {
@@ -808,15 +903,18 @@ impl TextBoxArgs {
     /// 
     fn from_args(
         args: ArgumentList, err: &mut EvalErrors
-    ) -> Result<Self, Failed> {
+    ) -> Result<(Self, Layout), Failed> {
         let args = match args.try_into_array() {
             Ok([class, position, shift, layout]) => {
                 let class = class.eval(err);
                 let position = position.eval(err);
                 let shift = shift.eval(err);
-                return Self::from_all_args(
-                    class?, position?, shift?, layout, err
-                )
+                return Ok((
+                    Self::from_all_args(
+                        class?, position?, shift?, err
+                    )?,
+                    label::layout_from_expr(layout, err)?,
+                ))
             },
             Err(args) => args
         };
@@ -825,9 +923,12 @@ impl TextBoxArgs {
             Ok([class, position, layout]) => {
                 let class = class.eval(err);
                 let position = position.eval(err);
-                return Self::from_all_args(
-                    class?, position?, Default::default(), layout, err
-                )
+                return Ok((
+                    Self::from_all_args(
+                        class?, position?, Default::default(), err
+                    )?,
+                    label::layout_from_expr(layout, err)?,
+                ))
             },
             Err(args) => args
         };
@@ -836,11 +937,48 @@ impl TextBoxArgs {
         Err(Failed)
     }
 
+    fn double_from_args(
+        args: ArgumentList, err: &mut EvalErrors
+    ) -> Result<(Self, Layout, Layout), Failed> {
+        let args = match args.try_into_array() {
+            Ok([class, position, shift, l1, l2]) => {
+                let class = class.eval(err);
+                let position = position.eval(err);
+                let shift = shift.eval(err);
+                return Ok((
+                    Self::from_all_args(
+                        class?, position?, shift?, err
+                    )?,
+                    label::layout_from_expr(l1, err)?,
+                    label::layout_from_expr(l2, err)?,
+                ))
+            },
+            Err(args) => args
+        };
+
+        let args = match args.try_into_array() {
+            Ok([class, position, l1, l2]) => {
+                let class = class.eval(err);
+                let position = position.eval(err);
+                return Ok((
+                    Self::from_all_args(
+                        class?, position?, Default::default(), err
+                    )?,
+                    label::layout_from_expr(l1, err)?,
+                    label::layout_from_expr(l2, err)?,
+                ))
+            },
+            Err(args) => args
+        };
+
+        err.add(args.pos(), "expected 4 or 5 arguments");
+        Err(Failed)
+    }
+
     fn from_all_args(
         mut class: SymbolSet,
         position: Position,
         shift: (Distance, Distance),
-        text: Expression,
         err: &mut EvalErrors,
     ) -> Result<Self, Failed> {
         // :left or :right
@@ -872,10 +1010,7 @@ impl TextBoxArgs {
         let double = class.take("double");
         class.check_exhausted(err)?;
 
-        // Create the layout.
-        let layout = label::layout_from_expr(text, err)?;
-
-        Ok(Self { left, anchor, properties, double, position, shift, layout })
+        Ok(Self { left, anchor, properties, double, position, shift })
     }
 
 }
