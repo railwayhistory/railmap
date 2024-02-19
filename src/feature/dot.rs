@@ -3,12 +3,12 @@
 use femtomap::world;
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
 use femtomap::path::Position;
-use femtomap::render::{Canvas, LineWidth, Operator};
-use kurbo::Circle;
+use femtomap::render::{Canvas, Color, LineWidth, Operator};
+use kurbo::{Circle, Point};
 use crate::class::Railway;
 use crate::import::eval::{Scope, ScopeExt};
 use crate::style::Style;
-use super::{AnyShape, Category, Group, Feature};
+use super::{AnyShape, Category, Group, Feature, Shape, Stage};
 
 
 //------------ DotMarker -----------------------------------------------------
@@ -108,43 +108,6 @@ impl DotMarker {
     pub fn class(&self) -> &Railway {
         &self.class
     }
-
-    pub fn render(&self, style: &Style, canvas: &mut Canvas) {
-        let (point, _) = self.position.resolve(style);
-        let radius = self.size.radius() * style.units().dt;
-        let sp = style.units().sp;
-
-        if self.casing {
-            let mut sketch = canvas.sketch();
-            sketch.apply(
-                Circle::new(point, radius + 2.5 * sp)
-            );
-            sketch.apply(Operator::DestinationOut);
-            sketch.fill();
-        }
-
-        match self.inner {
-            Inner::Fill => {
-                canvas.sketch().apply(
-                    Circle::new(point, radius)
-                ).apply(
-                    style.primary_marker_color(&self.class)
-                ).fill();
-            }
-            Inner::Stroke => {
-                canvas.sketch().apply(
-                    Circle::new(point, radius - 1.5 * sp)
-                ).apply(
-                    style.primary_marker_color(
-                        &self.class
-                    )
-                ).apply(
-                    LineWidth(3. * sp)
-                ).stroke();
-            }
-            Inner::None => { }
-        }
-    }
 }
 
 impl Feature for DotMarker {
@@ -157,11 +120,68 @@ impl Feature for DotMarker {
     }
 
     fn shape(
-        &self, _style: &Style, _canvas: &Canvas
+        &self, style: &Style, _canvas: &Canvas
     ) -> AnyShape {
-        AnyShape::single_stage(|style: &Style, canvas: &mut Canvas| {
-            self.render(style, canvas)
-        })
+        DotShape {
+            feature: self,
+            center: self.position.resolve(style).0
+        }.into()
+    }
+}
+
+
+//------------ Shape ---------------------------------------------------------
+
+struct DotShape<'a> {
+    feature: &'a DotMarker,
+    center: Point,
+}
+
+impl<'a> Shape<'a> for DotShape<'a> {
+    fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
+        match stage {
+            Stage::MarkerCasing => {
+                if self.feature.casing {
+                    let mut sketch = canvas.sketch();
+                    sketch.apply(
+                        Circle::new(
+                            self.center,
+                            self.feature.size.radius(style)
+                                + 0.5 * style.units().sp
+                        )
+                    );
+                    //sketch.apply(Operator::DestinationOut);
+                    sketch.apply(Color::WHITE);
+                    sketch.fill();
+                }
+            }
+            Stage::MarkerBase => {
+                let radius = self.feature.size.radius(style);
+                let sp = style.units().sp;
+                match self.feature.inner {
+                    Inner::Fill => {
+                        canvas.sketch().apply(
+                            Circle::new(self.center, radius)
+                        ).apply(
+                            style.primary_marker_color(&self.feature.class)
+                        ).fill();
+                    }
+                    Inner::Stroke => {
+                        canvas.sketch().apply(
+                            Circle::new(self.center, radius - 0.3 * sp)
+                        ).apply(
+                            style.primary_marker_color(
+                                &self.feature.class
+                            )
+                        ).apply(
+                            LineWidth(0.6 * sp)
+                        ).stroke();
+                    }
+                    Inner::None => { }
+                }
+            }
+            _ => { }
+        }
     }
 }
 
@@ -193,8 +213,8 @@ impl Size {
         }
     }
 
-    fn radius(self) -> f64 {
-        match self {
+    fn radius(self, style: &Style) -> f64 {
+        style.units().dt * match self {
             Self::Small => 0.5,
             Self::Medium => 0.7,
             Self::Large => 1.0,

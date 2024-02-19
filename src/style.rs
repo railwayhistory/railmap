@@ -171,9 +171,9 @@ impl Units {
     /// Creates the value for detail level 4.
     fn d4() -> Self {
         Self {
-            line_width: 1.1,
-            other_width: 0.8,
-            mark_width: 0.8,
+            line_width: 0.8,
+            other_width: 0.7,
+            mark_width: 0.5,
             guide_width: 0.3,
             border_width: 0.6,
             .. Self::standard(0.6 * MM, 2.4 * MM, 2.25 * MM)
@@ -194,7 +194,7 @@ impl Units {
             seg: 6. * dt,
             sw: sw,
             sh: sh,
-            sp: 0.05 * sw,
+            sp: 1.0,
             .. Default::default()
         }
     }
