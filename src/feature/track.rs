@@ -742,11 +742,14 @@ impl<'a> ContourShape4<'a> {
         })
     }
 
-    fn will_have_inside(class: &TrackClass) -> bool {
+    fn will_have_inside(_class: &TrackClass) -> bool {
+        false
+        /*
         if !class.class.is_open() {
             return false
         }
         matches!(class.class.pax(), Pax::None | Pax::Heritage)
+            */
     }
 
     fn render_inside(&self, style: &Style, canvas: &mut Sketch) {

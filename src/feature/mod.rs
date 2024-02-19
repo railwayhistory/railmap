@@ -159,6 +159,12 @@ pub enum Stage {
     ///
     /// These needs to be drawn last so they can paint over the insides.
     Base,
+
+    /// The casing for markers.
+    MarkerCasing,
+
+    /// The base for markers.
+    MarkerBase,
 }
 
 impl IntoIterator for Stage {
@@ -185,7 +191,9 @@ impl Iterator for StageIter {
                 Stage::Casing => Some(Stage::InsideBase),
                 Stage::InsideBase => Some(Stage::Inside),
                 Stage::Inside => Some(Stage::Base),
-                Stage::Base => None,
+                Stage::Base => Some(Stage::MarkerCasing),
+                Stage::MarkerCasing => Some(Stage::MarkerBase),
+                Stage::MarkerBase => None,
             };
             self.0 = next;
         }
