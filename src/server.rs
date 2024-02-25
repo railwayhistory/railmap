@@ -6,27 +6,24 @@ use hyper::{Body, Request, Response};
 use hyper::body::Bytes;
 use hyper::service::{make_service_fn, service_fn};
 use lru::LruCache;
-use crate::railway::colors::ColorSet;
-use crate::railway::feature::Store;
-use crate::tile::{Tile, TileId};
+use crate::railway;
+use crate::tile::TileId;
 
 
 #[derive(Clone)]
 pub struct Server {
-    features: Arc<Store>,
+    railway: Arc<railway::Map>,
     cache: Arc<Mutex<LruCache<TileId, Bytes>>>,
-    colors: ColorSet,
 }
 
 
 impl Server {
-    pub fn new(features: Store) -> Self {
+    pub fn new(railway: railway::Map) -> Self {
         Server {
-            features: Arc::new(features),
+            railway: Arc::new(railway),
             cache: Arc::new(Mutex::new(
                 LruCache::new(NonZeroUsize::new(10_000).unwrap())
             )),
-            colors: Default::default(),
         }
     }
 }
@@ -154,9 +151,7 @@ impl Server {
         let body = match cached {
             Some(bytes) => bytes.into(),
             None => {
-                let bytes: Bytes = Tile::new(tile.clone()).render(
-                    &self.features, &self.colors,
-                ).into();
+                let bytes: Bytes = tile.render(&self.railway).into();
                 self.cache.lock().unwrap().put(tile.clone(), bytes.clone());
                 bytes.into()
             }

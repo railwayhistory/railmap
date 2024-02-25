@@ -8,6 +8,7 @@ use crate::tile::TileId;
 use super::class;
 use super::colors::{Colors, ColorSet};
 use super::import::units::MM;
+use super::map::LayerId;
 
 // This module is organized slightly backwards: All the tweakable stuff is up
 // top and the actual `Style` type is way at the bottom.
@@ -299,12 +300,12 @@ pub struct Style {
 }
 
 impl Style {
-    pub fn new(id: &TileId, colors: &ColorSet) -> Self {
-        let zoom = ZOOM[usize::from(id.zoom)];
-        let canvas_bp = id.format.canvas_bp() * zoom.mag;
+    pub fn new(layer_id: LayerId, tile_id: &TileId, colors: &ColorSet) -> Self {
+        let zoom = ZOOM[usize::from(tile_id.zoom)];
+        let canvas_bp = tile_id.format.canvas_bp() * zoom.mag;
         let units = Units::new(zoom.detail, canvas_bp);
-        let equator_scale = id.scale();
-        let style_id = id.layer.style_id();
+        let equator_scale = tile_id.scale();
+        let style_id = layer_id.style_id();
 
         Self {
             store_scale: zoom.store_scale,
@@ -315,8 +316,8 @@ impl Style {
             colors: style_id.colors(colors),
             transform: TranslateScale::new(
                 Vec2::new(
-                    -id.nw().x * equator_scale,
-                    -id.nw().y * equator_scale
+                    -tile_id.nw().x * equator_scale,
+                    -tile_id.nw().y * equator_scale
                 ),
                 equator_scale
             ),
