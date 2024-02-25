@@ -265,6 +265,8 @@ pub trait ScopeExt {
     fn layer(&self) -> i16;
 
     fn railway(&self) -> Railway;
+
+    fn opt_railway(&self) -> Option<&Railway>;
 }
 
 impl<'s> ScopeExt for Scope<'s> {
@@ -299,6 +301,10 @@ impl<'s> ScopeExt for Scope<'s> {
 
     fn railway(&self) -> Railway {
         RenderParams::railway(self).cloned().unwrap_or_default()
+    }
+
+    fn opt_railway(&self) -> Option<&Railway> {
+        RenderParams::railway(self)
     }
 }
 

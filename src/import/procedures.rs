@@ -5,7 +5,7 @@ use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
 use femtomap::layout::Align;
 use femtomap::path::{Distance, Edge, Position, Trace};
 use crate::class::Railway;
-use crate::feature::label;
+use crate::feature::{label, marker};
 use crate::feature::{FeatureSetBuilder, StoreBuilder};
 use crate::feature::border::BorderContour;
 use crate::feature::area::{AreaContour, PlatformContour};
@@ -14,7 +14,6 @@ use crate::feature::guide::GuideContour;
 use crate::feature::label::{
     Anchor, FontSize, Label, Layout, LayoutProperties, TextAnchor,
 };
-use crate::feature::marker::StandardMarker;
 use crate::feature::track::{TrackCasing, TrackClass, TrackContour};
 use super::units;
 use super::eval::{ArgumentList, Scope, ScopeExt};
@@ -394,7 +393,7 @@ const PROCEDURES: &[(
                     );
                 }
                 None => {
-                    let marker = StandardMarker::from_arg(
+                    let marker = marker::from_args(
                         class, position, scope, err
                     )?;
                     store.railway.insert(

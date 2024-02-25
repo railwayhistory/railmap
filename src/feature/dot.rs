@@ -3,7 +3,7 @@
 use femtomap::world;
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
 use femtomap::path::Position;
-use femtomap::render::{Canvas, Color, LineWidth, Operator};
+use femtomap::render::{Canvas, Color, LineWidth};
 use kurbo::{Circle, Point};
 use crate::class::Railway;
 use crate::import::eval::{Scope, ScopeExt};
@@ -86,7 +86,7 @@ impl DotMarker {
             position,
             class: scope.railway(),
             size: Size::default(),
-            inner: Inner::default(),
+            inner: Inner::from_scope(scope),
             casing: true
         })
     }
@@ -246,6 +246,20 @@ impl Inner {
         }
         else if class.status().is_open() && !class.pax().is_full() {
             Inner::Stroke
+        }
+        else {
+            Inner::Fill
+        }
+    }
+
+    fn from_scope(scope: &Scope) -> Self {
+        if let Some(class) = scope.opt_railway() {
+            if class.status().is_open() && !class.pax().is_full() {
+                Inner::Stroke
+            }
+            else {
+                Inner::Fill
+            }
         }
         else {
             Inner::Fill
