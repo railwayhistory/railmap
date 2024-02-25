@@ -3,8 +3,8 @@
 use femtomap::world;
 use femtomap::path::Trace;
 use femtomap::render::Canvas;
-use crate::class::Railway;
-use crate::style::Style;
+use crate::railway::class::Railway;
+use crate::railway::style::Style;
 use super::{AnyShape, Category, Group, Feature};
 
 //------------ AreaContour ---------------------------------------------------

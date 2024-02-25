@@ -1,7 +1,7 @@
 //! The coloring rules for the electrification map.
 
 use femtomap::render::Color;
-use crate::class;
+use crate::railway::class;
 
 //------------ Colors --------------------------------------------------------
 

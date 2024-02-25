@@ -4,9 +4,9 @@ use femtomap::world;
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
 use femtomap::path::Trace;
 use femtomap::render::{Canvas, DashPattern, Color, Outline, LineWidth};
-use crate::class;
-use crate::import::eval::Expression;
-use crate::style::Style;
+use crate::railway::class;
+use crate::railway::import::eval::Expression;
+use crate::railway::style::Style;
 use super::{AnyShape, Category, Group, Feature};
 
 //------------ Configuration -------------------------------------------------

@@ -1,11 +1,8 @@
 #![allow(dead_code)]
 use std::{fmt, ops};
 use std::str::FromStr;
-use femtomap::render::Canvas;
-use kurbo::{Point, Rect};
-use crate::colors::ColorSet;
-use crate::feature::{FeatureSet, Stage, Store};
-use crate::style::{Style, StyleId};
+use kurbo::Point;
+use crate::railway;
 
 
 //------------ Configurable Constants ----------------------------------------
@@ -14,78 +11,6 @@ use crate::style::{Style, StyleId};
 ///
 /// This **must** be less than 32 or stuff will break.
 const MAX_ZOOM: u8 = 20;
-
-
-//------------ Tile ----------------------------------------------------------
-
-pub struct Tile {
-    id: TileId,
-}
-
-impl Tile {
-    pub fn new(id: TileId) -> Self {
-        Tile { id }
-    }
-
-    pub fn content_type(&self) -> &'static str {
-        self.id.content_type()
-    }
-
-    pub fn render(
-        &mut self,
-        features: &Store,
-        colors: &ColorSet,
-    ) -> Vec<u8> {
-        let surface = Surface::new(self.id.format);
-        self.render_surface(&surface, features, colors);
-        surface.finalize()
-    }
-
-    fn render_surface(
-        &mut self,
-        surface: &Surface,
-        features: &Store,
-        colors: &ColorSet,
-    ) {
-        let style = Style::new(&self.id, colors);
-        let mut canvas = Canvas::new(surface);
-        let size = self.id.format.size();
-        canvas.set_clip(Rect::new(0., 0., size, size));
-        let shapes = self.id.layer.features(features).shape(
-            style.store_scale(),
-            self.feature_bounds(&style).into(),
-            &style, &canvas,
-        );
-
-        for group in shapes.layer_groups() {
-            for stage in Stage::default() {
-                group.iter().for_each(|shape| {
-                    shape.shape().render(stage, &style, &mut canvas)
-                });
-            }
-        }
-    }
-
-    fn feature_bounds(&self, style: &Style) -> Rect {
-        let size = self.id.format.size();
-        let scale = size * self.id.n();
-        let feature_size = Point::new(size / scale, size / scale);
-        let nw = self.id.nw();
-
-        let correct = style.bounds_correction();
-        let correct = Point::new(
-            feature_size.x * correct,
-            feature_size.y * correct,
-        );
-
-        Rect::new(
-            nw.x - correct.x,
-            nw.y - correct.y,
-            nw.x + feature_size.x + correct.x,
-            nw.y + feature_size.y + correct.y,
-        )
-    }
-}
 
 
 //------------ TileId --------------------------------------------------------
@@ -185,6 +110,12 @@ impl TileId {
         )
     }
     */
+
+    pub fn render(self, map: &railway::Map) -> Vec<u8> {
+        let surface = Surface::new(self.format);
+        let _ = map.render(self, &surface);
+        surface.finalize()
+    }
 }
 
 impl fmt::Display for TileId {
@@ -198,56 +129,14 @@ impl fmt::Display for TileId {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum LayerId {
-    /// Electrification base map.
-    El,
-
-    /// Electrification line number map.
-    ElNum,
-
-    /// Passenger base map.
-    Pax,
-
-    /// Passenger timetable number map.
-    PaxNum,
-
-    /// Border map.
-    Border,
-}
-
-impl LayerId {
-    pub fn style_id(self) -> StyleId {
-        use self::LayerId::*;
-
-        match self {
-            El | ElNum | Border => StyleId::El,
-            Pax | PaxNum => StyleId::Pax
-        }
-    }
-
-    pub fn features(self, store: &Store) -> &FeatureSet {
-        use self::LayerId::*;
-
-        match self {
-            El | Pax => &store.railway,
-            ElNum => &store.line_labels,
-            PaxNum => &store.tt_labels,
-            Border => &store.borders,
-        }
-    }
+    Railway(railway::LayerId),
 }
 
 impl FromStr for LayerId {
     type Err = TileIdError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "el" => Ok(LayerId::El),
-            "el-num" => Ok(LayerId::ElNum),
-            "pax" => Ok(LayerId::Pax),
-            "pax-num" => Ok(LayerId::PaxNum),
-            "border" => Ok(LayerId::Border),
-            _ => Err(TileIdError)
-        }
+        railway::LayerId::from_str(s).map(LayerId::Railway)
     }
 }
 

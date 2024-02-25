@@ -5,9 +5,9 @@ use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
 use femtomap::path::Position;
 use femtomap::render::{Canvas, Color, LineWidth};
 use kurbo::{Circle, Point};
-use crate::class::Railway;
-use crate::import::eval::{Scope, ScopeExt};
-use crate::style::Style;
+use crate::railway::class::Railway;
+use crate::railway::import::eval::{Scope, ScopeExt};
+use crate::railway::style::Style;
 use super::{AnyShape, Category, Group, Feature, Shape, Stage};
 
 

@@ -10,10 +10,10 @@ use femtomap::render::{
     Operator, Sketch,
 };
 use kurbo::Vec2;
-use crate::import::eval;
-use crate::import::eval::{Custom, Expression, Scope};
-use crate::class::Railway;
-use crate::style::Style;
+use crate::railway::import::eval;
+use crate::railway::import::eval::{Custom, Expression, Scope};
+use crate::railway::class::Railway;
+use crate::railway::style::Style;
 use super::{AnyShape, Category, Group, Feature, Stage};
 
 

@@ -1,7 +1,7 @@
 //! Coloring rules.
 
 use femtomap::render::Color;
-use crate::class;
+use super::class;
 
 //------------ Colors for individual styles ----------------------------------
 

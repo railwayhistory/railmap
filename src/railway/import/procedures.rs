@@ -4,17 +4,17 @@ use femtomap::import::ast::Pos;
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
 use femtomap::layout::Align;
 use femtomap::path::{Distance, Edge, Position, Trace};
-use crate::class::Railway;
-use crate::feature::{label, marker};
-use crate::feature::{FeatureSetBuilder, StoreBuilder};
-use crate::feature::border::BorderContour;
-use crate::feature::area::{AreaContour, PlatformContour};
-use crate::feature::dot::DotMarker;
-use crate::feature::guide::GuideContour;
-use crate::feature::label::{
+use crate::railway::class::Railway;
+use crate::railway::feature::{label, marker};
+use crate::railway::feature::{FeatureSetBuilder, StoreBuilder};
+use crate::railway::feature::border::BorderContour;
+use crate::railway::feature::area::{AreaContour, PlatformContour};
+use crate::railway::feature::dot::DotMarker;
+use crate::railway::feature::guide::GuideContour;
+use crate::railway::feature::label::{
     Anchor, FontSize, Label, Layout, LayoutProperties, TextAnchor,
 };
-use crate::feature::track::{TrackCasing, TrackClass, TrackContour};
+use crate::railway::feature::track::{TrackCasing, TrackClass, TrackContour};
 use super::units;
 use super::eval::{ArgumentList, Scope, ScopeExt};
 

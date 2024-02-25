@@ -11,7 +11,7 @@
 #![allow(dead_code)]
 
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
-use crate::import::eval::{Expression, Scope, ScopeExt};
+use super::import::eval::{Expression, Scope, ScopeExt};
 
 
 //------------ Railway -------------------------------------------------------
