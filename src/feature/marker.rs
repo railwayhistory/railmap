@@ -23,10 +23,22 @@ use lazy_static::lazy_static;
 use crate::class::Railway;
 use crate::import::eval::Scope;
 use crate::style::{Units, Style};
-use super::{AnyShape, Category, Feature};
+use super::{AnyFeature, AnyShape, Category, Feature};
 
 
 const CASING_COLOR: Color = Color::rgba(1., 1., 1., 0.7);
+
+
+//------------ from_args -----------------------------------------------------
+
+pub fn from_args(
+    symbols: SymbolSet,
+    position: Position,
+    scope: &Scope,
+    err: &mut EvalErrors,
+) -> Result<AnyFeature, Failed> {
+    StandardMarker::from_arg(symbols, position, scope, err).map(Into::into)
+}
 
 
 //------------ StandardMarker ------------------------------------------------
@@ -69,7 +81,7 @@ impl StandardMarker {
                 return Err(Failed)
             }
         };
-        let marker = match MARKERS.get(marker.as_str()) {
+        let marker = match OLD_MARKERS.get(marker.as_str()) {
             Some(marker) => *marker,
             None => {
                 err.add(pos, "missing marker");
@@ -166,7 +178,7 @@ macro_rules! markers {
     )
     => {
         lazy_static! {
-            static ref MARKERS: HashMap<&'static str, Marker> = {
+            static ref OLD_MARKERS: HashMap<&'static str, Marker> = {
                 let mut set = HashMap::new();
                 $(
                     let marker = make_marker!( $( $closure, )* );
@@ -186,7 +198,8 @@ macro_rules! make_marker {
     };
     ( $large:expr, $small:expr, ) => {
         Marker { large: &$large, small: &$small }
-    }
+    };
+
 }
 
 
@@ -352,21 +365,10 @@ markers! {
 
     ("de.bf", "de.kbf", "station") => (
         |canvas: &mut Group, u: Units| {
-            let hsp = 0.5 * u.sp;
-            canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
-            canvas.line_to(-0.5 * u.sw + hsp, u.sh - hsp);
-            canvas.line_to(0.5 * u.sw - hsp, u.sh - hsp);
-            canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.sp);
-            canvas.close_path();
-            canvas.apply_line_width(u.sp);
-            canvas.stroke();
-
-            let hsp = 2. * u.sp;
-            canvas.new_path();
-            canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
-            canvas.line_to(-0.5 * u.sw + hsp, u.sh - hsp);
-            canvas.line_to(0.5 * u.sw - hsp, u.sh - hsp);
-            canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.sp);
+            canvas.move_to(-0.5 * u.sw, 2. * u.sp);
+            canvas.line_to(-0.5 * u.sw, u.sh);
+            canvas.line_to(0.5 * u.sw, u.sh);
+            canvas.line_to(0.5 * u.sw, 2. * u.sp);
             canvas.close_path();
             canvas.fill()
         },
@@ -665,6 +667,16 @@ markers! {
 
     ("de.gbf", "goodsstation") => (
         |canvas: &mut Group, u: Units| {
+            canvas.move_to(-0.5 * u.sw, 2. * u.sp);
+            canvas.line_to(-0.5 * u.sw, u.sh - 2. * u.sp);
+            canvas.line_to(0., u.sh);
+            canvas.line_to(0.5 * u.sw, u.sh - 2. * u.sp);
+            canvas.line_to(0.5 * u.sw, 2. * u.sp);
+            canvas.close_path();
+            canvas.fill();
+
+
+            /*
             let hsp = 0.5 * u.sp;
             canvas.move_to(-0.5 * u.sw + hsp, 2.5 * u.sp);
             canvas.line_to(-0.5 * u.sw + hsp, 0.7 * u.sh);
@@ -684,6 +696,7 @@ markers! {
             canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.sp);
             canvas.close_path();
             canvas.fill()
+            */
         },
         |canvas: &mut Group, u: Units| {
             let hsp = 0.5 * u.sp;
