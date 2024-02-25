@@ -3,9 +3,9 @@ use std::{fmt, ops};
 use std::str::FromStr;
 use femtomap::render::Canvas;
 use kurbo::{Point, Rect};
-use crate::colors::ColorSet;
-use crate::feature::{FeatureSet, Stage, Store};
-use crate::style::{Style, StyleId};
+use crate::railway::colors::ColorSet;
+use crate::railway::feature::{FeatureSet, Stage, Store};
+use crate::railway::style::{Style, StyleId};
 
 
 //------------ Configurable Constants ----------------------------------------

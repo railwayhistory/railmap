@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use femtomap::import::eval::{Builtin as _, LoadErrors};
 use femtomap::import::path::{ImportPathSet, PathSetError};
 use crate::config::Region;
-use crate::feature::{Store, StoreBuilder};
+use crate::railway::feature::{Store, StoreBuilder};
 use super::eval::Builtin;
 
 

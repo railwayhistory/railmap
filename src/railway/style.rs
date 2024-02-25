@@ -4,10 +4,10 @@ use std::ops;
 use femtomap::path::{MapDistance, Transform};
 use femtomap::render::Color;
 use kurbo::{TranslateScale, Vec2};
-use crate::class;
-use crate::colors::{Colors, ColorSet};
-use crate::import::units::MM;
 use crate::tile::TileId;
+use super::class;
+use super::colors::{Colors, ColorSet};
+use super::import::units::MM;
 
 // This module is organized slightly backwards: All the tweakable stuff is up
 // top and the actual `Style` type is way at the bottom.

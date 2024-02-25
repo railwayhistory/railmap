@@ -20,9 +20,9 @@ use femtomap::render::{
     Canvas, Color, DashPattern, Group, LineCap, Matrix, Operator
 };
 use lazy_static::lazy_static;
-use crate::class::Railway;
-use crate::import::eval::Scope;
-use crate::style::{Units, Style};
+use crate::railway::class::Railway;
+use crate::railway::import::eval::Scope;
+use crate::railway::style::{Units, Style};
 use super::{AnyFeature, AnyShape, Category, Feature};
 
 

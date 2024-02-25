@@ -6,9 +6,9 @@ use femtomap::import::ast::Pos;
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
 use femtomap::import::path::{ImportPathSet};
 use femtomap::path::Distance;
-use crate::class::Railway;
-use crate::feature::StoreBuilder;
-use crate::feature::label::Layout;
+use crate::railway::class::Railway;
+use crate::railway::feature::StoreBuilder;
+use crate::railway::feature::label::Layout;
 use super::{functions, procedures, units};
 
 pub type ArgumentList<'s> = eval::ArgumentList<'s, Builtin>;

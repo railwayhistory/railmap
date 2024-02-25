@@ -44,9 +44,9 @@ use femtomap::render::{
     Canvas, Color, DashPattern, Group, LineWidth, Outline, Sketch,
 };
 use kurbo::{PathEl, Vec2};
-use crate::import::eval::{Expression, Scope};
-use crate::class::{Railway, Pax};
-use crate::style::Style;
+use crate::railway::import::eval::{Expression, Scope};
+use crate::railway::class::{Railway, Pax};
+use crate::railway::style::Style;
 use super::{AnyShape, Category, Feature, Shape, Stage};
 
 

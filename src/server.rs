@@ -6,8 +6,8 @@ use hyper::{Body, Request, Response};
 use hyper::body::Bytes;
 use hyper::service::{make_service_fn, service_fn};
 use lru::LruCache;
-use crate::colors::ColorSet;
-use crate::feature::Store;
+use crate::railway::colors::ColorSet;
+use crate::railway::feature::Store;
 use crate::tile::{Tile, TileId};
 
 

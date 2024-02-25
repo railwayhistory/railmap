@@ -1,7 +1,7 @@
 use femtomap::render::Canvas;
 use femtomap::world::Rect;
-use crate::class;
-use crate::style::Style;
+use crate::railway::class;
+use crate::railway::style::Style;
 
 
 //------------ Submodules with actual features -------------------------------
