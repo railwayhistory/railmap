@@ -409,9 +409,13 @@ const PROCEDURES: &[(
 
     // Draws a platform.
     //
-    ("platform", &|pos, args, scope, err| {
-        let [class, trace] = args.into_array(err)?;
-        let class = Railway::from_arg(class, scope, err)?;
+    ("platform", &|pos, mut args, scope, err| {
+        let mut class_symbols = args.take_first_if_matches(
+            err
+        )?.unwrap_or_default();
+        let [trace] = args.into_array(err)?;
+        let class = Railway::from_symbols(&mut class_symbols, scope);
+        class_symbols.check_exhausted(err)?;
         let trace = trace.eval(err)?;
         scope.builtin().with_store(|store| {
             store.railway.insert(
