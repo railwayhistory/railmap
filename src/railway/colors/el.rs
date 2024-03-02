@@ -40,6 +40,15 @@ pub struct Colors {
     /// The color for gone railway.
     gone: Color,
 
+    /// The color for labels on closed railways .
+    closed_label: Color,
+
+    /// The color for labels on removed railways.
+    removed_label: Color,
+
+    /// The color for labels on gone railways.
+    gone_label: Color,
+
     /// The color for unknown things.
     toxic: Color,
 }
@@ -137,7 +146,14 @@ impl Colors {
 
     /// Returns the color for a station label.
     pub fn label_color(&self, class: &class::Railway) -> Color {
-        self.track_color(class)
+        match class.status() {
+            class::Status::Closed => self.closed_label,
+            class::Status::Removed | class::Status::Explanned => {
+                self.removed_label
+            }
+            class::Status::Gone => self.gone_label,
+            _ => self.track_color(class)
+        }
     }
 
     /// Returns the primary color for a marker.
@@ -160,6 +176,9 @@ impl Default for Colors {
             closed:  Color::grey(0.550),
             removed: Color::grey(0.650),
             gone:    Color::grey(0.850),
+            closed_label:  Color::grey(0.250),
+            removed_label: Color::grey(0.350),
+            gone_label:    Color::grey(0.450),
             toxic:   Color::rgb(0.824, 0.824, 0.0),
         }
     }
