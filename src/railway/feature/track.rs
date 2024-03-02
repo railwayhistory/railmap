@@ -326,9 +326,9 @@ impl<'a> Shape<'a> for ContourShape2<'a> {
             Stage::Casing => {
                 if self.casing {
                     canvas.sketch().apply(
-                        Color::rgba(1., 1., 1., 0.7)
+                        Color::rgba(1., 1., 1., 0.8)
                     ).apply(
-                        LineWidth(1.5 * self.width)
+                        LineWidth(1.6 * self.width)
                     ).apply(
                         &self.trace
                     ).stroke();
