@@ -67,6 +67,9 @@ impl Railway {
         if let Some(status) = Status::from_symbols(symbols) {
             self.status = Some(status)
         }
+        if let Some(surface) = Surface::from_symbols(symbols) {
+            self.surface = Some(surface)
+        }
         if let Some(cat) = ElectricCat::from_symbols(symbols) {
             self.cat = Some(cat)
         }
