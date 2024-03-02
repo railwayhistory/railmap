@@ -262,6 +262,8 @@ pub trait ScopeExt {
         &self, pos: Pos, err: &mut EvalErrors
     ) -> Result<(f64, f64), Failed>;
 
+    fn min_detail(&self) -> u8;
+
     fn layer(&self) -> i16;
 
     fn railway(&self) -> Railway;
@@ -292,7 +294,15 @@ impl<'s> ScopeExt for Scope<'s> {
                 Err(Failed)
             }
         }
-        
+    }
+
+    fn min_detail(&self) -> u8 {
+        if let Some((min, _)) = RenderParams::detail(self) {
+            min as u8
+        }
+        else {
+            0
+        }
     }
 
     fn layer(&self) -> i16 {

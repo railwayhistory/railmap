@@ -323,7 +323,7 @@ const PROCEDURES: &[(
     //   anchored.
     ("line_label", &|pos, args, scope, err| {
         let (args, layout) = TextBoxArgs::from_args(args, scope, err)?;
-        let (contour, label) = line_label(args, layout);
+        let (contour, label) = line_label(args, layout, scope);
         scope.builtin().with_store(|store| {
             store.line_labels.insert(
                 contour,
@@ -343,8 +343,8 @@ const PROCEDURES: &[(
         let (args, line_layout, tt_layout) = TextBoxArgs::double_from_args(
             args, scope, err
         )?;
-        let (l_contour, l_label) = line_label(args.clone(), line_layout);
-        let (tt_contour, tt_label) = line_label(args, tt_layout);
+        let (l_contour, l_label) = line_label(args.clone(), line_layout, scope);
+        let (tt_contour, tt_label) = line_label(args, tt_layout, scope);
         scope.builtin().with_store(|store| {
             store.line_labels.insert(
                 l_contour,
@@ -638,7 +638,7 @@ const PROCEDURES: &[(
     //   anchored.
     ("tt_label", &|pos, args, scope, err| {
         let (args, layout) = TextBoxArgs::from_args(args, scope, err)?;
-        let (contour, label) = line_label(args, layout);
+        let (contour, label) = line_label(args, layout, scope);
         scope.builtin().with_store(|store| {
             store.tt_labels.insert(
                 contour,
@@ -690,6 +690,7 @@ fn line_badge(
 fn line_label(
     mut args: TextBoxArgs,
     mut layout: Layout,
+    scope: &Scope,
 ) -> (GuideContour, label::Label) {
     // Get the positions for things.
     let pos1 = args.position.sideways(
@@ -703,21 +704,12 @@ fn line_label(
             },
         )
     );
+    let distance = if scope.min_detail() >= 3 { 4. }
+    else { 3. };
     let pos2 = args.position.sideways(
-        units::dt(if args.left { 3.0 } else { -3.0 })
+        units::dt(if args.left { distance } else { -distance })
     );
-    let pos3 = 3.0; /*{
-        use self::Anchor::*;
-
-        match anchor {
-            North | South => 3.0,
-            East | West => 3.5,
-            _ => 3.8,
-        }
-    };*/
-    let pos3 = args.position.sideways(
-        units::dt(if args.left { pos3 } else { -pos3 })
-    ).shift(args.shift);
+    let pos3 = pos2.clone().shift(args.shift);
 
     let (halign, valign) = args.anchor.into_aligns();
 
