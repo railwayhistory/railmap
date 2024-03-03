@@ -29,20 +29,22 @@ impl Colors {
 
     /// Returns the color for cat markings if they should be drawn.
     pub fn cat_color(&self, class: &class::Railway) -> Option<Color> {
-        class.cat().map(|cat| {
+        class.cat().and_then(|cat| {
             match cat.status {
-                class::ElectricStatus::Open => self.track_color(class),
-                class::ElectricStatus::Removed => self.closed,
+                class::ElectricStatus::None => None,
+                class::ElectricStatus::Open => Some(self.track_color(class)),
+                class::ElectricStatus::Removed => Some(self.closed),
             }
         })
     }
 
     /// Returns the color for third rail markings if they should be drawn.
     pub fn rail_color(&self, class: &class::Railway) -> Option<Color> {
-        class.rail().map(|rail| {
+        class.rail().and_then(|rail| {
             match rail.status {
-                class::ElectricStatus::Open => self.track_color(class),
-                class::ElectricStatus::Removed => self.closed,
+                class::ElectricStatus::None => None,
+                class::ElectricStatus::Open => Some(self.track_color(class)),
+                class::ElectricStatus::Removed => Some(self.closed),
             }
         })
     }

@@ -96,49 +96,53 @@ impl Colors {
         use self::class::VoltageGroup::*;
         use self::class::ElectricSystem::*;
 
-        class.cat().map(|cat| {
+        class.cat().and_then(|cat| {
             if class.category().is_tram() {
-                match cat.status {
-                    class::ElectricStatus::Open => return self.tram,
-                    class::ElectricStatus::Removed => return self.removed,
+                return match cat.status {
+                    class::ElectricStatus::None => None,
+                    class::ElectricStatus::Open => Some(self.tram),
+                    class::ElectricStatus::Removed => Some(self.removed),
                 }
             }
 
             match cat.status {
+                class::ElectricStatus::None => None,
                 class::ElectricStatus::Open => {
-                    match (cat.system, cat.voltage_group()) {
+                    Some(match (cat.system, cat.voltage_group()) {
                         (Some(Ac), High) => self.ac_high,
                         (Some(Ac), Low) => self.ac_low,
                         (Some(Dc), High) => self.dc_high,
                         (Some(Dc), Low) => self.dc_low,
                         _ => self.toxic,
-                    }
+                    })
                 }
-                class::ElectricStatus::Removed => self.removed,
+                class::ElectricStatus::Removed => Some(self.removed),
             }
         })
     }
 
     /// Returns the color for third rail markings if they should be drawn.
     pub fn rail_color(&self, class: &class::Railway) -> Option<Color> {
-        class.rail().map(|rail| {
+        class.rail().and_then(|rail| {
             if class.category().is_tram() {
                 match rail.status {
-                    class::ElectricStatus::Open => self.tram,
-                    class::ElectricStatus::Removed => self.removed,
+                    class::ElectricStatus::None => None,
+                    class::ElectricStatus::Open => Some(self.tram),
+                    class::ElectricStatus::Removed => Some(self.removed),
                 }
             }
             else {
                 match rail.status {
+                    class::ElectricStatus::None => None,
                     class::ElectricStatus::Open => {
                         if rail.fourth {
-                            self.four
+                            Some(self.four)
                         }
                         else {
-                            self.rail
+                            Some(self.rail)
                         }
                     }
-                    class::ElectricStatus::Removed => self.removed,
+                    class::ElectricStatus::Removed => Some(self.removed),
                 }
             }
         })

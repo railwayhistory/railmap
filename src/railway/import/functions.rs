@@ -64,7 +64,7 @@ const FUNCTIONS: &[(
     //     alignment, layout *[, layout]
     // )
     // ```
-    ("hbox", &|args, scope, _,  err| {
+    ("hbox", &|args, _scope, _,  err| {
         let ([align], layouts) = args.into_var_array::<1>(err)?;
         let mut align = align.eval(err)?;
         let halign = match label::halign_from_symbols(&mut align) {
@@ -81,8 +81,8 @@ const FUNCTIONS: &[(
                 return Err(Failed)
             }
         };
-        let mut properties = label::LayoutProperties::from_symbols(
-            &mut align, scope
+        let mut properties = label::LayoutProperties::from_symbols_only(
+            &mut align
         );
         if align.take("frame") {
             properties.set_layout_type(label::LayoutType::TextFrame);
@@ -152,10 +152,10 @@ const FUNCTIONS: &[(
     // ```text
     // span(font: symbol-set, text)
     // ```
-    ("span", &|args, scope, _, err| {
+    ("span", &|args, _scope, _, err| {
         let [properties, text] = args.into_array(err)?;
-        let properties = label::LayoutProperties::from_arg(
-            properties, scope, err
+        let properties = label::LayoutProperties::from_arg_only(
+            properties, err
         )?;
         Ok(Value::Custom(
             label::Layout::span(text.eval(err)?, properties).into()
@@ -169,7 +169,7 @@ const FUNCTIONS: &[(
     //     alignment, layout *[, layout]
     // )
     // ```
-    ("vbox", &|args, scope, _,  err| {
+    ("vbox", &|args, _scope, _,  err| {
         let ([align], layouts) = args.into_var_array::<1>(err)?;
         let mut align = align.eval(err)?;
         let halign = match label::halign_from_symbols(&mut align) {
@@ -186,8 +186,8 @@ const FUNCTIONS: &[(
                 return Err(Failed)
             }
         };
-        let mut properties = label::LayoutProperties::from_symbols(
-            &mut align, scope
+        let mut properties = label::LayoutProperties::from_symbols_only(
+            &mut align
         );
         if align.take("frame") {
             properties.set_layout_type(label::LayoutType::TextFrame);

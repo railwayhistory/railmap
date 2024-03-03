@@ -60,6 +60,16 @@ impl Railway {
         class
     }
 
+    pub fn from_symbols_only(symbols: &mut SymbolSet) -> Self {
+        let mut class = Self::default();
+        class.apply_symbols(symbols);
+        class
+    }
+
+    pub fn from_scope(scope: &Scope) -> Self {
+        scope.railway()
+    }
+
     fn apply_symbols(&mut self, symbols: &mut SymbolSet) {
         if let Some(category) = Category::from_symbols(symbols) {
             self.category = Some(category)
@@ -450,6 +460,13 @@ impl ElectricCat {
                 system: None,
             }
         }
+        else if symbols.take("nocat") {
+            return Some(ElectricCat {
+                status: ElectricStatus::None,
+                voltage: None,
+                system: None,
+            })
+        }
         else {
             return None
         };
@@ -546,6 +563,13 @@ impl ElectricRail {
                 fourth: true,
             }
         }
+        else if symbols.take("norail") {
+            return Some(ElectricRail {
+                status: ElectricStatus::None,
+                voltage: None,
+                fourth: false,
+            })
+        }
         else {
             return None
         };
@@ -587,6 +611,7 @@ impl ElectricRail {
 /// The status of the feature.
 #[derive(Clone, Copy, Debug)]
 pub enum ElectricStatus {
+    None,
     Open,
     Removed
 }

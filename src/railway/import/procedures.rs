@@ -797,7 +797,7 @@ impl BadgeArgs {
                 let layout = label::layout_from_expr(layout, err);
                 return Ok(Self {
                     linenum: false,
-                    properties: Default::default(),
+                    properties: label::LayoutProperties::from_scope(scope),
                     position: position?,
                     layout: layout?,
                 })

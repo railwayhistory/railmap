@@ -197,6 +197,13 @@ impl LayoutProperties {
         Self { class, .. Default::default() }
     }
 
+    pub fn from_scope(scope: &Scope) -> Self {
+        Self {
+            class: Railway::from_scope(scope),
+            .. Default::default()
+        }
+    }
+
     pub fn from_arg(
         arg: Expression,
         scope: &Scope,
@@ -204,6 +211,16 @@ impl LayoutProperties {
     ) -> Result<Self, Failed> {
         let mut symbols = arg.eval(err)?;
         let res = Self::from_symbols(&mut symbols, scope);
+        symbols.check_exhausted(err)?;
+        Ok(res)
+    }
+
+    pub fn from_arg_only(
+        arg: Expression,
+        err: &mut EvalErrors,
+    ) -> Result<Self, Failed> {
+        let mut symbols = arg.eval(err)?;
+        let res = Self::from_symbols_only(&mut symbols);
         symbols.check_exhausted(err)?;
         Ok(res)
     }
@@ -217,6 +234,18 @@ impl LayoutProperties {
             packed: None,
             layout_type: LayoutType::Normal,
             class: Railway::from_symbols(symbols, scope),
+        }
+    }
+
+    pub fn from_symbols_only(
+        symbols: &mut SymbolSet
+    ) -> Self {
+        Self {
+            font: Self::font_from_symbols(symbols),
+            size: FontSize::from_symbols(symbols),
+            packed: None,
+            layout_type: LayoutType::Normal,
+            class: Railway::from_symbols_only(symbols),
         }
     }
 
@@ -456,30 +485,15 @@ impl FontSize {
             Medium => 7.,
             Large => 9.,
             Xlarge => 11.,
-            Badge => 5.4,
-        };
-        /*
-        let base = if style.detail() >= 3.0 {
-            match self {
-                Xsmall => 5.,
-                Small => 6.,
-                Medium => 7.,
-                Large => 9.,
-                Xlarge => 11.,
-                Badge => 5.4,
-            }
-        }
-        else {
-            match self {
-                Xsmall => 5.,
-                Small => 6.,
-                Medium => 7.,
-                Large => 9.,
-                Xlarge => 11.,
-                Badge => 5.4,
+            Badge => {
+                if style.detail() >= 4 {
+                    6.2
+                }
+                else {
+                    5.4
+                }
             }
         };
-        */
         base * style.units().bp
     }
 
