@@ -704,8 +704,7 @@ fn line_label(
             },
         )
     );
-    let distance = if scope.min_detail() >= 3 { 4. }
-    else { 3. };
+    let distance = if scope.min_detail() >= 3 { 3.5 } else { 3. };
     let pos2 = args.position.sideways(
         units::dt(if args.left { distance } else { -distance })
     );
