@@ -179,9 +179,9 @@ impl Default for Colors {
             tram: Color::hex(TRAM).unwrap(),
             closed:  Color::grey(0.550),
             removed: Color::grey(0.650),
-            gone:    Color::grey(0.850),
-            closed_label:  Color::grey(0.250),
-            removed_label: Color::grey(0.350),
+            gone:    Color::grey(0.800),
+            closed_label:  Color::grey(0.350),
+            removed_label: Color::grey(0.400),
             gone_label:    Color::grey(0.450),
             toxic:   Color::rgb(0.824, 0.824, 0.0),
         }

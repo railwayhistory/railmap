@@ -5,11 +5,11 @@
 use femtomap::world;
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
 use femtomap::path::Trace;
-use femtomap::render::{Canvas, Color, LineWidth};
+use femtomap::render::{Canvas, LineWidth, Outline};
 use crate::railway::class::Railway;
 use crate::railway::import::eval::Scope;
 use crate::railway::style::Style;
-use super::{AnyShape, Category, Group, Feature};
+use super::{AnyShape, Category, Group, Feature, Shape, Stage};
 
 //------------ GuideContour --------------------------------------------------
 
@@ -54,22 +54,45 @@ impl Feature for GuideContour {
     }
 
     fn shape(
-        &self, _style: &Style, _canvas: &Canvas
+        &self, style: &Style, _canvas: &Canvas
     ) -> AnyShape {
-        AnyShape::single_stage(|style: &Style, canvas: &mut Canvas| {
-            let mut sketch = canvas.sketch();
-            sketch.apply(self.trace.iter_outline(style));
-            if self.casing {
-                sketch.apply(LineWidth(
-                    1.8 * style.units().guide_width
-                ));
-                sketch.apply(Color::rgba(1., 1., 1., 0.7));
+        GuideShape {
+            contour: self, trace: self.trace.outline(style)
+        }.into()
+    }
+}
+
+
+//------------ GuideShape ----------------------------------------------------
+
+struct GuideShape<'a> {
+    contour: &'a GuideContour,
+    trace: Outline,
+}
+
+impl<'a> Shape<'a> for GuideShape<'a> {
+    fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
+        match stage {
+            Stage::Casing => {
+                if self.contour.casing {
+                    let mut sketch = canvas.sketch();
+                    sketch.apply(&self.trace);
+                    sketch.apply(LineWidth(
+                        3. * style.units().guide_width
+                    ));
+                    sketch.apply(style.casing_color());
+                    sketch.stroke();
+                }
+            }
+            Stage::Base => {
+                let mut sketch = canvas.sketch();
+                sketch.apply(&self.trace);
+                sketch.apply(LineWidth(style.units().guide_width));
+                sketch.apply(style.label_color(&self.contour.class));
                 sketch.stroke();
             }
-            sketch.apply(LineWidth(style.units().guide_width));
-            sketch.apply(style.label_color(&self.class));
-            sketch.stroke();
-        })
+            _ => { }
+        }
     }
 }
 

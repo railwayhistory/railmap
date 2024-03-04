@@ -60,6 +60,10 @@ impl Colors {
             Colors::Pax(colors) => colors.primary_marker_color(class),
         }
     }
+
+    pub fn casing_color(&self) -> Color {
+        Color::rgba(1., 1., 1., 0.7)
+    }
 }
 
 

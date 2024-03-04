@@ -175,7 +175,7 @@ impl Units {
             line_width: 0.8,
             other_width: 0.7,
             mark_width: 0.5,
-            guide_width: 0.3,
+            guide_width: 0.5,
             border_width: 0.6,
             .. Self::standard(0.6 * MM, 2.4 * MM, 2.25 * MM)
         }
@@ -364,6 +364,10 @@ impl Style {
 
     pub fn primary_marker_color(&self, class: &class::Railway) -> Color {
         self.colors.primary_marker_color(class)
+    }
+
+    pub fn casing_color(&self) -> Color {
+        self.colors.casing_color()
     }
 
     pub fn bounds_correction(&self) -> f64 {
