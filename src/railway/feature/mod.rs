@@ -211,8 +211,8 @@ impl Iterator for StageIter {
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Category {
     Back = 0,
-    Track,
     Marker,
+    Track,
     Label,
 }
 
