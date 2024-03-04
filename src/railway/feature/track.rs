@@ -41,7 +41,7 @@ use femtomap::world;
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
 use femtomap::path::Trace;
 use femtomap::render::{
-    Canvas, Color, DashPattern, Group, LineWidth, Outline, Sketch,
+    Canvas, Color, DashPattern, Group, LineCap, LineWidth, Outline, Sketch,
 };
 use kurbo::{PathEl, Vec2};
 use crate::railway::import::eval::{Expression, Scope};
@@ -66,9 +66,6 @@ pub struct TrackClass {
 
     /// Should this track be combined with the underlying track?
     combined: bool,
-
-    /// Is this station track?
-    station: bool,
 }
 
 impl TrackClass {
@@ -91,7 +88,6 @@ impl TrackClass {
             left: Neighbor::left_from_symbols(symbols, tight),
             right: Neighbor::right_from_symbols(symbols, tight),
             combined: symbols.take("combined"),
-            station: symbols.take("station"),
         }
     }
 
@@ -388,7 +384,7 @@ impl<'a> ContourShape2<'a> {
         match (style.pax_only(), self.class.class.pax()) {
             (false, Pax::None) => { }
             (_, Pax::Heritage) => {
-                if self.class.station {
+                if self.class.class.station() {
                     return
                 }
                 canvas.apply(DashPattern::new(
@@ -504,13 +500,7 @@ impl<'a> Shape<'a> for ContourShape4<'a> {
         match stage {
             Stage::Casing => {
                 if self.casing {
-                    let mut canvas = canvas.sketch();
-                    canvas.apply(Color::rgba(1., 1., 1., 0.7));
-                    canvas.apply(LineWidth(
-                        1.2 * style.units().dt
-                    ));
-                    canvas.apply(&self.track);
-                    canvas.stroke();
+                    self.render_casing(style, &mut canvas.sketch());
                 }
             }
             Stage::InsideBase => {
@@ -534,9 +524,17 @@ impl<'a> Shape<'a> for ContourShape4<'a> {
 }
 
 impl<'a> ContourShape4<'a> {
+    fn render_casing(&self, style: &Style, canvas: &mut Sketch) {
+        self.render_track_casing(style, canvas);
+        if !self.class.class.station() {
+            self.render_electric_casing(style, canvas);
+            //self.render_gauge(style, canvas);
+        }
+    }
+
     fn render_base(&self, style: &Style, canvas: &mut Sketch) {
         self.render_track(style, canvas);
-        if !self.class.station {
+        if !self.class.class.station() {
             self.render_electric(style, canvas);
             self.render_gauge(style, canvas);
         }
@@ -581,6 +579,15 @@ impl<'a> ContourShape4<'a> {
         //}
     }
 
+    fn render_track_casing(&self, style: &Style, canvas: &mut Sketch) {
+        canvas.apply(style.casing_color());
+        canvas.apply(LineWidth(
+            1.2 * style.units().dt
+        ));
+        canvas.apply(&self.track);
+        canvas.stroke();
+    }
+
     /*
     fn render_tunnel(&self, style: &Style, canvas: &mut Sketch) {
         canvas.apply(Color::WHITE);
@@ -591,8 +598,17 @@ impl<'a> ContourShape4<'a> {
         canvas.stroke();
     }
     */
-
     fn render_electric(&self, style: &Style, canvas: &mut Sketch) {
+        self.render_electric_common(style, canvas, false)
+    }
+
+    fn render_electric_casing(&self, style: &Style, canvas: &mut Sketch) {
+        self.render_electric_common(style, canvas, true)
+    }
+
+    fn render_electric_common(
+        &self, style: &Style, canvas: &mut Sketch, casing: bool
+    ) {
         let seg = match self.seg {
             Some(seg) => seg,
             None => return
@@ -614,9 +630,15 @@ impl<'a> ContourShape4<'a> {
 
         match (cat_color, rail_color) {
             (Some(cat_color), None) => {
-
-                canvas.apply(LineWidth(style.units().mark_width));
-                canvas.apply(cat_color);
+                if casing {
+                    canvas.apply(LineWidth(style.units().mark_width * 2.));
+                    canvas.apply(LineCap::Round);
+                    canvas.apply(style.casing_color());
+                }
+                else {
+                    canvas.apply(LineWidth(style.units().mark_width));
+                    canvas.apply(cat_color);
+                }
                 self.track.iter_positions(
                     seg, Some(0.5 * seg)
                 ).for_each(|(pos, dir)| {
@@ -633,8 +655,15 @@ impl<'a> ContourShape4<'a> {
                 let skip = style.units().mark_width * 3.;
                 let seg = seg - skip;
 
-                canvas.apply(LineWidth(style.units().mark_width));
-                canvas.apply(rail_color);
+                if casing {
+                    canvas.apply(LineWidth(style.units().mark_width * 2.));
+                    canvas.apply(LineCap::Round);
+                    canvas.apply(style.casing_color());
+                }
+                else {
+                    canvas.apply(LineWidth(style.units().mark_width));
+                    canvas.apply(rail_color);
+                }
 
                 let mut positions = self.track.positions();
                 let (mut p1, mut d1) = match positions.advance(0.5 * seg) {

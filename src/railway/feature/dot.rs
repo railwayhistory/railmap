@@ -84,7 +84,7 @@ impl DotMarker {
     ) -> Result<Self, Failed> {
         Ok(DotMarker {
             position,
-            class: scope.railway(),
+            class: scope.railway().clone(),
             size: Size::default(),
             inner: Inner::from_scope(scope),
             casing: true
@@ -253,13 +253,9 @@ impl Inner {
     }
 
     fn from_scope(scope: &Scope) -> Self {
-        if let Some(class) = scope.opt_railway() {
-            if class.status().is_open() && !class.pax().is_full() {
-                Inner::Stroke
-            }
-            else {
-                Inner::Fill
-            }
+        let class = scope.railway();
+        if class.status().is_open() && !class.pax().is_full() {
+            Inner::Stroke
         }
         else {
             Inner::Fill

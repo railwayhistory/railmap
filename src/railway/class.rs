@@ -28,6 +28,7 @@ pub struct Railway {
     gauge_group: Option<GaugeGroup>,
     gauge: Option<Gauge>,
     double: Option<bool>,
+    station: Option<bool>,
 }
 
 impl Railway {
@@ -48,14 +49,14 @@ impl Railway {
         err: &mut EvalErrors,
     ) -> Result<Self, Failed> {
         let mut symbols = arg.eval::<SymbolSet>(err)?;
-        let mut class = scope.railway();
+        let mut class = scope.railway().clone();
         class.apply_symbols(&mut symbols);
         symbols.check_exhausted(err)?;
         Ok(class)
     }
 
     pub fn from_symbols(symbols: &mut SymbolSet, scope: &Scope) -> Self {
-        let mut class = scope.railway();
+        let mut class = scope.railway().clone();
         class.apply_symbols(symbols);
         class
     }
@@ -67,7 +68,7 @@ impl Railway {
     }
 
     pub fn from_scope(scope: &Scope) -> Self {
-        scope.railway()
+        scope.railway().clone()
     }
 
     fn apply_symbols(&mut self, symbols: &mut SymbolSet) {
@@ -98,11 +99,19 @@ impl Railway {
         if let Some(gauge_group) = GaugeGroup::from_symbols(symbols) {
             self.gauge_group = Some(gauge_group)
         }
+
         if symbols.take("double") {
             self.double = Some(true)
         }
         else if symbols.take("single") {
             self.double = Some(false)
+        }
+
+        if symbols.take("station") {
+            self.station = Some(true)
+        }
+        else if symbols.take("nostation") {
+            self.station = Some(false)
         }
     }
 
@@ -136,6 +145,9 @@ impl Railway {
         }
         if self.double.is_none() {
             self.double = class.double
+        }
+        if self.station.is_none() {
+            self.station = class.station
         }
     }
 
@@ -227,6 +239,10 @@ impl Railway {
     pub fn double(&self) -> bool {
         self.double.unwrap_or_default()
     }
+
+    pub fn station(&self) -> bool {
+        self.station.unwrap_or_default()
+    }
 }
 
 
@@ -251,8 +267,6 @@ pub enum Category {
     Private,
 
     /// Sidings tracks.
-    ///
-    /// For historical reasons, this is the default category.
     Siding,
 }
 
@@ -272,6 +286,9 @@ impl Category {
         }
         else if symbols.take("private") {
             Some(Category::Private)
+        }
+        else if symbols.take("side") {
+            Some(Category::Siding)
         }
         else {
             None

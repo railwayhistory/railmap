@@ -36,6 +36,13 @@ impl eval::Builtin for Builtin {
     type Scope = RenderParams;
     type Value = Custom;
 
+    fn new_scope(
+        &self,
+        parent: &eval::Scope<Self>,
+    ) -> Self::Scope {
+        RenderParams::from_parent(parent.custom())
+    }
+
     fn eval_distance(
         &self,
         number: f64,
@@ -111,10 +118,17 @@ pub struct RenderParams {
     detail: Option<(f64, f64)>,
     zoom: Option<Zoom>,
     layer: Option<i16>,
-    railway: Option<Railway>,
+    railway: Railway,
 }
 
 impl RenderParams {
+    fn from_parent(parent: &Self) -> Self {
+        Self {
+            railway: parent.railway.clone(),
+            .. Default::default()
+        }
+    }
+
     fn update(
         &mut self,
         target: &str,
@@ -209,7 +223,7 @@ impl RenderParams {
         err: &mut EvalErrors
     ) {
         if let Ok(value) = Railway::from_arg_only(value, err) {
-            self.railway = Some(value)
+            self.railway.update(&value)
         }
     }
 
@@ -243,14 +257,8 @@ impl RenderParams {
         }
     }
 
-    fn railway<'s>(scope: &'s Scope) -> Option<&'s Railway> {
-        if let Some(res) = scope.custom().railway.as_ref() {
-            return Some(res)
-        }
-        match scope.parent() {
-            Some(parent) =>  Self::railway(parent),
-            None => None
-        }
+    fn railway<'s>(scope: &'s Scope) -> &'s Railway {
+        &scope.custom().railway
     }
 }
 
@@ -266,9 +274,7 @@ pub trait ScopeExt {
 
     fn layer(&self) -> i16;
 
-    fn railway(&self) -> Railway;
-
-    fn opt_railway(&self) -> Option<&Railway>;
+    fn railway(&self) -> &Railway;
 }
 
 impl<'s> ScopeExt for Scope<'s> {
@@ -309,11 +315,7 @@ impl<'s> ScopeExt for Scope<'s> {
         RenderParams::layer(self).unwrap_or(0)
     }
 
-    fn railway(&self) -> Railway {
-        RenderParams::railway(self).cloned().unwrap_or_default()
-    }
-
-    fn opt_railway(&self) -> Option<&Railway> {
+    fn railway(&self) -> &Railway {
         RenderParams::railway(self)
     }
 }
