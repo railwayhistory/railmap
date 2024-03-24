@@ -662,6 +662,12 @@ markers! {
             canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh + 1.5 * u.sp);
             canvas.apply_line_width(u.sp);
             stroke_round(canvas)
+        },
+        |canvas: &mut Group, u: Units| {
+            canvas.move_to(-0.5 * u.sw + 0.5 * u.sp, u.sh + 1. * u.sp);
+            canvas.line_to(0.5 * u.sw - 0.5 * u.sp, u.sh + 1. * u.sp);
+            canvas.apply_line_width(u.sp);
+            stroke_round(canvas)
         }
     ),
 
