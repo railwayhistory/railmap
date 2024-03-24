@@ -338,15 +338,22 @@ impl LayoutProperties {
 impl layout::Properties for LayoutProperties {
     type Style = Style;
     type Stage = Stage;
+    type SpanText = String;
+
+    fn packed(&self, _style: &Self::Style) -> bool {
+        matches!(self.packed, Some(true))
+    }
+
+    fn span_text<'a>(
+        &self, text: &'a Self::SpanText, _style: &Self::Style
+    ) -> &'a str {
+        text
+    }
 
     fn font(&self, style: &Self::Style) -> Font {
         self.font.clone().size(
             self.size().size(style)
         ).finalize()
-    }
-
-    fn packed(&self, _style: &Self::Style) -> bool {
-        matches!(self.packed, Some(true))
     }
 
     fn frame(&self, style: &Self::Style) -> Option<Margins> {
