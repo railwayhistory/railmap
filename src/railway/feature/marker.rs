@@ -802,19 +802,10 @@ markers! {
 
     ("de.inbf") => (
         |canvas: &mut Group, u: Units| {
-            let hsp = 0.5 * u.sp;
-            canvas.move_to(-0.5 * u.sw + hsp, 0.5 * u.dt + hsp);
-            canvas.line_to(-0.5 * u.sw + hsp, 2.5 * u.dt - hsp);
-            canvas.line_to(0.5 * u.sw - hsp, 2.5 * u.dt - hsp);
-            canvas.line_to(0.5 * u.sw - hsp, 0.5 * u.dt + hsp);
-            canvas.close_path();
-            canvas.stroke();
-            canvas.new_path();
-            let hsp = 2. * u.sp;
-            canvas.move_to(-0.5 * u.sw + hsp, 1.1 * u.dt);
-            canvas.line_to(-0.5 * u.sw + hsp, 1.9 * u.dt);
-            canvas.line_to(0.5 * u.sw - hsp, 1.9 * u.dt);
-            canvas.line_to(0.5 * u.sw - hsp, 1.1 * u.dt);
+            canvas.move_to(-0.5 * u.sw, 2. * u.sp);
+            canvas.line_to(-0.5 * u.sw, 4. * u.dt - 2. * u.sp);
+            canvas.line_to(0.5 * u.sw, 4. * u.dt - 2. * u.sp);
+            canvas.line_to(0.5 * u.sw, 2. * u.sp);
             canvas.close_path();
             canvas.fill()
         },
