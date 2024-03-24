@@ -127,6 +127,27 @@ const FUNCTIONS: &[(
         })
     }),
 
+    // Produces a span of text with original and latin text.
+    ("latspan", &|mut args, scope, _, err| {
+        let mut class_symbols = args.take_first_if_matches(
+            err
+        )?.unwrap_or_default();
+        let [org_text, lat_text] = args.into_array(err)?;
+        let properties = label::LayoutProperties::from_symbols(
+            &mut class_symbols, scope
+        );
+        class_symbols.check_exhausted(err)?;
+        Ok(Value::Custom(
+            label::Layout::span(
+                label::Text::with_latin(
+                    org_text.eval(err)?,
+                    lat_text.eval(err)?,
+                ),
+                properties
+            ).into()
+        ))
+    }),
+
     // Resolve a base path.
     //
     // ```text
@@ -158,7 +179,9 @@ const FUNCTIONS: &[(
             properties, err
         )?;
         Ok(Value::Custom(
-            label::Layout::span(text.eval(err)?, properties).into()
+            label::Layout::span(
+                text.eval::<String>(err)?.into(), properties
+            ).into()
         ))
     }),
 

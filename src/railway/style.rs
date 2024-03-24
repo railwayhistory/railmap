@@ -282,6 +282,9 @@ pub struct Style {
     /// The coloring rules.
     colors: Colors,
 
+    /// Are we using latin text only?
+    latin_text: bool,
+
     /// The transformation from storage to canvas coordinates.
     ///
     /// Storage coordinates are Spherical Mercator with a range of `0. .. 1.`
@@ -306,6 +309,7 @@ impl Style {
         let units = Units::new(zoom.detail, canvas_bp);
         let equator_scale = tile_id.scale();
         let style_id = layer_id.style_id();
+        let latin_text = layer_id.latin_text();
 
         Self {
             store_scale: zoom.store_scale,
@@ -314,6 +318,7 @@ impl Style {
             map_units: units.map_units(),
             units,
             colors: style_id.colors(colors),
+            latin_text,
             transform: TranslateScale::new(
                 Vec2::new(
                     -tile_id.nw().x * equator_scale,
@@ -340,6 +345,10 @@ impl Style {
 
     pub fn units(&self) -> Units {
         self.units
+    }
+
+    pub fn latin_text(&self) -> bool {
+        self.latin_text
     }
 
     pub fn canvas_bp(&self) -> f64 {

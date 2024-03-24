@@ -80,13 +80,13 @@ impl Map {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum LayerId {
     /// Electrification base map.
-    El,
+    El(ScriptId),
 
     /// Electrification line number map.
     ElNum,
 
     /// Passenger base map.
-    Pax,
+    Pax(ScriptId),
 
     /// Passenger timetable number map.
     PaxNum,
@@ -100,8 +100,8 @@ impl LayerId {
         use self::LayerId::*;
 
         match self {
-            El | ElNum | Border => StyleId::El,
-            Pax | PaxNum => StyleId::Pax
+            El(_) | ElNum | Border => StyleId::El,
+            Pax(_) | PaxNum => StyleId::Pax
         }
     }
 
@@ -109,10 +109,17 @@ impl LayerId {
         use self::LayerId::*;
 
         match self {
-            El | Pax => &store.railway,
+            El(_) | Pax(_) => &store.railway,
             ElNum => &store.line_labels,
             PaxNum => &store.tt_labels,
             Border => &store.borders,
+        }
+    }
+
+    pub fn latin_text(self) -> bool {
+        match self {
+            LayerId::El(id) | LayerId::Pax(id) => id.latin_text(),
+            _ => false
         }
     }
 }
@@ -132,13 +139,34 @@ impl FromStr for LayerId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "el" => Ok(LayerId::El),
+            "el" => Ok(LayerId::El(ScriptId::Original)),
+            "el-lat" => Ok(LayerId::El(ScriptId::Latin)),
             "el-num" => Ok(LayerId::ElNum),
-            "pax" => Ok(LayerId::Pax),
+            "pax" => Ok(LayerId::Pax(ScriptId::Original)),
+            "pax-lat" => Ok(LayerId::Pax(ScriptId::Latin)),
             "pax-num" => Ok(LayerId::PaxNum),
             "border" => Ok(LayerId::Border),
             _ => Err(TileIdError)
         }
+    }
+}
+
+
+//------------ ScriptId ------------------------------------------------------
+
+/// Which script should we prefer for labels?
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ScriptId {
+    /// Use the script used by the locals.
+    Original,
+
+    /// Use latin or latin transliteration.
+    Latin,
+}
+
+impl ScriptId {
+    pub fn latin_text(self) -> bool {
+        matches!(self, ScriptId::Latin)
     }
 }
 

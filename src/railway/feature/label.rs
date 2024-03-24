@@ -99,7 +99,7 @@ pub fn layout_from_expr(
     match expr.value {
         eval::Value::Custom(Custom::Layout(val)) => Ok(val),
         eval::Value::Text(val) => {
-            Ok(Layout::span(val, Default::default()))
+            Ok(Layout::span(val.into(), Default::default()))
         }
         _ => {
             err.add(expr.pos, "expected layout or string");
@@ -338,16 +338,21 @@ impl LayoutProperties {
 impl layout::Properties for LayoutProperties {
     type Style = Style;
     type Stage = Stage;
-    type SpanText = String;
+    type SpanText = Text;
 
     fn packed(&self, _style: &Self::Style) -> bool {
         matches!(self.packed, Some(true))
     }
 
     fn span_text<'a>(
-        &self, text: &'a Self::SpanText, _style: &Self::Style
+        &self, text: &'a Self::SpanText, style: &Self::Style
     ) -> &'a str {
-        text
+        if style.latin_text() {
+            if let Some(text) = text.latin.as_ref() {
+                return text
+            }
+        }
+        &text.original
     }
 
     fn font(&self, style: &Self::Style) -> Font {
@@ -467,6 +472,35 @@ pub enum LayoutType {
     Framed,
 }
 
+
+//------------ Text ----------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct Text {
+    /// The text in its original script.
+    original: String,
+
+    /// The text in latin script, if it isn’t originally latin.
+    latin: Option<String>,
+}
+
+impl Text {
+    pub fn with_latin(original: String, latin: String) -> Self {
+        Self {
+            original,
+            latin: Some(latin)
+        }
+    }
+}
+
+impl From<String> for Text {
+    fn from(original: String) -> Self {
+        Self {
+            original,
+            latin: None,
+        }
+    }
+}
 
 
 //------------ FontSize ------------------------------------------------------
