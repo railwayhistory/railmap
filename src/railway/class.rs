@@ -347,7 +347,7 @@ pub enum Status {
 
 impl Status {
     fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
-        if symbols.take("exproject") {
+        let res = if symbols.take("exproject") {
             Some(Status::Explanned)
         }
         else if symbols.take("project") {
@@ -372,6 +372,14 @@ impl Status {
         }
         else {
             None
+        };
+
+        // Overwrite for labels with :former
+        if symbols.contains("former") {
+            Some(Status::Removed)
+        }
+        else {
+            res
         }
     }
 
