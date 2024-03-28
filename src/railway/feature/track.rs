@@ -36,7 +36,7 @@
 //! * `:inner` if the segment is in the middle and markings need to be
 //!   “justified.”
 
-use std::f64::consts::FRAC_PI_2;
+use std::f64::consts::{FRAC_PI_2, PI};
 use femtomap::world;
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
 use femtomap::path::Trace;
@@ -45,7 +45,7 @@ use femtomap::render::{
 };
 use kurbo::{PathEl, Vec2};
 use crate::railway::import::eval::{Expression, Scope};
-use crate::railway::class::{Railway, Pax};
+use crate::railway::class::{GaugeGroup, Railway, Pax};
 use crate::railway::style::Style;
 use super::{AnyShape, Category, Feature, Shape, Stage};
 
@@ -700,15 +700,52 @@ impl<'a> ContourShape4<'a> {
     }
 
     fn render_gauge(&self, style: &Style, canvas: &mut Sketch) {
-        use super::super::class::GaugeGroup::*;
+        if self.class.class.gauge().secondary().is_some() {
+            self.render_multi_gauge(style, canvas)
+        }
+        else if !matches!(
+            self.class.class.gauge_group(), GaugeGroup::Standard
+        ) {
+            self.render_gauge_group(style, canvas)
+        }
+    }
 
+    fn render_multi_gauge(&self, style: &Style, canvas: &mut Sketch) {
         let seg = match self.seg {
             Some(seg) => seg,
             None => return
         };
+
+        let radius = style.units().dt * 0.5;
+        let halfwidth = style.units().guide_width * 0.5;
+        let inner_radius = radius - halfwidth;
+        let outer_radius = radius + halfwidth;
+
+        self.track.iter_positions(
+            seg, Some(0.5 * seg)
+        ).for_each(|(pos, dir)| {
+            canvas.apply(style.track_color(&self.class.class));
+            canvas.apply(kurbo::Circle::new(pos, outer_radius));
+            canvas.fill();
+            canvas.apply(Color::WHITE);
+            canvas.apply(kurbo::CircleSegment::new(
+                pos, inner_radius, 0., dir + 0.5 * PI, PI,
+            ));
+            canvas.fill();
+        })
+    }
+
+    fn render_gauge_group(&self, style: &Style, canvas: &mut Sketch) {
+        use super::super::class::GaugeGroup::*;
+
         let group = self.class.class.gauge_group();
         if matches!(group, Standard) {
             return
+        };
+
+        let seg = match self.seg {
+            Some(seg) => seg,
+            None => return
         };
         let radius = style.units().dt * 0.5;
         let width = style.units().guide_width;
