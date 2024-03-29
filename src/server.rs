@@ -1,11 +1,16 @@
+use std::io;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
-use hyper::{Body, Request, Response};
-use hyper::body::Bytes;
-use hyper::service::{make_service_fn, service_fn};
+use http_body_util::Full;
+use hyper::{Request, Response};
+use hyper::body::{Bytes, Incoming};
+use hyper::server::conn::http1;
+use hyper::service::service_fn;
+use hyper_util::rt::TokioIo;
 use lru::LruCache;
+use tokio::net::TcpListener;
 use crate::railway;
 use crate::tile::TileId;
 
@@ -29,30 +34,29 @@ impl Server {
 }
 
 impl Server {
-    pub async fn run(&self, addr: SocketAddr) {
-        let make_svc = make_service_fn(move |_conn| {
+    pub async fn run(&self, addr: SocketAddr) -> Result<(), io::Error>{
+        let listener = TcpListener::bind(addr).await?;
+        loop {
+            let (stream, _) = listener.accept().await?;
+            let stream = TokioIo::new(stream);
             let this = self.clone();
-            async move {
-                Ok::<_, Infallible>(service_fn(move |r| {
-                    let this = this.clone();
-                    async move { this.process(r).await }
-                }))
-            }
-        });
-
-        let server = hyper::Server::bind(&addr).serve(make_svc);
-
-        // Run this server for ... ever!
-        if let Err(e) = server.await {
-            eprintln!("server error: {}", e);
+            tokio::task::spawn(async move {
+                http1::Builder::new().serve_connection(
+                    stream,
+                    service_fn(|r| {
+                        let this = this.clone();
+                        async move { this.process(r).await }
+                    })
+                ).await
+            });
         }
     }
 }
 
 impl Server {
     async fn process(
-        &self, request: Request<Body>
-    ) -> Result<Response<Body>, Infallible> {
+        &self, request: Request<Incoming>
+    ) -> Result<Response<Full<Bytes>>, Infallible> {
         let path = request.uri().path();
 
         match path {
@@ -164,11 +168,11 @@ impl Server {
     }
 }
 
-fn not_found() -> Response<Body> {
+fn not_found() -> Response<Full<Bytes>> {
     Response::builder()
         .status(404)
         .header("Content-Type", "text/plain;charset=utf-8")
-        .body(Body::from("not found"))
+        .body(Full::new(Bytes::from("not found")))
         .unwrap()
 }
 

@@ -212,7 +212,7 @@ impl Config {
 
         let server = Server::new(railway::Map::new(features));
         eprintln!("Server ready after {:.03}s.", start.elapsed().as_secs_f32());
-        server.run(self.listen).await;
+        let _ = server.run(self.listen).await;
     }
 }
 
