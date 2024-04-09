@@ -368,7 +368,7 @@ impl<'a> ContourShape2<'a> {
         }
         match (style.pax_only(), class.class.pax()) {
             (false, Pax::None) => true,
-            (_, Pax::Heritage) => true,
+            (_, Pax::Heritage | Pax::Seasonal) => true,
             _ => false,
         }
     }
@@ -383,7 +383,7 @@ impl<'a> ContourShape2<'a> {
 
         match (style.pax_only(), self.class.class.pax()) {
             (false, Pax::None) => { }
-            (_, Pax::Heritage) => {
+            (_, Pax::Heritage | Pax::Seasonal) => {
                 if self.class.class.station() {
                     return
                 }
@@ -851,7 +851,7 @@ impl<'a> ContourShape4<'a> {
                     }
                 }
             }
-            Pax::Heritage => {
+            Pax::Heritage | Pax::Seasonal => {
                 pos.advance(0.125 * seg);
                 let step = 0.25 * seg;
                 loop {
