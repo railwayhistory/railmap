@@ -60,7 +60,7 @@ impl Colors {
         use self::class::ElectricSystem::*;
 
         match class.status() {
-            class::Status::Closed => self.closed,
+            class::Status::Closed | class::Status::Suspended => self.closed,
             class::Status::Removed | class::Status::Explanned => self.removed,
             class::Status::Gone => self.gone,
             class::Status::Open | class::Status::Planned => {
@@ -151,7 +151,9 @@ impl Colors {
     /// Returns the color for a station label.
     pub fn label_color(&self, class: &class::Railway) -> Color {
         match class.status() {
-            class::Status::Closed => self.closed_label,
+            class::Status::Closed | class::Status::Suspended => {
+                self.closed_label
+            }
             class::Status::Removed | class::Status::Explanned => {
                 self.removed_label
             }

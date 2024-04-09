@@ -336,6 +336,9 @@ pub enum Status {
     /// The feature is closed but still present.
     Closed,
 
+    /// The feature is technically open but unusable.
+    Suspended,
+
     /// The feature is planned or under construction.
     Planned,
 
@@ -363,6 +366,9 @@ impl Status {
         }
         else if symbols.take("closed") {
             Some(Status::Closed)
+        }
+        else if symbols.take("suspended") {
+            Some(Status::Suspended)
         }
         else if symbols.take("removed") {
             Some(Status::Removed)
@@ -394,7 +400,7 @@ impl Status {
     pub fn layer_offset(self) -> i16 {
         match self {
             Status::Open => 0,
-            Status::Closed => -10,
+            Status::Closed | Status::Suspended => -10,
             Status::Removed => -20,
             Status::Gone => -30,
             _ => -40,
