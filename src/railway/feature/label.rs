@@ -7,7 +7,7 @@ use femtomap::path::Position;
 use femtomap::render::{
     Canvas, Color, Font, FontBuilder, FontFamily, FontFeatures, FontStretch,
     FontStyle, FontWeight, LineCap, LineJoin, LineWidth, Matrix,
-    Operator, Sketch,
+    Operator, TextDecoration, Sketch,
 };
 use kurbo::Vec2;
 use crate::railway::import::eval;
@@ -271,7 +271,6 @@ impl LayoutProperties {
         //
         if symbols.take("italic")
             || symbols.take("designation")
-            || symbols.take("former")
         {
             res = res.style(FontStyle::Italic);
         }
@@ -291,6 +290,11 @@ impl LayoutProperties {
         }
         else if symbols.take("light") {
             res = res.weight(FontWeight::Light)
+        }
+
+        // Decoration
+        if symbols.take("former") {
+            res = res.decoration(TextDecoration::LineThrough)
         }
 
         res
