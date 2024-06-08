@@ -3,9 +3,6 @@
 //! In order to be able to draw features differently for different styles, we
 //! need to describe them in an abstract fashion. This is what classes do.
 //!
-//! There are currently two classes, [`Railway`] for the classes of features
-//! related to railways, and [`Border`] for borders.
-//!
 //! Since railways are very comples, there are plenty extra types here that
 //! help with defining the railway class.
 #![allow(dead_code)]
@@ -320,8 +317,8 @@ impl Default for Category {
 
 /// The status of the feature.
 ///
-/// The variants ordered for use in [`Group`][crate::feature::Group] with the
-/// one draw atop everything else last.
+/// The variants are ordered so that features with these statuses are drawn
+/// in a  sensible order way atop each other.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Status {
     /// The feature has been removed a long time ago.
