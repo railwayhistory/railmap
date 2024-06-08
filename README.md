@@ -43,10 +43,14 @@ results are likely going to look a bit odd).
 The following layers are currently available:
 
 *  `el`: railway lines colored according to their electrification scheme,
+*  `el-lat`: the `el` layer but with names transliterated into Latin
+   script,
 *  `el-num`: Railway History Database line number colored for use with the
    `el` layer,
 *  `pax`: railway lines colored according to the passenger service
    provided,
+*  `pax-lat`: the `pax` layer but with names transliterated into Latin
+   script,
 *  `pax-num`: timetable line numbers,
 *  `border`: borders contours.
 
