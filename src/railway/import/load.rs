@@ -3,6 +3,7 @@ use std::fmt;
 use std::sync::{Arc, Mutex};
 use femtomap::import::eval::{Builtin as _, LoadErrors};
 use femtomap::import::path::{ImportPathSet, PathSetError};
+use femtomap::import::watch::WatchSet;
 use crate::config::Region;
 use crate::railway::feature::{Store, StoreBuilder};
 use super::eval::Builtin;
@@ -26,15 +27,16 @@ impl LoadFeatures {
     pub fn load_region(
         &mut self,
         region: &Region,
+        watch: &mut WatchSet,
     ) {
-        let builtin = match ImportPathSet::load(&region.paths) {
+        let builtin = match ImportPathSet::load(&region.paths, watch) {
             Ok(paths) => Builtin::new(paths, self.features.clone()),
             Err(err) => {
                 self.err.paths.extend(err);
                 return
             }
         };
-        if let Err(err) = builtin.load(&region.rules) {
+        if let Err(err) = builtin.load(&region.rules, watch) {
             self.err.rules.extend(err);
         }
     }

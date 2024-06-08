@@ -3,6 +3,7 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
+use arc_swap::ArcSwap;
 use http_body_util::Full;
 use hyper::{Request, Response};
 use hyper::body::{Bytes, Incoming};
@@ -11,35 +12,46 @@ use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
 use lru::LruCache;
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
 use crate::railway;
 use crate::tile::TileId;
 
 
-#[derive(Clone)]
+//------------ Server --------------------------------------------------------
+
 pub struct Server {
-    railway: Arc<railway::Map>,
+    railway: ArcSwap<railway::Map>,
     cache: Arc<Mutex<LruCache<TileId, Bytes>>>,
+    rx: Option<mpsc::Receiver<ServerCommand>>,
 }
 
 
 impl Server {
-    pub fn new(railway: railway::Map) -> Self {
-        Server {
-            railway: Arc::new(railway),
-            cache: Arc::new(Mutex::new(
-                LruCache::new(NonZeroUsize::new(10_000).unwrap())
-            )),
-        }
+    pub fn new(railway: railway::Map) -> (Self, ServerControl) {
+        let (tx, rx) = mpsc::channel(10);
+        (
+            Server {
+                railway: Arc::new(railway).into(),
+                cache: Arc::new(Mutex::new(
+                    LruCache::new(NonZeroUsize::new(10_000).unwrap())
+                )),
+                rx: Some(rx),
+            },
+            ServerControl { tx },
+        )
     }
 }
 
 impl Server {
-    pub async fn run(&self, addr: SocketAddr) -> Result<(), io::Error>{
+    pub async fn run(mut self, addr: SocketAddr) -> Result<(), io::Error> {
         let listener = TcpListener::bind(addr).await?;
+        let rx = self.rx.take().unwrap();
+        let this = Arc::new(self);
+        tokio::spawn(this.clone().run_control(rx));
         loop {
             let (stream, _) = listener.accept().await?;
             let stream = TokioIo::new(stream);
-            let this = self.clone();
+            let this = this.clone();
             tokio::task::spawn(async move {
                 http1::Builder::new().serve_connection(
                     stream,
@@ -49,6 +61,19 @@ impl Server {
                     })
                 ).await
             });
+        }
+    }
+
+    async fn run_control(
+        self: Arc<Self>, mut rx: mpsc::Receiver<ServerCommand>
+    ) {
+        while let Some(cmd) = rx.recv().await {
+            match cmd {
+                ServerCommand::UpdateRailway(map) => {
+                    self.railway.store(map.into());
+                    self.cache.lock().unwrap().clear();
+                }
+            }
         }
     }
 }
@@ -155,7 +180,7 @@ impl Server {
         let body = match cached {
             Some(bytes) => bytes.into(),
             None => {
-                let bytes: Bytes = tile.render(&self.railway).into();
+                let bytes: Bytes = tile.render(&self.railway.load()).into();
                 self.cache.lock().unwrap().put(tile.clone(), bytes.clone());
                 bytes.into()
             }
@@ -177,4 +202,25 @@ fn not_found() -> Response<Full<Bytes>> {
 }
 
 pub struct Failed;
+
+
+//------------ ServerControl -------------------------------------------------
+
+#[derive(Clone)]
+pub struct ServerControl {
+    tx: mpsc::Sender<ServerCommand>,
+}
+
+impl ServerControl {
+    pub async fn update_railway(&self, map: railway::Map) {
+        let _ = self.tx.send(ServerCommand::UpdateRailway(map)).await;
+    }
+}
+
+
+//------------ ServerCommand -------------------------------------------------
+
+enum ServerCommand {
+    UpdateRailway(railway::Map),
+}
 

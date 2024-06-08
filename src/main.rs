@@ -2,23 +2,20 @@ use std::{fs, io};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::time::Instant;
-use clap::{
-    Arg, ArgAction, ArgMatches, Command, crate_version, crate_authors,
-    value_parser,
-};
-use railmap::{LoadFeatures, MapConfig, Server};
-use railmap::railway;
+use std::time::{Duration, Instant};
+use clap::Parser;
 use femtomap::import::eval::Failed;
+use femtomap::import::watch::WatchSet;
+use notify::Watcher;
+use railmap::MapConfig;
+use railmap::railway;
+use railmap::railway::import::load::LoadFeatures;
+use railmap::server::{Server, ServerControl};
+use tokio::sync::{mpsc, oneshot};
 
 const DEFAULT_CONFIG_PATH: &str = "/etc/railmap.conf";
 
-
-struct Config {
-    map: PathBuf,
-    regions: Option<Vec<String>>,
-    listen: SocketAddr,
-}
+//------------ ConfigFile ----------------------------------------------------
 
 #[derive(serde::Deserialize)]
 struct ConfigFile {
@@ -27,24 +24,59 @@ struct ConfigFile {
     listen: Option<SocketAddr>,
 }
 
+//------------ Args ----------------------------------------------------------
+
+#[derive(Parser)]
+#[command(version, about, long_about = "renders a railway map")]
+struct Args {
+    /// The configuration file.
+    #[arg(short, long, value_name = "FILE")]
+    config: Option<PathBuf>,
+
+    /// The map configuration file.
+    #[arg(short, long, value_name = "FILE")]
+    map: Option<PathBuf>,
+
+    /// Select regions to render.
+    #[arg(value_name = "NAME")]
+    region: Vec<String>,
+
+    /// The addr to listen on.
+    #[arg(short, long, value_name = "ADDR")]
+    listen: Option<SocketAddr>,
+
+    /// Watch for changes in map files.
+    #[arg(short, long)]
+    watch: bool,
+}
+
+
+//------------ Config --------------------------------------------------------
+
+struct Config {
+    map: PathBuf,
+    regions: Option<Vec<String>>,
+    listen: SocketAddr,
+    watch: bool,
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
             map: PathBuf::new(),
             regions: None,
             listen: SocketAddr::from_str("127.0.0.1:8080").unwrap(),
+            watch: false,
         }
     }
 }
 
 impl Config {
     pub fn get() -> Result<Self, Failed> {
-        let mut matches = Self::get_matches();
+        let args = Args::parse();
 
-        let (config_path, insist) = match matches.remove_one::<PathBuf>(
-            "config"
-        ) {
-            Some(path) => (path, true),
+        let (config_path, insist) = match args.config.as_ref() {
+            Some(path) => (path.clone(), true),
             None => (PathBuf::from(DEFAULT_CONFIG_PATH), false),
         };
 
@@ -78,7 +110,7 @@ impl Config {
             }
         }
 
-        config.apply_matches(matches);
+        config.apply_args(args);
 
         if !config.map.is_file() {
             eprintln!("Map configuration not provided or does not exist.");
@@ -88,57 +120,17 @@ impl Config {
         Ok(config)
     }
 
-    fn get_matches() -> ArgMatches {
-        Command::new("railmap")
-            .version(crate_version!())
-            .author(crate_authors!())
-            .about("renders a railway map")
-            .arg(Arg::new("config")
-                .short('c')
-                .long("config")
-                .value_name("FILE")
-                .value_parser(value_parser!(PathBuf))
-                .help("the configuration file")
-                .action(ArgAction::Set)
-            )
-            .arg(Arg::new("map")
-                .short('m')
-                .long("map")
-                .value_name("FILE")
-                .value_parser(value_parser!(PathBuf))
-                .help("the map configuration file")
-                .action(ArgAction::Set)
-            )
-            .arg(Arg::new("region")
-                .short('r')
-                .long("region")
-                .value_name("NAME")
-                .help("select a region to render")
-                .num_args(1..)
-                .action(ArgAction::Append)
-            )
-            .arg(Arg::new("listen")
-                .short('l')
-                .long("listen")
-                .value_name("ADDR")
-                .value_parser(value_parser!(SocketAddr))
-                .help("the addr to listen on")
-                .action(ArgAction::Set)
-                .default_value("127.0.0.1:8080")
-            )
-            .get_matches()
-    }
-
-    fn apply_matches(&mut self, mut matches: ArgMatches) {
-        if let Some(map) = matches.remove_one("map") {
+    fn apply_args(&mut self, args: Args) {
+        if let Some(map) = args.map {
             self.map = map;
         }
-        if let Some(regions) = matches.remove_many("region") {
-            self.regions = Some(regions.collect());
+        if !args.region.is_empty() {
+            self.regions = Some(args.region);
         }
-        if let Some(addr) = matches.remove_one("listen") {
+        if let Some(addr) = args.listen {
             self.listen = addr;
         }
+        self.watch = args.watch;
     }
 
     fn apply_toml(&mut self, toml: ConfigFile) {
@@ -153,7 +145,99 @@ impl Config {
         }
     }
 
-    pub async fn run(self) {
+    pub async fn run(mut self) {
+        if let Some(regions) = self.regions.as_mut() {
+            regions.sort();
+            regions.dedup();
+        }
+
+        let mut watch = WatchSet::default();
+        if self.watch {
+            watch.enable();
+        }
+
+        let map = match self.load_railway(&mut watch) {
+            Some(map) => map,
+            None => return,
+        };
+
+        let (server, ctrl) = Server::new(map);
+        let listen = self.listen;
+
+        if self.watch {
+            tokio::spawn(self.watch(ctrl, watch));
+        }
+
+        let _ = server.run(listen).await;
+    }
+
+    async fn watch(self, ctrl: ServerControl, mut watch: WatchSet) {
+        loop {
+            watch = match self.watch_step(&ctrl, watch).await {
+                Ok(watch) => watch,
+                Err(_) => break,
+            }
+        }
+    }
+
+    async fn watch_step(
+        &self, ctrl: &ServerControl, watch: WatchSet
+    ) -> Result<WatchSet, Failed> {
+        let (ev_tx, mut ev_rx) = mpsc::channel(10);
+        let (done_tx, done_rx) = oneshot::channel();
+
+        tokio::task::spawn_blocking(move || {
+            let mut watcher = match notify::recommended_watcher(
+                move |res: Result<notify::event::Event, _>| {
+                    match res {
+                        Ok(ev) => {
+                            let mut skip = true;
+                            for path in &ev.paths {
+                                if let Some(name) = path.file_name() {
+                                    if name.as_encoded_bytes().first()
+                                        != Some(&b'.')
+                                    {
+                                        skip = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            if skip {
+                                return
+                            }
+                            let _ = ev_tx.blocking_send(());
+                        }
+                        _ => { } // XXX Ignore errors for now.
+                    }
+                }
+            ) {
+                Ok(watcher) => watcher,
+                Err(_) => return,
+            };
+            for item in watch.iter() {
+                let _ = watcher.watch(
+                    item, notify::RecursiveMode::NonRecursive
+                );
+            }
+            let _ = done_rx.blocking_recv();
+        });
+
+        let _ = ev_rx.recv().await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let _ = done_tx.send(());
+
+        let mut watch = WatchSet::default();
+        watch.enable();
+        if let Some(map) = self.load_railway(&mut watch) {
+            ctrl.update_railway(map).await;
+        }
+
+        Ok(watch)
+    }
+
+    fn load_railway(
+        &self, watch: &mut WatchSet,
+    ) -> Option<railway::Map> {
         let map = match MapConfig::load(&self.map) {
             Ok(map) => map,
             Err(err) => {
@@ -161,31 +245,29 @@ impl Config {
                     "Failed to load map config {}: {}",
                     self.map.display(), err
                 );
-                return
+                return None
             }
         };
 
         let start = Instant::now();
         let mut features = LoadFeatures::new();
-        match self.regions {
-            Some(mut values) => {
-                values.sort();
-                values.dedup();
+        match self.regions.as_ref() {
+            Some(values) => {
                 for value in values {
-                    match map.regions.get(&value) {
+                    match map.regions.get(value) {
                         Some(region) => {
-                            features.load_region(region);
+                            features.load_region(region, watch);
                         }
                         None => {
                             eprintln!("Unknown region '{}'.", value);
-                            std::process::exit(1);
+                            return None;
                         }
                     }
                 }
             }
             None => {
                 for region in map.regions.values() {
-                    features.load_region(region)
+                    features.load_region(region, watch)
                 }
             }
         }
@@ -194,10 +276,11 @@ impl Config {
             Ok(features) => features,
             Err(err) => {
                 eprintln!("{}", err);
-                std::process::exit(1);
+                return None;
             }
         };
 
+        eprintln!("Loaded map in {:.03}s.", start.elapsed().as_secs_f32());
         eprintln!(
             "Features:\n  \
                railway: {}\n  \
@@ -210,9 +293,7 @@ impl Config {
             features.borders.len(),
         );
 
-        let server = Server::new(railway::Map::new(features));
-        eprintln!("Server ready after {:.03}s.", start.elapsed().as_secs_f32());
-        let _ = server.run(self.listen).await;
+        Some(railway::Map::new(features))
     }
 }
 
