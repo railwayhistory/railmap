@@ -12,7 +12,7 @@ use crate::railway::feature::area::{AreaContour, PlatformContour};
 use crate::railway::feature::dot::DotMarker;
 use crate::railway::feature::guide::GuideContour;
 use crate::railway::feature::label::{
-    Anchor, FontSize, Label, Layout, LayoutProperties, TextAnchor,
+    Anchor, Layout, FontSize, Label, Block, BlockProperties, TextAnchor,
 };
 use crate::railway::feature::track::{TrackCasing, TrackClass, TrackContour};
 use super::units;
@@ -77,7 +77,7 @@ const PROCEDURES: &[(
         scope.builtin().with_store(|store| {
             args.features(store).insert(
                 label::Label::new(
-                    args.layout,
+                    args.block,
                     args.position,
                     true,
                     args.properties
@@ -165,7 +165,7 @@ const PROCEDURES: &[(
         scope.builtin().with_store(|store| {
             args.features(store).insert(
                 label::Label::new(
-                    args.layout,
+                    args.block,
                     args.position,
                     false,
                     args.properties
@@ -293,7 +293,7 @@ const PROCEDURES: &[(
             store.line_labels.insert(
                 Label::new(
                     Layout::hbox(
-                        halign, valign, args.properties, vec![layout],
+                        halign, valign, args.properties, vec![layout.into()],
                     ),
                     pos3, false,
                     Default::default(),
@@ -435,7 +435,7 @@ const PROCEDURES: &[(
     ("slabel", &|pos, args, scope, err| {
         let (mut args, layout) = LabelArgs::from_args(args, scope, err)?;
         args.properties.update_size(FontSize::Small);
-        let layout = Layout::hbox(
+        let block = Layout::hbox(
             args.anchor.h, args.anchor.v, args.properties, vec![layout]
         );
 
@@ -446,7 +446,7 @@ const PROCEDURES: &[(
             else {
                 &mut store.railway
             }.insert(
-                Label::new(layout, args.position, false, Default::default()),
+                Label::new(block, args.position, false, Default::default()),
                 scope.detail(pos, err)?,
                 scope.layer(),
             );
@@ -499,8 +499,8 @@ const PROCEDURES: &[(
 
         let class = class.eval::<SymbolSet>(err);
         let position = position.eval(err);
-        let name = label::layout_from_expr(name, err);
-        let km = label::layout_from_expr(km, err);
+        let name = label::block_from_expr(name, err);
+        let km = label::block_from_expr(km, err);
 
         let mut class = class?;
         let position = position?;
@@ -508,12 +508,14 @@ const PROCEDURES: &[(
         let mut km = km?;
 
         name.properties_mut().update(
-            &label::LayoutProperties::with_size(label::FontSize::Medium)
+            &label::BlockProperties::with_size(label::FontSize::Medium)
         );
         km.properties_mut().update(
-            &label::LayoutProperties::with_size(label::FontSize::Xsmall)
+            &label::BlockProperties::with_size(label::FontSize::Xsmall)
         );
-        let properties = label::LayoutProperties::with_class(
+        let name = name.into();
+        let km = km.into();
+        let properties = label::BlockProperties::with_class(
             Railway::from_symbols(&mut class, scope)
         );
 
@@ -527,7 +529,7 @@ const PROCEDURES: &[(
             Align::Center
         };
 
-        let layout = if class.take("top") {
+        let block = if class.take("top") {
             label::Layout::vbox(
                 halign, Align::End, Default::default(),
                 vec![name, km]
@@ -537,7 +539,7 @@ const PROCEDURES: &[(
             label::Layout::hbox(
                 Align::End, Align::Base, Default::default(),
                 vec![
-                    label::Layout::vbox(
+                    label::Block::vbox(
                         halign, Align::Base, Default::default(),
                         vec![name, km]
                     )
@@ -554,7 +556,7 @@ const PROCEDURES: &[(
             label::Layout::hbox(
                 Align::Start, Align::Base, Default::default(),
                 vec![
-                    label::Layout::vbox(
+                    label::Block::vbox(
                         halign, Align::Base, Default::default(),
                         vec![name, km]
                     )
@@ -570,7 +572,7 @@ const PROCEDURES: &[(
         scope.builtin().with_store(|store| {
             store.railway.insert(
                 label::Label::new(
-                    layout, position, false, properties
+                    block, position, false, properties
                 ),
                 scope.detail(pos, err)?,
                 scope.layer(),
@@ -667,20 +669,20 @@ fn line_badge(
 ) -> Result<label::Label, Failed> {
     let mut args = BadgeArgs::from_args(args, scope, err)?;
     args.properties.set_layout_type(
-        label::LayoutType::BadgeFrame
+        label::BlockType::BadgeFrame
     );
     args.properties.update_size(FontSize::Badge);
     args.properties.set_packed(true);
-    args.layout.properties_mut().set_layout_type(label::LayoutType::Framed);
+    args.block.properties_mut().set_layout_type(label::BlockType::Framed);
 
-    let mut layout = label::Layout::hbox(
+    let mut block = label::Layout::hbox(
         Align::Center, Align::Center, args.properties,
-        vec![args.layout]
+        vec![args.block.into()]
     );
-    layout.properties_mut().set_layout_type(label::LayoutType::TextFrame);
+    block.properties_mut().set_layout_type(label::BlockType::TextFrame);
     
     Ok(label::Label::new(
-        layout, 
+        block, 
         args.position,
         true,
         Default::default(),
@@ -713,9 +715,9 @@ fn line_label(
     let (halign, valign) = args.anchor.into_aligns();
 
     args.properties.set_packed(true);
-    args.properties.set_layout_type(label::LayoutType::TextFrame);
+    args.properties.set_layout_type(label::BlockType::TextFrame);
     layout.properties_mut().set_layout_type(
-        label::LayoutType::Framed
+        label::BlockType::Framed
     );
 
     let mut trace = Trace::new();
@@ -727,9 +729,9 @@ fn line_label(
         ),
         label::Label::new(
             label::Layout::hbox(
-                halign, valign, args.properties, vec![layout],
+                halign, valign, args.properties, vec![layout.into()],
             ),
-            pos3, false, LayoutProperties::with_size(FontSize::Badge),
+            pos3, false, BlockProperties::with_size(FontSize::Badge),
         ),
     )
 }
@@ -745,13 +747,13 @@ struct BadgeArgs {
     linenum: bool,
 
     /// The layout properties for the label.
-    properties: label::LayoutProperties,
+    properties: label::BlockProperties,
 
     /// The position of the label.
     position: Position,
 
-    /// The actual layout.
-    layout: label::Layout
+    /// The actual block layout.
+    block: label::Layout
 }
 
 impl BadgeArgs {
@@ -760,23 +762,23 @@ impl BadgeArgs {
     /// This is basically:
     ///
     /// ```text
-    /// ([class: symbol-set,] position: position, layout: Layout)
+    /// ([class: symbol-set,] position: position, block: Layout)
     /// ```
     fn from_args(
         args: ArgumentList, scope: &Scope, err: &mut EvalErrors
     ) -> Result<Self, Failed> {
         let args = match args.try_into_array() {
-            Ok([class, position, layout]) => {
+            Ok([class, position, block]) => {
                 let class = class.eval::<SymbolSet>(err);
                 let position = position.eval(err);
-                let layout = label::layout_from_expr(layout, err);
+                let block = label::block_from_expr(block, err);
                 
                 let mut class = class?;
                 let position = position?;
-                let layout = layout?;
+                let block = block?;
 
                 let linenum = class.take("linenum");
-                let mut properties = label::LayoutProperties::from_symbols(
+                let mut properties = label::BlockProperties::from_symbols(
                     &mut class, scope
                 );
                 class.check_exhausted(err)?;
@@ -785,20 +787,20 @@ impl BadgeArgs {
                     properties.update_size(label::FontSize::Badge);
                 }
 
-                return Ok(Self { linenum, properties, position, layout })
+                return Ok(Self { linenum, properties, position, block })
             }
             Err(args) => args,
         };
 
         let args = match args.try_into_array() {
-            Ok([position, layout]) => {
+            Ok([position, block]) => {
                 let position = position.eval(err);
-                let layout = label::layout_from_expr(layout, err);
+                let block = label::block_from_expr(block, err);
                 return Ok(Self {
                     linenum: false,
-                    properties: label::LayoutProperties::from_scope(scope),
+                    properties: label::BlockProperties::from_scope(scope),
                     position: position?,
-                    layout: layout?,
+                    block: block?,
                 })
             }
             Err(args) => args,
@@ -834,7 +836,7 @@ struct LabelArgs {
     anchor: TextAnchor,
 
     /// The layout properties for the label.
-    properties: LayoutProperties,
+    properties: BlockProperties,
 
     /// The position of the label.
     position: Position,
@@ -846,11 +848,11 @@ impl LabelArgs {
     /// This is basically:
     ///
     /// ```text
-    /// (class: symbol-set, position: position, layout: Layout)
+    /// (class: symbol-set, position: position, layout: Block)
     /// ```
     fn from_args(
         args: ArgumentList, scope: &Scope, err: &mut EvalErrors
-    ) -> Result<(Self, Layout), Failed> {
+    ) -> Result<(Self, Block), Failed> {
         let [class, position, layout] = args.into_array(err)?;
         let class = class.eval::<SymbolSet>(err);
         let position = position.eval::<Position>(err);
@@ -866,7 +868,7 @@ impl LabelArgs {
                 return Err(Failed)
             }
         };
-        let properties = LayoutProperties::from_symbols(&mut class, scope);
+        let properties = BlockProperties::from_symbols(&mut class, scope);
         class.check_exhausted(err)?;
 
         Ok((Self { linenum, anchor, properties, position }, layout))
@@ -886,7 +888,7 @@ struct TextBoxArgs {
     anchor: Anchor,
 
     /// The layout properties.
-    properties: LayoutProperties,
+    properties: BlockProperties,
 
     /// Is this for a double track line?
     double: bool,
@@ -927,7 +929,7 @@ impl TextBoxArgs {
                     Self::from_all_args(
                         class?, position?, shift?, scope, err
                     )?,
-                    label::layout_from_expr(layout, err)?,
+                    label::block_from_expr(layout, err)?,
                 ))
             },
             Err(args) => args
@@ -941,7 +943,7 @@ impl TextBoxArgs {
                     Self::from_all_args(
                         class?, position?, Default::default(), scope, err
                     )?,
-                    label::layout_from_expr(layout, err)?,
+                    label::block_from_expr(layout, err)?,
                 ))
             },
             Err(args) => args
@@ -963,8 +965,8 @@ impl TextBoxArgs {
                     Self::from_all_args(
                         class?, position?, shift?, scope, err
                     )?,
-                    label::layout_from_expr(l1, err)?,
-                    label::layout_from_expr(l2, err)?,
+                    label::block_from_expr(l1, err)?,
+                    label::block_from_expr(l2, err)?,
                 ))
             },
             Err(args) => args
@@ -978,8 +980,8 @@ impl TextBoxArgs {
                     Self::from_all_args(
                         class?, position?, Default::default(), scope, err
                     )?,
-                    label::layout_from_expr(l1, err)?,
-                    label::layout_from_expr(l2, err)?,
+                    label::block_from_expr(l1, err)?,
+                    label::block_from_expr(l2, err)?,
                 ))
             },
             Err(args) => args
@@ -1018,8 +1020,8 @@ impl TextBoxArgs {
         };
 
         // every else from class
-        let mut properties = LayoutProperties::from_symbols(&mut class, scope);
-        properties.set_layout_type(label::LayoutType::TextFrame);
+        let mut properties = BlockProperties::from_symbols(&mut class, scope);
+        properties.set_layout_type(label::BlockType::TextFrame);
 
         // :double and then we should be empty.
         let double = class.take("double");

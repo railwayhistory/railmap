@@ -43,6 +43,12 @@ const FUNCTIONS: &[(
         &mut EvalErrors
     ) -> Result<Value<'a>, Failed>
 )] = &[
+    // Adds an anchor.
+    ("anchor", &|args, _, _, err| {
+        args.into_empty(err)?;
+        Ok(Value::Custom(label::Block::anchor().into()))
+    }),
+
     // Produces a layout containing a horizontal bar.
     //
     // ```text
@@ -51,10 +57,10 @@ const FUNCTIONS: &[(
     ("hbar", &|args, _, _, err| {
         let [width] = args.into_array::<1>(err)?;
         let _width = width.eval::<f64>(err)?;
-        let mut props = label::LayoutProperties::default();
-        props.set_layout_type(label::LayoutType::Rule);
+        let mut props = label::BlockProperties::default();
+        props.set_layout_type(label::BlockType::Rule);
 
-        Ok(Value::Custom(label::Layout::hrule(props).into()))
+        Ok(Value::Custom(label::Block::hrule(props).into()))
     }),
 
     // Produces a horizontal box for a label layout.
@@ -81,11 +87,11 @@ const FUNCTIONS: &[(
                 return Err(Failed)
             }
         };
-        let mut properties = label::LayoutProperties::from_symbols_only(
+        let mut properties = label::BlockProperties::from_symbols_only(
             &mut align
         );
         if align.take("frame") {
-            properties.set_layout_type(label::LayoutType::TextFrame);
+            properties.set_layout_type(label::BlockType::TextFrame);
         }
         align.check_exhausted(err)?;
         Ok(Value::Custom(
@@ -103,14 +109,14 @@ const FUNCTIONS: &[(
     // ```
     ("hrule", &|args, scope, _, err| {
         let mut props = if args.is_empty() {
-            label::LayoutProperties::default()
+            label::BlockProperties::default()
         }
         else {
             let [props] = args.into_array(err)?;
-            label::LayoutProperties::from_arg(props, scope, err)?
+            label::BlockProperties::from_arg(props, scope, err)?
         };
-        props.set_layout_type(label::LayoutType::Rule);
-        Ok(Value::Custom(label::Layout::hrule(props).into()))
+        props.set_layout_type(label::BlockType::Rule);
+        Ok(Value::Custom(label::Block::hrule(props).into()))
     }),
 
     // Resolves a color from a string of hex digits.
@@ -133,7 +139,7 @@ const FUNCTIONS: &[(
             err
         )?.unwrap_or_default();
         let [org_text, lat_text] = args.into_array(err)?;
-        let properties = label::LayoutProperties::from_symbols(
+        let properties = label::BlockProperties::from_symbols(
             &mut class_symbols, scope
         );
         class_symbols.check_exhausted(err)?;
@@ -175,7 +181,7 @@ const FUNCTIONS: &[(
     // ```
     ("span", &|args, _scope, _, err| {
         let [properties, text] = args.into_array(err)?;
-        let properties = label::LayoutProperties::from_arg_only(
+        let properties = label::BlockProperties::from_arg_only(
             properties, err
         )?;
         Ok(Value::Custom(
@@ -209,11 +215,11 @@ const FUNCTIONS: &[(
                 return Err(Failed)
             }
         };
-        let mut properties = label::LayoutProperties::from_symbols_only(
+        let mut properties = label::BlockProperties::from_symbols_only(
             &mut align
         );
         if align.take("frame") {
-            properties.set_layout_type(label::LayoutType::TextFrame);
+            properties.set_layout_type(label::BlockType::TextFrame);
         }
         align.check_exhausted(err)?;
         Ok(Value::Custom(
@@ -231,14 +237,14 @@ const FUNCTIONS: &[(
     // ```
     ("vrule", &|args, scope, _, err| {
         let mut props = if args.is_empty() {
-            label::LayoutProperties::default()
+            label::BlockProperties::default()
         }
         else {
             let [props] = args.into_array(err)?;
-            label::LayoutProperties::from_arg(props, scope, err)?
+            label::BlockProperties::from_arg(props, scope, err)?
         };
-        props.set_layout_type(label::LayoutType::Rule);
-        Ok(Value::Custom(label::Layout::vrule(props).into()))
+        props.set_layout_type(label::BlockType::Rule);
+        Ok(Value::Custom(label::Block::vrule(props).into()))
     }),
 ];
 
