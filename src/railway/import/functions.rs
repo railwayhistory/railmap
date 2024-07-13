@@ -73,10 +73,10 @@ const FUNCTIONS: &[(
     ("hbox", &|args, _scope, _,  err| {
         let ([align], layouts) = args.into_var_array::<1>(err)?;
         let mut align = align.eval(err)?;
-        let halign = match label::halign_from_symbols(&mut align) {
+        let halign = match label::hbase_from_symbols(&mut align) {
             Some(align) => align,
             None => {
-                err.add(align.pos(), "horizontal alignment required");
+                err.add(align.pos(), "horizontal base required");
                 return Err(Failed)
             }
         };
@@ -208,10 +208,10 @@ const FUNCTIONS: &[(
                 return Err(Failed)
             }
         };
-        let valign = match label::valign_from_symbols(&mut align) {
+        let vbase = match label::vbase_from_symbols(&mut align) {
             Some(align) => align,
             None => {
-                err.add(align.pos(), "vertical alignment required");
+                err.add(align.pos(), "vertical base required");
                 return Err(Failed)
             }
         };
@@ -224,7 +224,7 @@ const FUNCTIONS: &[(
         align.check_exhausted(err)?;
         Ok(Value::Custom(
             label::Layout::vbox(
-                halign, valign, properties,
+                halign, vbase, properties,
                 label::layouts_from_args(layouts, err)?,
             ).into()
         ))

@@ -2,7 +2,7 @@
 
 use femtomap::{layout, world};
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
-use femtomap::layout::{Align, Margins, ShapedBlock};
+use femtomap::layout::{Align, Base, Margins, ShapedBlock};
 use femtomap::path::Position;
 use femtomap::render::{
     Canvas, Color, Font, FontBuilder, FontFamily, FontFeatures, FontStretch,
@@ -149,6 +149,24 @@ pub fn halign_from_symbols(symbols: &mut SymbolSet) -> Option<Align> {
     }
 }
 
+pub fn hbase_from_symbols(symbols: &mut SymbolSet) -> Option<Base> {
+    if symbols.take("left") {
+        Some(Base::Start)
+    }
+    else if symbols.take("center") {
+        Some(Base::Center)
+    }
+    else if symbols.take("sep") {
+        Some(Base::FirstBase)
+    }
+    else if symbols.take("right") {
+        Some(Base::End)
+    }
+    else {
+        None
+    }
+}
+
 pub fn valign_from_symbols(symbols: &mut SymbolSet) -> Option<Align> {
     if symbols.take("top") {
         Some(Align::Start)
@@ -161,6 +179,27 @@ pub fn valign_from_symbols(symbols: &mut SymbolSet) -> Option<Align> {
     }
     else if symbols.take("bottom") {
         Some(Align::End)
+    }
+    else {
+        None
+    }
+}
+
+pub fn vbase_from_symbols(symbols: &mut SymbolSet) -> Option<Base> {
+    if symbols.take("top") {
+        Some(Base::Start)
+    }
+    else if symbols.take("middle") {
+        Some(Base::Center)
+    }
+    else if symbols.take("topbase") {
+        Some(Base::FirstBase)
+    }
+    else if symbols.take("base") {
+        Some(Base::LastBase)
+    }
+    else if symbols.take("bottom") {
+        Some(Base::End)
     }
     else {
         None
@@ -643,18 +682,16 @@ impl Anchor {
     }
 
     /// Converts the anchor into horizontal and vertical align.
-    pub fn into_aligns(self) -> (Align, Align) {
-        use self::Align::*;
-
+    pub fn into_hbox_aligns(self) -> (Base, Align) {
         match self {
-            Anchor::North => (Center, Start),
-            Anchor::NorthEast => (End, Start),
-            Anchor::East => (End, Center),
-            Anchor::SouthEast => (End, End),
-            Anchor::South => (Center, End),
-            Anchor::SouthWest => (Start, End),
-            Anchor::West => (Start, Center),
-            Anchor::NorthWest => (Start, Start),
+            Anchor::North => (Base::Center, Align::Start),
+            Anchor::NorthEast => (Base::End, Align::Start),
+            Anchor::East => (Base::End, Align::Center),
+            Anchor::SouthEast => (Base::End, Align::End),
+            Anchor::South => (Base::Center, Align::End),
+            Anchor::SouthWest => (Base::Start, Align::End),
+            Anchor::West => (Base::Start, Align::Center),
+            Anchor::NorthWest => (Base::Start, Align::Start),
         }
     }
 }
@@ -665,36 +702,34 @@ impl Anchor {
 /// The compass direction where to anchor a label.
 #[derive(Clone, Copy, Debug)]
 pub struct TextAnchor {
-    pub h: Align,
+    pub h: Base,
     pub v: Align,
 }
 
 impl TextAnchor {
-    pub fn new(h: Align, v: Align) -> Self {
+    pub fn new(h: Base, v: Align) -> Self {
         Self { h, v }
     }
 
-    pub fn from_pair((h, v): (Align, Align)) -> Self {
+    pub fn from_pair((h, v): (Base, Align)) -> Self {
         Self::new(h, v)
     }
 
     pub fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
-        use self::Align::*;
-
         if let Some(anchor) = Anchor::from_symbols(symbols) {
-            Some(Self::from_pair(anchor.into_aligns()))
+            Some(Self::from_pair(anchor.into_hbox_aligns()))
         }
         else if symbols.take("left") {
-            Some(Self::new(End, Base))
+            Some(Self::new(Base::End, Align::Base))
         }
         else if symbols.take("right") {
-            Some(Self::new(Start, Base))
+            Some(Self::new(Base::Start, Align::Base))
         }
         else if symbols.take("top") {
-            Some(Self::new(Center, End))
+            Some(Self::new(Base::Center, Align::End))
         }
         else if symbols.take("bottom") {
-            Some(Self::new(Center, Start))
+            Some(Self::new(Base::Center, Align::Start))
         }
         else {
             None

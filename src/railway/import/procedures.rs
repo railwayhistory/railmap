@@ -2,7 +2,7 @@
 
 use femtomap::import::ast::Pos;
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
-use femtomap::layout::Align;
+use femtomap::layout::{Align, Base};
 use femtomap::path::{Distance, Edge, Position, Trace};
 use crate::railway::class::Railway;
 use crate::railway::feature::{label, marker};
@@ -238,21 +238,7 @@ const PROCEDURES: &[(
         );
         let pos3 = pos2.clone().shift(args.shift);
 
-        let (halign, valign) = {
-            use self::Anchor::*;
-            use self::Align::*;
-
-            match args.anchor {
-                North => (Center, Start),
-                NorthEast => (End, Start),
-                East => (End, Center),
-                SouthEast => (End, End),
-                South => (Center, End),
-                SouthWest => (Start, End),
-                West => (Start, Center),
-                NorthWest => (Start, Start)
-            }
-        };
+        let (hbase, valign) = args.anchor.into_hbox_aligns();
 
         scope.builtin().with_store(|store| {
             // Build the dots
@@ -293,7 +279,7 @@ const PROCEDURES: &[(
             store.line_labels.insert(
                 Label::new(
                     Layout::hbox(
-                        halign, valign, args.properties, vec![layout.into()],
+                        hbase, valign, args.properties, vec![layout.into()],
                     ),
                     pos3, false,
                     Default::default(),
@@ -531,16 +517,16 @@ const PROCEDURES: &[(
 
         let block = if class.take("top") {
             label::Layout::vbox(
-                halign, Align::End, Default::default(),
+                halign, Base::End, Default::default(),
                 vec![name, km]
             )
         }
         else if class.take("left") {
             label::Layout::hbox(
-                Align::End, Align::Base, Default::default(),
+                Base::End, Align::Base, Default::default(),
                 vec![
                     label::Block::vbox(
-                        halign, Align::Base, Default::default(),
+                        halign, Base::FirstBase, Default::default(),
                         vec![name, km]
                     )
                 ]
@@ -548,16 +534,16 @@ const PROCEDURES: &[(
         }
         else if class.take("bottom") {
             label::Layout::vbox(
-                halign, Align::Start, Default::default(),
+                halign, Base::Start, Default::default(),
                 vec![name, km]
             )
         }
         else if class.take("right") {
             label::Layout::hbox(
-                Align::Start, Align::Base, Default::default(),
+                Base::Start, Align::Base, Default::default(),
                 vec![
                     label::Block::vbox(
-                        halign, Align::Base, Default::default(),
+                        halign, Base::FirstBase, Default::default(),
                         vec![name, km]
                     )
                 ]
@@ -676,7 +662,7 @@ fn line_badge(
     args.block.properties_mut().set_layout_type(label::BlockType::Framed);
 
     let mut block = label::Layout::hbox(
-        Align::Center, Align::Center, args.properties,
+        Base::Center, Align::Center, args.properties,
         vec![args.block.into()]
     );
     block.properties_mut().set_layout_type(label::BlockType::TextFrame);
@@ -712,7 +698,7 @@ fn line_label(
     );
     let pos3 = pos2.clone().shift(args.shift);
 
-    let (halign, valign) = args.anchor.into_aligns();
+    let (hbase, valign) = args.anchor.into_hbox_aligns();
 
     args.properties.set_packed(true);
     args.properties.set_layout_type(label::BlockType::TextFrame);
@@ -729,7 +715,7 @@ fn line_label(
         ),
         label::Label::new(
             label::Layout::hbox(
-                halign, valign, args.properties, vec![layout.into()],
+                hbase, valign, args.properties, vec![layout.into()],
             ),
             pos3, false, BlockProperties::with_size(FontSize::Badge),
         ),
