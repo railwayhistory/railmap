@@ -154,7 +154,11 @@ impl Units {
 
     /// Creates the value for detail level 2.
     fn d2() -> Self {
-        Self::d0()
+        Self {
+            line_width: 1.1,
+            other_width: 0.6,
+            .. Self::d0()
+        }
     }
 
     /// Creates the value for detail level 3.

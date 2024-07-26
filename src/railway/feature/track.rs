@@ -50,6 +50,12 @@ use crate::railway::style::Style;
 use super::{AnyShape, Category, Feature, Shape, Stage};
 
 
+//------------ Constants -----------------------------------------------------
+
+/// Multiplier over line_width for double track in detail 2.
+pub const D2_DOUBLE_MULTIPLIER: f64 = 1.6;
+
+
 //------------ TrackClass ----------------------------------------------------
 
 /// The properties of the track.
@@ -279,14 +285,14 @@ impl<'a> ContourShape2<'a> {
             color: style.track_color(&contour.class.class),
             width: if contour.class.class.category().is_main() {
                 if contour.class.double() {
-                    style.units().line_width * 2.0
+                    style.units().line_width * D2_DOUBLE_MULTIPLIER
                 }
                 else {
-                    style.units().line_width * 1.4
+                    style.units().line_width
                 }
             }
             else {
-                style.units().other_width * 1.2
+                style.units().other_width
             },
             base_dash: if contour.class.combined {
                 Some(DashPattern::new(

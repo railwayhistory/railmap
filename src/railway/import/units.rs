@@ -66,7 +66,12 @@ pub const MAP_DISTANCES: &[(&str, usize, f64)] = &[
     ("dl", 2, 1.),
 
     // Stroke width of main line track (“stroke track”).
-    ("st", 3, 1.), 
+    ("st", 3, 1.),
+
+    // Stroke width of a double main line track.
+    //
+    // This is only used in lower in detail 2.
+    ("dst", 3, crate::railway::feature::track::D2_DOUBLE_MULTIPLIER),
 
     // Width of the station symbol (“station width”).
     ("sw", 4, 1.),
