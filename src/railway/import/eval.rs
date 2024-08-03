@@ -8,7 +8,7 @@ use femtomap::import::path::{ImportPathSet};
 use femtomap::path::Distance;
 use crate::railway::class::Railway;
 use crate::railway::feature::StoreBuilder;
-use crate::railway::feature::label::Layout;
+use crate::railway::feature::label::{Block, Layout};
 use super::{functions, procedures, units};
 
 pub type ArgumentList<'s> = eval::ArgumentList<'s, Builtin>;
@@ -101,7 +101,14 @@ impl eval::Builtin for Builtin {
 
 #[derive(Clone)]
 pub enum Custom {
+    Block(Block),
     Layout(Layout),
+}
+
+impl From<Block> for Custom {
+    fn from(src: Block) -> Self {
+        Self::Block(src)
+    }
 }
 
 impl From<Layout> for Custom {

@@ -2,14 +2,13 @@
 
 use femtomap::{layout, world};
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
-use femtomap::layout::{Align, Margins, ShapedLayout};
+use femtomap::layout::{Align, Base, Margins, ShapedBlock};
 use femtomap::path::Position;
 use femtomap::render::{
     Canvas, Color, Font, FontBuilder, FontFamily, FontFeatures, FontStretch,
     FontStyle, FontWeight, LineCap, LineJoin, LineWidth, Matrix,
     Operator, TextDecoration, Sketch,
 };
-use kurbo::Vec2;
 use crate::railway::import::eval;
 use crate::railway::import::eval::{Custom, Expression, Scope};
 use crate::railway::class::Railway;
@@ -42,23 +41,22 @@ pub struct Label {
     /// If this is `false`, the base direction is to the right.
     on_path: bool,
 
-    /// The layout to render
-    layout: layout::Block<LayoutProperties>,
+    /// The block to render
+    block: Layout,
 }
 
 impl Label {
     pub fn new(
-        layout: Layout,
+        mut block: Layout,
         position: Position,
         on_path: bool,
-        mut base: LayoutProperties,
+        mut base: BlockProperties,
     ) -> Self {
-        base.update(&LayoutProperties::base());
-        let mut layout = layout::Block::new(layout);
-        layout.update_properties(&base, |me, parent| me.update(parent));
+        base.update(&BlockProperties::base());
+        block.update_properties(&base, |me, parent| me.update(parent));
 
         Self {
-            position, on_path, layout
+            position, on_path, block
         }
     }
 }
@@ -77,10 +75,10 @@ impl Feature for Label {
     ) -> AnyShape {
         let (point, angle) = self.position.resolve_label(style, self.on_path);
         let matrix = Matrix::identity().translate(point).rotate(angle);
-        let layout = self.layout.shape(style, canvas);
+        let layout = self.block.shape(Default::default(), style, canvas);
         AnyShape::from(move |stage: Stage, style: &Style, canvas: &mut Canvas| {
             layout.render(
-                style, Default::default(), &stage,
+                style, &stage,
                 canvas.sketch().apply(matrix)
             )
         })
@@ -88,11 +86,11 @@ impl Feature for Label {
 }
 
 
-//------------ Layout --------------------------------------------------------
+//------------ Layout ---------------------------------------------------------
 
-pub type Layout = layout::Layout<LayoutProperties>;
+pub type Layout = layout::Layout<BlockProperties>;
 
-pub fn layout_from_expr(
+pub fn block_from_expr(
     expr: eval::Expression,
     err: &mut EvalErrors
 ) -> Result<Layout, Failed> {
@@ -102,6 +100,28 @@ pub fn layout_from_expr(
             Ok(Layout::span(val.into(), Default::default()))
         }
         _ => {
+            err.add(expr.pos, "expected block layout or string");
+            return Err(Failed)
+        }
+    }
+}
+
+
+//------------ Block --------------------------------------------------------
+
+pub type Block = layout::Block<BlockProperties>;
+
+pub fn layout_from_expr(
+    expr: eval::Expression,
+    err: &mut EvalErrors
+) -> Result<Block, Failed> {
+    match expr.value {
+        eval::Value::Custom(Custom::Layout(val)) => Ok(val.into()),
+        eval::Value::Custom(Custom::Block(val)) => Ok(val),
+        eval::Value::Text(val) => {
+            Ok(Block::span(val.into(), Default::default()))
+        }
+        _ => {
             err.add(expr.pos, "expected layout or string");
             return Err(Failed)
         }
@@ -109,7 +129,7 @@ pub fn layout_from_expr(
 }
 
 
-//------------ Creating Layouts ----------------------------------------------
+//------------ Creating Blocks ----------------------------------------------
 
 pub fn halign_from_symbols(symbols: &mut SymbolSet) -> Option<Align> {
     if symbols.take("left") {
@@ -123,6 +143,24 @@ pub fn halign_from_symbols(symbols: &mut SymbolSet) -> Option<Align> {
     }
     else if symbols.take("right") {
         Some(Align::End)
+    }
+    else {
+        None
+    }
+}
+
+pub fn hbase_from_symbols(symbols: &mut SymbolSet) -> Option<Base> {
+    if symbols.take("left") {
+        Some(Base::Start)
+    }
+    else if symbols.take("center") {
+        Some(Base::Center)
+    }
+    else if symbols.take("sep") {
+        Some(Base::FirstBase)
+    }
+    else if symbols.take("right") {
+        Some(Base::End)
     }
     else {
         None
@@ -147,9 +185,30 @@ pub fn valign_from_symbols(symbols: &mut SymbolSet) -> Option<Align> {
     }
 }
 
+pub fn vbase_from_symbols(symbols: &mut SymbolSet) -> Option<Base> {
+    if symbols.take("top") {
+        Some(Base::Start)
+    }
+    else if symbols.take("middle") {
+        Some(Base::Center)
+    }
+    else if symbols.take("topbase") {
+        Some(Base::FirstBase)
+    }
+    else if symbols.take("base") {
+        Some(Base::LastBase)
+    }
+    else if symbols.take("bottom") {
+        Some(Base::End)
+    }
+    else {
+        None
+    }
+}
+
 pub fn layouts_from_args<'a, I: IntoIterator<Item = Expression<'a>>>(
     args: I, err: &mut EvalErrors,
-) -> Result<Vec<Layout>, Failed> {
+) -> Result<Vec<Block>, Failed> {
     let mut res = Vec::new();
     for expr in args {
         res.push(layout_from_expr(expr, err)?);
@@ -158,10 +217,10 @@ pub fn layouts_from_args<'a, I: IntoIterator<Item = Expression<'a>>>(
 }
 
 
-//------------ LayoutProperties ----------------------------------------------
+//------------ BlockProperties ----------------------------------------------
 
 #[derive(Clone, Debug, Default)]
-pub struct LayoutProperties {
+pub struct BlockProperties {
     /// The font to be used.
     font: FontBuilder,
 
@@ -172,13 +231,13 @@ pub struct LayoutProperties {
     packed: Option<bool>,
 
     /// What kind of layout to we have?
-    layout_type: LayoutType,
+    layout_type: BlockType,
 
     /// The class for the layout.
     class: Railway,
 }
 
-impl LayoutProperties {
+impl BlockProperties {
     fn base() -> Self {
         Self {
             font: FontBuilder::new()
@@ -232,7 +291,7 @@ impl LayoutProperties {
             font: Self::font_from_symbols(symbols),
             size: FontSize::from_symbols(symbols),
             packed: None,
-            layout_type: LayoutType::Normal,
+            layout_type: BlockType::Normal,
             class: Railway::from_symbols(symbols, scope),
         }
     }
@@ -244,7 +303,7 @@ impl LayoutProperties {
             font: Self::font_from_symbols(symbols),
             size: FontSize::from_symbols(symbols),
             packed: None,
-            layout_type: LayoutType::Normal,
+            layout_type: BlockType::Normal,
             class: Railway::from_symbols_only(symbols),
         }
     }
@@ -304,7 +363,7 @@ impl LayoutProperties {
         &self.class
     }
 
-    pub fn set_layout_type(&mut self, layout_type: LayoutType) {
+    pub fn set_layout_type(&mut self, layout_type: BlockType) {
         self.layout_type = layout_type
     }
 
@@ -339,7 +398,7 @@ impl LayoutProperties {
 }
 
 
-impl layout::Properties for LayoutProperties {
+impl layout::Properties for BlockProperties {
     type Style = Style;
     type Stage = Stage;
     type SpanText = Text;
@@ -368,10 +427,10 @@ impl layout::Properties for LayoutProperties {
     fn frame(&self, style: &Self::Style) -> Option<Margins> {
         // XXX Make this font and size dependent.
         match self.layout_type {
-            LayoutType::Rule => {
+            BlockType::Rule => {
                 Some(Margins::equal(0.5 * style.units().guide_width))
             }
-            LayoutType::TextFrame => {
+            BlockType::TextFrame => {
                 Some(Margins::equal(style.units().guide_width))
             }
             _ => None,
@@ -380,13 +439,13 @@ impl layout::Properties for LayoutProperties {
 
     fn margins(&self, style: &Self::Style) -> Margins {
         match self.layout_type {
-            LayoutType::BadgeFrame => {
+            BlockType::BadgeFrame => {
                 Margins::vh(
                     style.units().dt * 0.1,
                     style.units().dt * 0.5,
                 )
             }
-            LayoutType::Framed => {
+            BlockType::Framed => {
                 Margins::vh(
                     self.size().size(style) * 0.15,
                     self.size().size(style) * 0.2,
@@ -398,23 +457,22 @@ impl layout::Properties for LayoutProperties {
 
     fn render(
         &self,
-        layout: &ShapedLayout<Self>,
+        layout: &ShapedBlock<Self>,
         style: &Self::Style,
-        base: Vec2,
         stage: &Self::Stage,
         canvas: &mut Sketch,
     ) {
         match stage {
             Stage::Back => {
                 match self.layout_type {
-                    LayoutType::BadgeFrame => {
+                    BlockType::BadgeFrame => {
                         let mut canvas = canvas.group();
-                        canvas.apply(layout.outer(base));
+                        canvas.apply(layout.outer());
                         canvas.apply(Operator::DestinationOut);
                         canvas.fill();
                     }
-                    LayoutType::TextFrame => {
-                        canvas.apply(layout.outer(base));
+                    BlockType::TextFrame => {
+                        canvas.apply(layout.outer());
                         canvas.apply(Color::WHITE);
                         canvas.fill();
                     }
@@ -429,22 +487,22 @@ impl layout::Properties for LayoutProperties {
                 canvas.apply(LineJoin::Bevel);
                 canvas.apply(Color::WHITE);
                 canvas.apply(LineWidth(self.size().size(style) * 0.3));
-                layout.stroke_text(base, canvas);
+                layout.stroke_text(canvas);
             }
             Stage::Base => {
                 if layout.is_span() {
                     canvas.apply(style.label_color(&self.class));
-                    layout.fill_text(base, canvas);
+                    layout.fill_text(canvas);
                 }
                 if layout.has_frame() {
                     canvas.apply(style.label_color(&self.class));
-                    layout.fill_frame(base, canvas);
+                    layout.fill_frame(canvas);
                 }
             }
             /*
             Stage::Inside => {
                 // Draw boxes around boxes for debugging.
-                let mut outer = layout.outer(base);
+                let mut outer = layout.outer();
                 canvas.apply(outer);
                 canvas.apply(Color::RED);
                 canvas.apply_line_width(0.6);
@@ -462,10 +520,10 @@ impl layout::Properties for LayoutProperties {
 }
 
 
-//------------ LayoutType ----------------------------------------------------
+//------------ BlockType ----------------------------------------------------
 
 #[derive(Clone, Copy, Debug, Default)]
-pub enum LayoutType {
+pub enum BlockType {
     #[default]
     Normal,
     Rule,
@@ -624,18 +682,16 @@ impl Anchor {
     }
 
     /// Converts the anchor into horizontal and vertical align.
-    pub fn into_aligns(self) -> (Align, Align) {
-        use self::Align::*;
-
+    pub fn into_hbox_aligns(self) -> (Base, Align) {
         match self {
-            Anchor::North => (Center, Start),
-            Anchor::NorthEast => (End, Start),
-            Anchor::East => (End, Center),
-            Anchor::SouthEast => (End, End),
-            Anchor::South => (Center, End),
-            Anchor::SouthWest => (Start, End),
-            Anchor::West => (Start, Center),
-            Anchor::NorthWest => (Start, Start),
+            Anchor::North => (Base::Center, Align::Start),
+            Anchor::NorthEast => (Base::End, Align::Start),
+            Anchor::East => (Base::End, Align::Center),
+            Anchor::SouthEast => (Base::End, Align::End),
+            Anchor::South => (Base::Center, Align::End),
+            Anchor::SouthWest => (Base::Start, Align::End),
+            Anchor::West => (Base::Start, Align::Center),
+            Anchor::NorthWest => (Base::Start, Align::Start),
         }
     }
 }
@@ -646,36 +702,34 @@ impl Anchor {
 /// The compass direction where to anchor a label.
 #[derive(Clone, Copy, Debug)]
 pub struct TextAnchor {
-    pub h: Align,
+    pub h: Base,
     pub v: Align,
 }
 
 impl TextAnchor {
-    pub fn new(h: Align, v: Align) -> Self {
+    pub fn new(h: Base, v: Align) -> Self {
         Self { h, v }
     }
 
-    pub fn from_pair((h, v): (Align, Align)) -> Self {
+    pub fn from_pair((h, v): (Base, Align)) -> Self {
         Self::new(h, v)
     }
 
     pub fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
-        use self::Align::*;
-
         if let Some(anchor) = Anchor::from_symbols(symbols) {
-            Some(Self::from_pair(anchor.into_aligns()))
+            Some(Self::from_pair(anchor.into_hbox_aligns()))
         }
         else if symbols.take("left") {
-            Some(Self::new(End, Base))
+            Some(Self::new(Base::End, Align::Base))
         }
         else if symbols.take("right") {
-            Some(Self::new(Start, Base))
+            Some(Self::new(Base::Start, Align::Base))
         }
         else if symbols.take("top") {
-            Some(Self::new(Center, End))
+            Some(Self::new(Base::Center, Align::End))
         }
         else if symbols.take("bottom") {
-            Some(Self::new(Center, Start))
+            Some(Self::new(Base::Center, Align::Start))
         }
         else {
             None
