@@ -131,6 +131,7 @@ pub fn layout_from_expr(
 
 //------------ Creating Blocks ----------------------------------------------
 
+/// Determines the horizontal alignment of a vbox.
 pub fn halign_from_symbols(symbols: &mut SymbolSet) -> Option<Align> {
     if symbols.take("left") {
         Some(Align::Start)
@@ -149,42 +150,7 @@ pub fn halign_from_symbols(symbols: &mut SymbolSet) -> Option<Align> {
     }
 }
 
-pub fn hbase_from_symbols(symbols: &mut SymbolSet) -> Option<Base> {
-    if symbols.take("left") {
-        Some(Base::Start)
-    }
-    else if symbols.take("center") {
-        Some(Base::Center)
-    }
-    else if symbols.take("sep") {
-        Some(Base::FirstBase)
-    }
-    else if symbols.take("right") {
-        Some(Base::End)
-    }
-    else {
-        None
-    }
-}
-
-pub fn valign_from_symbols(symbols: &mut SymbolSet) -> Option<Align> {
-    if symbols.take("top") {
-        Some(Align::Start)
-    }
-    else if symbols.take("middle") {
-        Some(Align::Center)
-    }
-    else if symbols.take("base") {
-        Some(Align::Base)
-    }
-    else if symbols.take("bottom") {
-        Some(Align::End)
-    }
-    else {
-        None
-    }
-}
-
+/// Determines the vertical base of an vbox.
 pub fn vbase_from_symbols(symbols: &mut SymbolSet) -> Option<Base> {
     if symbols.take("top") {
         Some(Base::Start)
@@ -200,6 +166,47 @@ pub fn vbase_from_symbols(symbols: &mut SymbolSet) -> Option<Base> {
     }
     else if symbols.take("bottom") {
         Some(Base::End)
+    }
+    else {
+        None
+    }
+}
+
+/// Determines the horizontal base of an hbox.
+pub fn hbase_from_symbols(symbols: &mut SymbolSet) -> Option<Base> {
+    if symbols.take("left") {
+        Some(Base::Start)
+    }
+    else if symbols.take("center") {
+        Some(Base::Center)
+    }
+    else if symbols.take("sep") {
+        Some(Base::FirstAnchor)
+    }
+    else if symbols.take("lastsep") {
+        Some(Base::LastAnchor)
+    }
+    else if symbols.take("right") {
+        Some(Base::End)
+    }
+    else {
+        None
+    }
+}
+
+/// Determines the vertical alignment of a hbox.
+pub fn valign_from_symbols(symbols: &mut SymbolSet) -> Option<Align> {
+    if symbols.take("top") {
+        Some(Align::Start)
+    }
+    else if symbols.take("middle") {
+        Some(Align::Center)
+    }
+    else if symbols.take("base") {
+        Some(Align::Base)
+    }
+    else if symbols.take("bottom") {
+        Some(Align::End)
     }
     else {
         None
