@@ -23,11 +23,12 @@ pub struct Server {
     railway: ArcSwap<railway::Map>,
     cache: Arc<Mutex<LruCache<TileId, Bytes>>>,
     rx: Option<mpsc::Receiver<ServerCommand>>,
+    proof: bool,
 }
 
 
 impl Server {
-    pub fn new(railway: railway::Map) -> (Self, ServerControl) {
+    pub fn new(railway: railway::Map, proof: bool) -> (Self, ServerControl) {
         let (tx, rx) = mpsc::channel(10);
         (
             Server {
@@ -36,6 +37,7 @@ impl Server {
                     LruCache::new(NonZeroUsize::new(10_000).unwrap())
                 )),
                 rx: Some(rx),
+                proof,
             },
             ServerControl { tx },
         )
@@ -169,7 +171,7 @@ impl Server {
         */
 
         let tile = match TileId::from_path(
-            &request.uri().path()[1..],
+            &request.uri().path()[1..], self.proof,
         ) {
             Ok(tile) => tile,
             Err(_) => {

@@ -22,6 +22,7 @@ pub struct TileId {
     pub x: u32,
     pub y: u32,
     pub format: TileFormat,
+    pub proof: bool,
 }
 
 impl TileId {
@@ -32,7 +33,7 @@ impl TileId {
     /// ```text
     /// {layer}/{zoom}/{x}/{y}.{fmt}
     /// ```
-    pub fn from_path(path: &str) -> Result<Self, TileIdError> {
+    pub fn from_path(path: &str, proof: bool) -> Result<Self, TileIdError> {
         let mut path = path.split('/');
 
         let layer = path.next().ok_or(TileIdError)?;
@@ -68,7 +69,7 @@ impl TileId {
             return Err(TileIdError)
         }
 
-        Ok(TileId { layer, zoom, x, y, format })
+        Ok(TileId { layer, zoom, x, y, format, proof, })
     }
 
     /// The upper bound for a coordinate in a zoom level.

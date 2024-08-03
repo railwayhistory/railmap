@@ -52,6 +52,28 @@ const ZOOM: &[Zoom] = &[
     Zoom::new(5.5, 5, 2.5),
 ];
 
+const PROOF_ZOOM: &[Zoom] = &[
+    Zoom::new(0.0, 0, 1.0),  // 0
+    Zoom::new(0.0, 0, 1.0),
+    Zoom::new(0.0, 0, 1.0),
+    Zoom::new(0.0, 0, 1.0),
+    Zoom::new(0.0, 0, 1.0),
+    Zoom::new(0.0, 0, 1.0),  // 5
+    Zoom::new(0.5, 0, 1.0),
+    Zoom::new(1.0, 1, 1.0),
+    Zoom::new(1.5, 1, 1.3),
+    Zoom::new(2.0, 2, 1.0),
+    Zoom::new(3.0, 3, 1.0), // 10
+    Zoom::new(3.5, 3, 1.3),
+    Zoom::new(4.0, 4, 1.0),
+    Zoom::new(4.5, 4, 1.3),
+    Zoom::new(5.0, 5, 1.0),
+    Zoom::new(5.5, 5, 1.3), // 15
+    Zoom::new(5.5, 5, 1.6),
+    Zoom::new(5.5, 5, 1.9),
+    Zoom::new(5.5, 5, 2.1),
+];
+
 /// Size correction for feature bounds.
 ///
 /// This value will be multiplied with detail level, then length and height of
@@ -181,7 +203,7 @@ impl Units {
             mark_width: 0.5,
             guide_width: 0.5,
             border_width: 0.6,
-            .. Self::standard(0.6 * MM, 2.4 * MM, 2.25 * MM)
+            .. Self::standard(0.75 * MM, 2.4 * MM, 2.25 * MM)
         }
     }
 
@@ -308,7 +330,12 @@ pub struct Style {
 
 impl Style {
     pub fn new(layer_id: LayerId, tile_id: &TileId, colors: &ColorSet) -> Self {
-        let zoom = ZOOM[usize::from(tile_id.zoom)];
+        let zoom = if tile_id.proof {
+            PROOF_ZOOM[usize::from(tile_id.zoom)]
+        }
+        else {
+            ZOOM[usize::from(tile_id.zoom)]
+        };
         let canvas_bp = tile_id.format.canvas_bp() * zoom.mag;
         let units = Units::new(zoom.detail, canvas_bp);
         let equator_scale = tile_id.scale();

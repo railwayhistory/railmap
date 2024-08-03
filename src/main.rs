@@ -48,6 +48,10 @@ struct Args {
     /// Watch for changes in map files.
     #[arg(short, long)]
     watch: bool,
+
+    /// Enable proof mode.
+    #[arg(short, long)]
+    proof: bool,
 }
 
 
@@ -58,6 +62,7 @@ struct Config {
     regions: Option<Vec<String>>,
     listen: SocketAddr,
     watch: bool,
+    proof: bool,
 }
 
 impl Default for Config {
@@ -67,6 +72,7 @@ impl Default for Config {
             regions: None,
             listen: SocketAddr::from_str("127.0.0.1:8080").unwrap(),
             watch: false,
+            proof: false,
         }
     }
 }
@@ -131,6 +137,7 @@ impl Config {
             self.listen = addr;
         }
         self.watch = args.watch;
+        self.proof = args.proof;
     }
 
     fn apply_toml(&mut self, toml: ConfigFile) {
@@ -161,7 +168,7 @@ impl Config {
             None => return,
         };
 
-        let (server, ctrl) = Server::new(map);
+        let (server, ctrl) = Server::new(map, self.proof);
         let listen = self.listen;
 
         if self.watch {
