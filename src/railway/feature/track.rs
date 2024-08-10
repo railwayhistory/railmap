@@ -231,13 +231,13 @@ impl<'a> Shape<'a> for ContourShape<'a> {
 impl<'a> ContourShape<'a> {
     fn apply_line_width(&self, style: &Style, canvas: &mut Group) {
         let line_width = if style.detail() < 1 {
-            style.units().line_width
+            style.measures().main_width()
         }
         else if self.class.double() {
-            style.units().line_width * 1.4
+            style.measures().line_width(&self.class.class) * 1.4
         }
         else {
-            style.units().line_width
+            style.measures().line_width(&self.class.class)
         };
         canvas.apply_line_width(line_width);
     }
@@ -283,33 +283,29 @@ impl<'a> ContourShape2<'a> {
             class: &contour.class,
             casing: contour.casing,
             color: style.track_color(&contour.class.class),
-            width: if contour.class.class.category().is_main() {
-                if contour.class.double() {
-                    style.units().line_width * D2_DOUBLE_MULTIPLIER
-                }
-                else {
-                    style.units().line_width
-                }
+            width: if contour.class.double() {
+                style.measures().line_width(&contour.class.class)
+                    * D2_DOUBLE_MULTIPLIER
             }
             else {
-                style.units().other_width
+                style.measures().line_width(&contour.class.class)
             },
             base_dash: if contour.class.combined {
                 Some(DashPattern::new(
                     [
-                        0.5 * style.units().seg,
-                        0.5 * style.units().seg
+                        0.5 * style.measures().seg(),
+                        0.5 * style.measures().seg()
                     ],
-                    0.75 * style.units().seg
+                    0.75 * style.measures().seg()
                 ))
             }
             else if contour.class.class.status().is_project() {
                 Some(DashPattern::new(
                     [
-                        0.7 * style.units().seg,
-                        0.3 * style.units().seg
+                        0.7 * style.measures().seg(),
+                        0.3 * style.measures().seg(),
                     ],
-                    0.85 * style.units().seg
+                    0.85 * style.measures().seg()
                 ))
             }
             else {
@@ -384,7 +380,7 @@ impl<'a> ContourShape2<'a> {
             return
         }
 
-        let seg = style.units().seg;
+        let seg = style.measures().seg();
         let mut canvas = canvas.sketch();
 
         match (style.pax_only(), self.class.class.pax()) {
@@ -430,7 +426,7 @@ impl<'a> ContourShape4<'a> {
         let has_inside = Self::will_have_inside(&contour.class);
         let use_inside_base = has_inside || !contour.class.class.is_open();
         if contour.class.double() {
-            let off = style.units().dt * 0.5;
+            let off = style.measures().dt() * 0.5;
             let left = contour.trace.outline_offset(off, style);
             let seg = Self::calc_seg(&contour.class, &left, style);
 
@@ -486,7 +482,7 @@ impl<'a> ContourShape4<'a> {
         }
         */
         let len = outline.base_arclen();
-        let base_seg = style.units().seg;
+        let base_seg = style.measures().seg();
         if len < base_seg {
             return None
         }
@@ -588,7 +584,7 @@ impl<'a> ContourShape4<'a> {
     fn render_track_casing(&self, style: &Style, canvas: &mut Sketch) {
         canvas.apply(style.casing_color());
         canvas.apply(LineWidth(
-            1.2 * style.units().dt
+            1.2 * style.measures().dt()
         ));
         canvas.apply(&self.track);
         canvas.stroke();
@@ -622,7 +618,7 @@ impl<'a> ContourShape4<'a> {
         let cat_color = style.cat_color(&self.class.class);
         let rail_color = style.rail_color(&self.class.class);
 
-        let dt = style.units().dt;
+        let dt = style.measures().dt();
         let dr = match self.right {
             Neighbor::None => 0.75 * dt,
             Neighbor::Same => 0.55 * dt, // Wee bit overlap.
@@ -637,12 +633,16 @@ impl<'a> ContourShape4<'a> {
         match (cat_color, rail_color) {
             (Some(cat_color), None) => {
                 if casing {
-                    canvas.apply(LineWidth(style.units().mark_width * 2.));
+                    canvas.apply(LineWidth(
+                        style.measures().line_width(&self.class.class) * 2.)
+                    );
                     canvas.apply(LineCap::Round);
                     canvas.apply(style.casing_color());
                 }
                 else {
-                    canvas.apply(LineWidth(style.units().mark_width));
+                    canvas.apply(LineWidth(
+                        style.measures().line_width(&self.class.class)
+                    ));
                     canvas.apply(cat_color);
                 }
                 self.track.iter_positions(
@@ -658,16 +658,19 @@ impl<'a> ContourShape4<'a> {
             }
 
             (None, Some(rail_color)) => {
-                let skip = style.units().mark_width * 3.;
+                let mark_width = style.measures().line_width(
+                    &self.class.class
+                );
+                let skip = mark_width * 3.;
                 let seg = seg - skip;
 
                 if casing {
-                    canvas.apply(LineWidth(style.units().mark_width * 2.));
+                    canvas.apply(LineWidth(mark_width * 2.));
                     canvas.apply(LineCap::Round);
                     canvas.apply(style.casing_color());
                 }
                 else {
-                    canvas.apply(LineWidth(style.units().mark_width));
+                    canvas.apply(LineWidth(mark_width));
                     canvas.apply(rail_color);
                 }
 
@@ -722,8 +725,8 @@ impl<'a> ContourShape4<'a> {
             None => return
         };
 
-        let radius = style.units().dt * 0.5;
-        let halfwidth = style.units().guide_width * 0.5;
+        let radius = style.measures().dt() * 0.5;
+        let halfwidth = style.measures().guide_width() * 0.5;
         let inner_radius = radius - halfwidth;
         let outer_radius = radius + halfwidth;
 
@@ -753,8 +756,8 @@ impl<'a> ContourShape4<'a> {
             Some(seg) => seg,
             None => return
         };
-        let radius = style.units().dt * 0.5;
-        let width = style.units().guide_width;
+        let radius = style.measures().dt() * 0.5;
+        let width = style.measures().guide_width();
         let radius_width = radius + 0.5 * width;
 
         match group {
@@ -917,12 +920,7 @@ impl<'a> ContourShape4<'a> {
     */
 
     fn line_width(&self, style: &Style) -> f64 {
-        if self.class.class.category().is_main() {
-            style.units().line_width
-        }
-        else {
-            style.units().other_width
-        }
+        style.measures().line_width(&self.class.class)
     }
 }
 
@@ -954,10 +952,10 @@ impl Feature for TrackCasing {
         &self, style: &Style, _canvas: &Canvas
     ) -> AnyShape {
         let line_width = if self.class.double() {
-            2.2 * style.units().dt
+            2.2 * style.measures().dt()
         }
         else {
-            1.2 * style.units().dt
+            1.2 * style.measures().dt()
         };
 
         AnyShape::single_stage(move |style: &Style, canvas: &mut Canvas| {

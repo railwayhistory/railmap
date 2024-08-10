@@ -435,10 +435,10 @@ impl layout::Properties for BlockProperties {
         // XXX Make this font and size dependent.
         match self.layout_type {
             BlockType::Rule => {
-                Some(Margins::equal(0.5 * style.units().guide_width))
+                Some(Margins::equal(0.5 * style.measures().guide_width()))
             }
             BlockType::TextFrame => {
-                Some(Margins::equal(style.units().guide_width))
+                Some(Margins::equal(style.measures().guide_width()))
             }
             _ => None,
         }
@@ -448,8 +448,8 @@ impl layout::Properties for BlockProperties {
         match self.layout_type {
             BlockType::BadgeFrame => {
                 Margins::vh(
-                    style.units().dt * 0.1,
-                    style.units().dt * 0.5,
+                    style.measures().dt() * 0.1,
+                    style.measures().dt() * 0.5,
                 )
             }
             BlockType::Framed => {
@@ -589,22 +589,14 @@ impl FontSize {
     pub fn size(self, style: &Style) -> f64 {
         use self::FontSize::*;
 
-        let base = match self {
-            Xsmall => 5.,
-            Small => 6.,
-            Medium => 7.,
-            Large => 9.,
-            Xlarge => 11.,
-            Badge => {
-                if style.detail() >= 4 {
-                    6.2
-                }
-                else {
-                    5.4
-                }
-            }
-        };
-        base * style.units().bp
+        match self {
+            Xsmall => style.measures().xsmall_font(),
+            Small => style.measures().small_font(),
+            Medium => style.measures().medium_font(),
+            Large => style.measures().large_font(),
+            Xlarge => style.measures().xlarge_font(),
+            Badge => style.measures().badge_font(),
+        }
     }
 
     pub fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {

@@ -78,7 +78,7 @@ impl<'a> Shape<'a> for GuideShape<'a> {
                     let mut sketch = canvas.sketch();
                     sketch.apply(&self.trace);
                     sketch.apply(LineWidth(
-                        3. * style.units().guide_width
+                        3. * style.measures().guide_width()
                     ));
                     sketch.apply(style.casing_color());
                     sketch.stroke();
@@ -87,7 +87,7 @@ impl<'a> Shape<'a> for GuideShape<'a> {
             Stage::Base => {
                 let mut sketch = canvas.sketch();
                 sketch.apply(&self.trace);
-                sketch.apply(LineWidth(style.units().guide_width));
+                sketch.apply(LineWidth(style.measures().guide_width()));
                 sketch.apply(style.label_color(&self.contour.class));
                 sketch.stroke();
             }
