@@ -67,8 +67,8 @@ const PROOF_ZOOM: &[Zoom] = &[
     Zoom::new(2.0, 2, 1.0, measures::BASE_D2),
     Zoom::new(3.0, 3, 1.0, measures::BASE_D3), // 10
     Zoom::new(3.5, 3, 1.3, measures::BASE_D3),
-    Zoom::new(4.0, 4, 1.0, measures::BASE_D4),
-    Zoom::new(4.5, 4, 1.3, measures::BASE_D4),
+    Zoom::new(4.0, 4, 1.2, measures::BASE_D4),
+    Zoom::new(4.5, 4, 1.5, measures::BASE_D4),
     Zoom::new(5.0, 5, 1.0, measures::BASE_D4),
     Zoom::new(5.5, 5, 1.3, measures::BASE_D4), // 15
     Zoom::new(5.5, 5, 1.6, measures::BASE_D4),
@@ -126,7 +126,7 @@ pub struct Style {
     measures: Measures,
 
     /// The map unit array for use with Femtomap transformation.
-    map_units: [f64; 6],
+    map_units: [f64; 8],
 
     /// The coloring rules.
     colors: Colors,

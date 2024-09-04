@@ -59,30 +59,33 @@ pub const MAP_DISTANCES: &[(&str, usize, f64)] = &[
     // The distance between two parallel track lines (“delta track”).
     ("dt", 1, 1.),
 
+    // The space between two parallel tracks ("delta skip")
+    ("ds", 2, 1.),
+
     // Length of a cross-over between two parallel tracks (“delta length”).
     //
     // This is typically a bit shorter than 1dt. In higher detail levels you
     // should use world distances instead.
-    ("dl", 2, 1.),
+    ("dl", 3, 1.),
 
     // Stroke width of main line track (“stroke track”).
-    ("st", 3, 1.),
+    ("st", 4, 1.),
 
     // Stroke width of a double main line track.
     //
     // This is only used in lower in detail 2.
-    ("dst", 3, crate::railway::feature::track::D2_DOUBLE_MULTIPLIER),
+    ("dst", 5, 1.),
 
     // Width of the station symbol (“station width”).
-    ("sw", 4, 1.),
+    ("sw", 6, 1.),
 
     // Width of the station symbol (“station width”).
     //
     // XXX Deprecated.
-    ("ssw", 4, 1.),
+    ("ssw", 6, 1.),
 
     // Height of the station symbol (“station height”).
-    ("sh", 5, 1.),
+    ("sh", 7, 1.),
 ];
 
 /// The length of a millimetre in bp.
