@@ -183,16 +183,19 @@ impl Feature for TrackContour {
     fn shape(
         &self, style: &Style, _canvas: &Canvas
     ) -> AnyShape {
-        if style.detail() == 2 {
-            return AnyShape::from(ContourShape2::new(self, style));
-        }
-        else if style.detail() >= 3 {
-            return ContourShape4::new(self, style)
-        }
-        else {
+        if style.detail() <= 1 {
             AnyShape::from(
                 ContourShape::new(&self.class, self.trace.outline(style))
             )
+        }
+        else if style.detail() == 2 {
+            return AnyShape::from(ContourShape2::new(self, style));
+        }
+        else if style.detail() == 3 {
+            return AnyShape::from(ContourShape3::new(self, style));
+        }
+        else {
+            return ContourShape4::new(self, style)
         }
     }
 }
@@ -284,8 +287,7 @@ impl<'a> ContourShape2<'a> {
             casing: contour.casing,
             color: style.track_color(&contour.class.class),
             width: if contour.class.double() {
-                style.measures().line_width(&contour.class.class)
-                    * D2_DOUBLE_MULTIPLIER
+                style.measures().double_width()
             }
             else {
                 style.measures().line_width(&contour.class.class)
@@ -403,11 +405,168 @@ impl<'a> ContourShape2<'a> {
     }
 }
 
+
+//------------ ContourShape3 -------------------------------------------------
+
+struct ContourShape3<'a> {
+    class: &'a TrackClass,
+    casing: bool,
+    color: Color,
+    width: f64,
+    inside_width: Option<f64>,
+    base_dash: Option<DashPattern<2>>,
+    trace: Outline,
+
+    /// Should we render the base during `Stage::InsideBase`?
+    ///
+    /// This is necessary so that non-open lines don’t draw over the inside
+    /// of open lines.
+    use_inside_base: bool,
+}
+
+impl<'a> ContourShape3<'a> {
+    fn new(
+        contour: &'a TrackContour,
+        style: &Style,
+    ) -> Self {
+        let has_inside = Self::will_have_inside(&contour.class, style);
+        Self {
+            class: &contour.class,
+            casing: contour.casing,
+            color: style.track_color(&contour.class.class),
+            width: if contour.class.double() {
+                style.measures().double_width()
+            }
+            else {
+                style.measures().line_width(&contour.class.class)
+            },
+            inside_width: has_inside.then(|| {
+                if contour.class.double() {
+                    style.measures().double_inside()
+                }
+                else {
+                    style.measures().line_inside(&contour.class.class)
+                }
+            }),
+            base_dash: if contour.class.combined {
+                Some(DashPattern::new(
+                    [
+                        0.5 * style.measures().seg(),
+                        0.5 * style.measures().seg()
+                    ],
+                    0.75 * style.measures().seg()
+                ))
+            }
+            else if contour.class.class.status().is_project() {
+                Some(DashPattern::new(
+                    [
+                        0.7 * style.measures().seg(),
+                        0.3 * style.measures().seg(),
+                    ],
+                    0.85 * style.measures().seg()
+                ))
+            }
+            else {
+                None
+            },
+            trace: contour.trace.outline(style),
+            use_inside_base: has_inside || !contour.class.class.is_open(),
+        }
+    }
+}
+
+impl<'a> Shape<'a> for ContourShape3<'a> {
+    fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
+        match stage {
+            Stage::Casing => {
+                if self.casing {
+                    canvas.sketch().apply(
+                        Color::rgba(1., 1., 1., 0.8)
+                    ).apply(
+                        LineWidth(1.6 * self.width)
+                    ).apply(
+                        &self.trace
+                    ).stroke();
+                }
+            }
+            Stage::InsideBase => {
+                if self.use_inside_base {
+                    self.render_base(style, canvas);
+                }
+            }
+            Stage::Inside => {
+                if let Some(width) = self.inside_width {
+                    self.render_inside(style, canvas, width);
+                }
+            }
+            Stage::Base => {
+                if !self.use_inside_base {
+                    self.render_base(style, canvas);
+                }
+            }
+            _ => { }
+        }
+    }
+}
+
+impl<'a> ContourShape3<'a> {
+    fn render_base(&self, _style: &Style, canvas: &mut Canvas) {
+        let mut canvas = canvas.sketch();
+        canvas.apply(self.color);
+        canvas.apply(LineWidth(self.width));
+        if let Some(dash) = self.base_dash {
+            canvas.apply(dash);
+        }
+        canvas.apply(&self.trace);
+        canvas.stroke();
+    }
+
+    fn will_have_inside(class: &TrackClass, style: &Style) -> bool {
+        if !class.class.is_open() || !class.class.category().is_main() {
+            return false
+        }
+        match (style.pax_only(), class.class.pax()) {
+            (false, Pax::None) => true,
+            (_, Pax::Heritage | Pax::Seasonal) => true,
+            _ => false,
+        }
+    }
+
+    fn render_inside(
+        &self, style: &Style, canvas: &mut Canvas, width: f64
+    ) {
+        let seg = style.measures().seg();
+        let mut canvas = canvas.sketch();
+
+        match (style.pax_only(), self.class.class.pax()) {
+            (false, Pax::None) => { }
+            (_, Pax::Heritage | Pax::Seasonal) => {
+                if self.class.class.station() {
+                    return
+                }
+                canvas.apply(DashPattern::new(
+                    [0.25 * seg, 0.25 * seg],
+                    0.375 * seg
+                ));
+            }
+            _ => return
+        };
+        canvas.apply(LineWidth(width));
+        canvas.apply(Color::WHITE);
+        canvas.apply(&self.trace);
+        canvas.stroke();
+    }
+}
+
+
 //------------ ContourShape4 -------------------------------------------------
 
 struct ContourShape4<'a> {
     class: &'a TrackClass,
+
+    #[allow(dead_code)]
     left: Neighbor,
+
     right: Neighbor,
     casing: bool,
     track: Outline,
@@ -575,10 +734,40 @@ impl<'a> ContourShape4<'a> {
             }
         }
         else {
-        */
             canvas.apply(&self.track);
             canvas.stroke();
-        //}
+        }
+        */
+        canvas.apply(&self.track);
+        canvas.stroke();
+        if !self.class.class.station() && self.class.class.is_open_no_pax() {
+            let seg = match self.seg {
+                Some(seg) => seg,
+                None => return
+            };
+            let offset = self.line_width(style) * 0.35;
+
+            canvas.apply(Color::WHITE);
+            canvas.apply(LineWidth(self.line_width(style) * 0.71));
+            let mut positions = self.track.positions();
+            let sub = match positions.advance_sub(0.075 * seg) {
+                Some(sub) => sub,
+                None => return,
+            };
+            canvas.apply(&sub.offset(offset));
+            canvas.stroke();
+            loop {
+                if positions.advance(0.85 * seg).is_none() {
+                    return
+                }
+                let sub = match positions.advance_sub(0.15 * seg) {
+                    Some(sub) => sub,
+                    None => return,
+                };
+                canvas.apply(&sub.offset(offset));
+                canvas.stroke();
+            }
+        }
     }
 
     fn render_track_casing(&self, style: &Style, canvas: &mut Sketch) {
@@ -619,6 +808,7 @@ impl<'a> ContourShape4<'a> {
         let rail_color = style.rail_color(&self.class.class);
 
         let dt = style.measures().dt();
+        /*
         let dr = match self.right {
             Neighbor::None => 0.75 * dt,
             Neighbor::Same => 0.55 * dt, // Wee bit overlap.
@@ -628,6 +818,11 @@ impl<'a> ContourShape4<'a> {
             Neighbor::None => -0.75 * dt,
             Neighbor::Same => -0.55 * dt, // Wee bit overlap.
             Neighbor::Other => -0.40 * dt,
+        };
+        */
+        let (dl, dr) = match self.right {
+            Neighbor::None => (0., dt),
+            _ => return,
         };
 
         match (cat_color, rail_color) {
@@ -824,7 +1019,7 @@ impl<'a> ContourShape4<'a> {
             return false
         }
         matches!(class.class.pax(), Pax::None | Pax::Heritage)
-            */
+        */
     }
 
     fn render_inside(&self, style: &Style, canvas: &mut Sketch) {
@@ -837,7 +1032,9 @@ impl<'a> ContourShape4<'a> {
             return;
         }
 
-        canvas.apply(LineWidth(self.line_width(style) * 0.5));
+        canvas.apply(
+            LineWidth(style.measures().line_inside(&self.class.class))
+        );
         canvas.apply(Color::WHITE);
         let mut pos = self.track.positions();
         match self.class.class.pax() {
