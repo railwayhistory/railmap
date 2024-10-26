@@ -229,7 +229,8 @@ impl Style {
     }
 
     pub fn bounds_correction(&self) -> f64 {
-        BOUNDS_CORRECTION * (self.detail as f64)
+        BOUNDS_CORRECTION
+            * if self.detail == 0 { 1. } else { self.detail as f64 }
     }
 }
 
