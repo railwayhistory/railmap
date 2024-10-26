@@ -417,11 +417,13 @@ struct ContourShape3<'a> {
     base_dash: Option<DashPattern<2>>,
     trace: Outline,
 
+    /*
     /// Should we render the base during `Stage::InsideBase`?
     ///
     /// This is necessary so that non-open lines don’t draw over the inside
     /// of open lines.
     use_inside_base: bool,
+    */
 }
 
 impl<'a> ContourShape3<'a> {
@@ -470,7 +472,7 @@ impl<'a> ContourShape3<'a> {
                 None
             },
             trace: contour.trace.outline(style),
-            use_inside_base: has_inside || !contour.class.class.is_open(),
+            //use_inside_base: has_inside || !contour.class.class.is_open(),
         }
     }
 }
@@ -479,16 +481,12 @@ impl<'a> Shape<'a> for ContourShape3<'a> {
     fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
         match stage {
             Stage::Casing => {
-                if self.casing {
-                    canvas.sketch().apply(
-                        Color::rgba(1., 1., 1., 0.8)
-                    ).apply(
-                        LineWidth(1.6 * self.width)
-                    ).apply(
-                        &self.trace
-                    ).stroke();
-                }
+                self.render_casing(style, canvas);
             }
+            Stage::Base => {
+                self.render_base(style, canvas);
+            }
+            /*
             Stage::InsideBase => {
                 if self.use_inside_base {
                     self.render_base(style, canvas);
@@ -504,21 +502,53 @@ impl<'a> Shape<'a> for ContourShape3<'a> {
                     self.render_base(style, canvas);
                 }
             }
+            */
             _ => { }
         }
     }
 }
 
 impl<'a> ContourShape3<'a> {
-    fn render_base(&self, _style: &Style, canvas: &mut Canvas) {
+    fn render_casing(&self, style: &Style, canvas: &mut Canvas) {
+        if !self.casing && !self.inside_width.is_some() {
+            return
+        }
+        let mut canvas = canvas.sketch();
+        let canvas = canvas.apply(&self.trace);
+        if self.casing {
+            canvas.apply(
+                Color::rgba(1., 1., 1., 0.8)
+            ).apply(
+                LineWidth(self.width + 2. * style.measures().ds())
+            ).stroke();
+        }
+        if self.inside_width.is_some() {
+            canvas.apply(
+                Color::WHITE
+            ).apply(
+                LineWidth(self.width)
+            ).stroke();
+        }
+    }
+
+    fn render_base(&self, style: &Style, canvas: &mut Canvas) {
         let mut canvas = canvas.sketch();
         canvas.apply(self.color);
         canvas.apply(LineWidth(self.width));
+        self.base_dash(style, &mut canvas);
         if let Some(dash) = self.base_dash {
             canvas.apply(dash);
         }
         canvas.apply(&self.trace);
         canvas.stroke();
+    }
+
+    fn base_dash(&self, style: &Style, canvas: &mut Sketch) {
+        if !self.class.class.is_open() || self.class.class.pax().is_full() {
+            return
+        }
+        let dist = style.measures().seg() * 0.125;
+        canvas.apply(DashPattern::new([dist * 0.6, dist * 0.4], dist * 0.2));
     }
 
     fn will_have_inside(class: &TrackClass, style: &Style) -> bool {
@@ -532,6 +562,7 @@ impl<'a> ContourShape3<'a> {
         }
     }
 
+    /*
     fn render_inside(
         &self, style: &Style, canvas: &mut Canvas, width: f64
     ) {
@@ -556,6 +587,7 @@ impl<'a> ContourShape3<'a> {
         canvas.apply(&self.trace);
         canvas.stroke();
     }
+    */
 }
 
 
