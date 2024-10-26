@@ -169,7 +169,7 @@ impl Measures {
 
     /// The deprecated sp measure.
     pub fn sp(self) -> f64 {
-        self.main_width()
+        self.side_width()
     }
 
     /// Returns the line width for the given class.
@@ -271,7 +271,7 @@ pub const BASE_D1: Measures = BASE_D0;
 pub const BASE_D2: Measures = Measures([
     1.,     // bp
     2.,     // dt
-    2.,     // ds
+    0.4,    // ds
     0.9,    // dl               = 2/3dt
     1.1,    // main width
     0.9,    // main inside
@@ -299,8 +299,8 @@ pub const BASE_D2: Measures = Measures([
 /// The standard measures for detail level 3.
 pub const BASE_D3: Measures = Measures([
     1.,     // bp
-    2.2,    // dt
-    0.8,    // ds
+    1.8,    // dt
+    0.4,    // ds
     1.5,    // dl
     1.4,    // main width
     0.2,    // main inside
