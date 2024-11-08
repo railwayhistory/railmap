@@ -176,27 +176,22 @@ impl<'a, F: Fn(&Style, &mut Canvas) + 'a> Shape<'a> for BaseFnShape<F> {
 #[derive(Clone, Copy, Debug, Default)]
 #[repr(u16)]
 pub enum Stage {
+    /// Background.
     #[default]
     Back = 0,
+
     Casing,
 
     AbandonedBase,
+    AbandonedMarking,
 
-    /// The base for shapes that have an inside.
-    InsideBase,
+    LimitedBase,
+    LimitedMarking,
 
-    /// The inside of shapes that have an inside.
-    Inside,
-
-    /// The base for shapes that don’t have an inside.
-    ///
-    /// These needs to be drawn last so they can paint over the insides.
     Base,
+    Marking,
 
-    /// The casing for markers.
     MarkerCasing,
-
-    /// The base for markers.
     MarkerBase,
 }
 
@@ -222,10 +217,12 @@ impl Iterator for StageIter {
             let next = match stage {
                 Stage::Back => Some(Stage::Casing),
                 Stage::Casing => Some(Stage::AbandonedBase),
-                Stage::AbandonedBase=> Some(Stage::InsideBase),
-                Stage::InsideBase => Some(Stage::Inside),
-                Stage::Inside => Some(Stage::Base),
-                Stage::Base => Some(Stage::MarkerCasing),
+                Stage::AbandonedBase => Some(Stage::AbandonedMarking),
+                Stage::AbandonedMarking => Some(Stage::LimitedBase),
+                Stage::LimitedBase => Some(Stage::LimitedMarking),
+                Stage::LimitedMarking => Some(Stage::Base),
+                Stage::Base => Some(Stage::Marking),
+                Stage::Marking => Some(Stage::MarkerCasing),
                 Stage::MarkerCasing => Some(Stage::MarkerBase),
                 Stage::MarkerBase => None,
             };

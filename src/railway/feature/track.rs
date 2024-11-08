@@ -355,7 +355,7 @@ impl<'a> Shape<'a> for ContourShape2 {
                         .stroke()
                 }
             }
-            Stage::InsideBase => {
+            Stage::LimitedBase => {
                 if self.open && self.dash.is_some() {
                    canvas.sketch() 
                         .apply(Color::rgba(1., 1., 1., 0.8))
@@ -364,7 +364,7 @@ impl<'a> Shape<'a> for ContourShape2 {
                         .stroke()
                 }
             }
-            Stage::Inside => {
+            Stage::LimitedMarking => {
                 if self.open {
                     if let Some(dash) = self.dash {
                        canvas.sketch() 
@@ -400,7 +400,7 @@ impl<'a> Shape<'a> for ContourShape2 {
             res.add(Stage::AbandonedBase)
         }
         else if self.dash.is_some() {
-            res.add(Stage::InsideBase).add(Stage::Inside)
+            res.add(Stage::LimitedBase).add(Stage::LimitedMarking)
         }
         else {
             res.add(Stage::Base)
@@ -421,7 +421,7 @@ struct ContourShape3<'a> {
     trace: Outline,
 
     /*
-    /// Should we render the base during `Stage::InsideBase`?
+    /// Should we render the base during `Stage::LimitedBase`?
     ///
     /// This is necessary so that non-open lines don’t draw over the inside
     /// of open lines.
@@ -490,12 +490,12 @@ impl<'a> Shape<'a> for ContourShape3<'a> {
                 self.render_base(style, canvas);
             }
             /*
-            Stage::InsideBase => {
+            Stage::LimitedBase => {
                 if self.use_inside_base {
                     self.render_base(style, canvas);
                 }
             }
-            Stage::Inside => {
+            Stage::LimitedMarking => {
                 if let Some(width) = self.inside_width {
                     self.render_inside(style, canvas, width);
                 }
@@ -618,7 +618,7 @@ struct ContourShape4<'a> {
     seg: Option<f64>,
     has_inside: bool,
 
-    /// Should we render the base during `Stage::InsideBase`?
+    /// Should we render the base during `Stage::LimitedBase`?
     ///
     /// This is necessary so that non-open lines don’t draw over the inside
     /// of open lines.
@@ -683,12 +683,12 @@ impl<'a> Shape<'a> for ContourShape4<'a> {
                     self.render_casing(style, &mut canvas.sketch());
                 }
             }
-            Stage::InsideBase => {
+            Stage::LimitedBase => {
                 if self.use_inside_base {
                     self.render_base(style, &mut canvas.sketch());
                 }
             }
-            Stage::Inside => {
+            Stage::LimitedMarking => {
                 if self.has_inside {
                     self.render_inside(style, &mut canvas.sketch());
                 }
