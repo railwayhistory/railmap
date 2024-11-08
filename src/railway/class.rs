@@ -225,6 +225,10 @@ impl Railway {
         self.pax.unwrap_or_default()
     }
 
+    pub fn opt_pax(&self) -> Option<Pax> {
+        self.pax
+    }
+
     pub fn gauge(&self) -> Gauge {
         self.gauge.unwrap_or_default()
     }

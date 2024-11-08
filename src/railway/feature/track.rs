@@ -315,8 +315,17 @@ impl ContourShape2 {
     fn pax_dash(
         class: &TrackClass, outline: &Outline, style: &Style
     ) -> Option<DashPattern<2>> {
-        if !class.class.is_open() || class.class.pax().is_full() {
-            return None
+        // For historical reasons, a missing explicit pax defaults to no pax
+        // for open lines and full pax for closed ones.
+        if class.class.status().is_open() {
+            if class.class.pax().is_full() {
+                return None
+            }
+        }
+        else {
+            if class.class.opt_pax().unwrap_or(Pax::Full).is_full() {
+                return None
+            }
         }
 
         if matches!(class.class.pax(), Pax::None) {
@@ -348,11 +357,30 @@ impl<'a> Shape<'a> for ContourShape2 {
             }
             Stage::AbandonedBase => {
                 if !self.open {
-                   canvas.sketch() 
-                        .apply(self.color)
+                    canvas.sketch()
+                        .apply(
+                            if self.dash.is_some() {
+                                Color::rgba(1., 1., 1., 0.8)
+                            }
+                            else {
+                                self.color
+                            }
+                        )
                         .apply(LineWidth(self.width))
                         .apply(&self.outline)
                         .stroke()
+                }
+            }
+            Stage::AbandonedMarking => {
+                if !self.open {
+                    if let Some(dash) = self.dash {
+                       canvas.sketch() 
+                            .apply(self.color)
+                            .apply(LineWidth(self.width))
+                            .apply(dash)
+                            .apply(&self.outline)
+                            .stroke()
+                    }
                 }
             }
             Stage::LimitedBase => {
