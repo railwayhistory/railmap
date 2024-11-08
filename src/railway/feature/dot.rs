@@ -8,7 +8,7 @@ use kurbo::{Circle, Point};
 use crate::railway::class::Railway;
 use crate::railway::import::eval::{Scope, ScopeExt};
 use crate::railway::style::Style;
-use super::{AnyShape, Category, Group, Feature, Shape, Stage};
+use super::{AnyShape, Category, Group, Feature, Shape, Stage, StageSet};
 
 
 //------------ DotMarker -----------------------------------------------------
@@ -183,6 +183,16 @@ impl<'a> Shape<'a> for DotShape<'a> {
                 }
             }
             _ => { }
+        }
+    }
+
+    fn stages(&self) -> StageSet {
+        let res = StageSet::from(Stage::MarkerBase);
+        if self.feature.casing {
+            res.add(Stage::MarkerCasing)
+        }
+        else {
+            res
         }
     }
 }

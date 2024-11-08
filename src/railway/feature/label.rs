@@ -2,7 +2,7 @@
 
 use femtomap::{layout, world};
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
-use femtomap::layout::{Align, Base, Margins, ShapedBlock};
+use femtomap::layout::{Align, Base, Margins, ShapedBlock, ShapedLayout};
 use femtomap::path::Position;
 use femtomap::render::{
     Canvas, Color, Font, FontBuilder, FontFamily, FontFeatures, FontStretch,
@@ -13,7 +13,7 @@ use crate::railway::import::eval;
 use crate::railway::import::eval::{Custom, Expression, Scope};
 use crate::railway::class::Railway;
 use crate::railway::style::Style;
-use super::{AnyShape, Category, Group, Feature, Stage};
+use super::{AnyShape, Category, Group, Feature, Shape, Stage, StageSet};
 
 
 //------------ Configuration -------------------------------------------------
@@ -76,14 +76,32 @@ impl Feature for Label {
         let (point, angle) = self.position.resolve_label(style, self.on_path);
         let matrix = Matrix::identity().translate(point).rotate(angle);
         let layout = self.block.shape(Default::default(), style, canvas);
-        AnyShape::from(move |stage: Stage, style: &Style, canvas: &mut Canvas| {
-            layout.render(
-                style, &stage,
-                canvas.sketch().apply(matrix)
-            )
-        })
+        AnyShape::from(LabelShape { matrix, layout })
     }
 }
+
+
+//------------ LabelShape -----------------------------------------------------
+
+struct LabelShape<'a> {
+    matrix: Matrix,
+    layout: ShapedLayout<'a, BlockProperties>,
+}
+
+const LABEL_STAGES: StageSet = StageSet::from_slice(&[
+    Stage::Back, Stage::Casing, Stage::Base,
+]);
+
+impl<'a> Shape<'a> for LabelShape<'a> {
+    fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
+        self.layout.render(style, &stage, canvas.sketch().apply(self.matrix))
+    }
+
+    fn stages(&self) -> StageSet {
+        LABEL_STAGES
+    }
+}
+    
 
 
 //------------ Layout ---------------------------------------------------------
@@ -506,21 +524,6 @@ impl layout::Properties for BlockProperties {
                     layout.fill_frame(canvas);
                 }
             }
-            /*
-            Stage::Inside => {
-                // Draw boxes around boxes for debugging.
-                let mut outer = layout.outer();
-                canvas.apply(outer);
-                canvas.apply(Color::RED);
-                canvas.apply_line_width(0.6);
-                canvas.stroke();
-                outer.y0 = 0.;
-                outer.y1 = 0.;
-                canvas.apply(outer);
-                canvas.apply(Color::BLUE);
-                canvas.stroke();
-            }
-            */
             _ => { }
         }
     }

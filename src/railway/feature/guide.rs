@@ -9,7 +9,7 @@ use femtomap::render::{Canvas, LineWidth, Outline};
 use crate::railway::class::Railway;
 use crate::railway::import::eval::Scope;
 use crate::railway::style::Style;
-use super::{AnyShape, Category, Group, Feature, Shape, Stage};
+use super::{AnyShape, Category, Group, Feature, Shape, Stage, StageSet};
 
 //------------ GuideContour --------------------------------------------------
 
@@ -92,6 +92,16 @@ impl<'a> Shape<'a> for GuideShape<'a> {
                 sketch.stroke();
             }
             _ => { }
+        }
+    }
+
+    fn stages(&self) -> StageSet {
+        let res = StageSet::from(Stage::Base);
+        if self.contour.casing {
+            res.add(Stage::Casing)
+        }
+        else {
+            res
         }
     }
 }

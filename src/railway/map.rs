@@ -6,7 +6,7 @@ use kurbo::{Point, Rect};
 use crate::tile;
 use crate::tile::{Surface, TileId, TileIdError};
 use super::colors::ColorSet;
-use super::feature::{FeatureSet, Stage, Store};
+use super::feature::{FeatureSet, StageSet, Store};
 use super::style::{Style, StyleId};
 
 
@@ -43,7 +43,10 @@ impl Map {
         );
 
         for group in shapes.layer_groups() {
-            for stage in Stage::default() {
+            let stages = group.iter().fold(StageSet::empty(), |set, shape| {
+                set.add_set(shape.shape().stages())
+            });
+            for stage in stages.iter() {
                 group.iter().for_each(|shape| {
                     shape.shape().render(stage, &style, &mut canvas)
                 });

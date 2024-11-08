@@ -74,11 +74,22 @@ pub trait Feature {
 
 pub trait Shape<'a> {
     fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas);
+
+    fn stages(&self) -> StageSet;
 }
 
-impl<'a, F: Fn(Stage, &Style, &mut Canvas) + 'a> Shape<'a> for F {
+impl<'a, T0, T1> Shape<'a> for (T0, T1)
+where
+    T0: Shape<'a>,
+    T1: Shape<'a>
+{
     fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
-        (*self)(stage, style, canvas)
+        self.0.render(stage, style, canvas);
+        self.1.render(stage, style, canvas);
+    }
+
+    fn stages(&self) -> StageSet {
+        self.0.stages().add_set(self.1.stages())
     }
 }
 
@@ -122,15 +133,15 @@ impl<'a> AnyShape<'a> {
     pub fn single_stage<F: Fn(&Style, &mut Canvas) + 'a>(
         op: F
     ) -> Self {
-        Self::from(move |stage: Stage, style: &Style, canvas: &mut Canvas| {
-            if matches!(stage, Stage::Base) {
-                (op)(style, canvas)
-            }
-        })
+        Self::from(BaseFnShape { op })
     }
 
     pub fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
         self.0.render(stage, style, canvas)
+    }
+
+    pub fn stages(&self) -> StageSet {
+        self.0.stages()
     }
 }
 
@@ -141,13 +152,35 @@ impl<'a, T: Shape<'a> + 'a> From<T> for AnyShape<'a> {
 }
 
 
+//------------ BaseFnShape ---------------------------------------------------
+
+struct BaseFnShape<F: Fn(&Style, &mut Canvas)> {
+    op: F
+}
+
+impl<'a, F: Fn(&Style, &mut Canvas) + 'a> Shape<'a> for BaseFnShape<F> {
+    fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
+        if matches!(stage, Stage::Base) {
+            (self.op)(style, canvas)
+        }
+    }
+
+    fn stages(&self) -> StageSet {
+        StageSet::default().add(Stage::Base)
+    }
+}
+
+
 //------------ Stage ---------------------------------------------------------
 
 #[derive(Clone, Copy, Debug, Default)]
+#[repr(u16)]
 pub enum Stage {
     #[default]
-    Back,
+    Back = 0,
     Casing,
+
+    AbandonedBase,
 
     /// The base for shapes that have an inside.
     InsideBase,
@@ -188,7 +221,8 @@ impl Iterator for StageIter {
         if let Some(stage) = self.0 {
             let next = match stage {
                 Stage::Back => Some(Stage::Casing),
-                Stage::Casing => Some(Stage::InsideBase),
+                Stage::Casing => Some(Stage::AbandonedBase),
+                Stage::AbandonedBase=> Some(Stage::InsideBase),
                 Stage::InsideBase => Some(Stage::Inside),
                 Stage::Inside => Some(Stage::Base),
                 Stage::Base => Some(Stage::MarkerCasing),
@@ -198,6 +232,53 @@ impl Iterator for StageIter {
             self.0 = next;
         }
         res 
+    }
+}
+
+
+//------------ StageSet ------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct StageSet(u16);
+
+impl StageSet {
+    pub const fn empty() -> Self {
+        Self(0)
+    }
+
+    pub const fn all() -> Self {
+        Self(u16::MAX)
+    }
+
+    pub const fn from_slice(mut stages: &[Stage]) -> Self {
+        let mut res = Self::empty();
+        while let Some((head, tail)) = stages.split_first() {
+            res = res.add(*head);
+            stages = tail;
+        }
+        res
+    }
+
+    pub const fn add(self, stage: Stage) -> Self {
+        Self(self.0 | (stage as u16))
+    }
+
+    pub const fn add_set(self, set: StageSet) -> Self {
+        Self(self.0 | set.0)
+    }
+
+    pub fn contains(self, stage: Stage) -> bool {
+        self.0 & (stage as u16) != 0
+    }
+
+    pub fn iter(self) -> impl Iterator<Item = Stage> {
+        Stage::default().into_iter().filter(move |stage| self.contains(*stage))
+    }
+}
+
+impl From<Stage> for StageSet {
+    fn from(stage: Stage) -> Self {
+        Self::default().add(stage)
     }
 }
 
