@@ -481,7 +481,17 @@ const PROCEDURES: &[(
     // station(class: symbol-set, position, name: text|layout, km: text|layout)
     // ```
     ("station", &|pos, args, scope, err| {
-        let [class, position, name, km] = args.into_array(err)?;
+        let (class, position, old_name, name, km) =
+            match args.try_into_array()
+        {
+            Ok([class, position, old_name, name, km]) => {
+                (class, position, Some(old_name), name, km)
+            }
+            Err(args) => {
+                let [class, position, name, km] = args.into_array(err)?;
+                (class, position, None, name, km)
+            }
+        };
 
         let class = class.eval::<SymbolSet>(err);
         let position = position.eval(err);
@@ -492,6 +502,17 @@ const PROCEDURES: &[(
         let position = position?;
         let mut name = name?;
         let mut km = km?;
+
+        let old_name = match old_name {
+            Some(old_name) => {
+                let mut old_name = label::block_from_expr(old_name, err)?;
+                old_name.properties_mut().update(
+                    &label::BlockProperties::with_size(label::FontSize::Medium)
+                );
+                Some(old_name.into())
+            }
+            None => None,
+        };
 
         name.properties_mut().update(
             &label::BlockProperties::with_size(label::FontSize::Medium)
@@ -518,35 +539,77 @@ const PROCEDURES: &[(
         let block = if class.take("top") {
             label::Layout::vbox(
                 halign, Base::End, Default::default(),
-                vec![name, km]
+                if let Some(old_name) = old_name {
+                    vec![old_name, name, km]
+                }
+                else {
+                    vec![name, km]
+                }
             )
         }
         else if class.take("left") {
             label::Layout::hbox(
                 Base::End, Align::Base, Default::default(),
-                vec![
-                    label::Block::vbox(
-                        halign, Base::FirstBase, Default::default(),
-                        vec![name, km]
-                    )
-                ]
+                if let Some(old_name) = old_name {
+                    vec![
+                        label::Block::vbox(
+                            Align::End, Base::LastBase, Default::default(),
+                            vec![
+                                old_name,
+                                label::Block::vbox(
+                                    halign, Base::FirstBase, Default::default(),
+                                    vec![name, km]
+                                )
+                            ]
+                        )
+                    ]
+                }
+                else {
+                    vec![
+                        label::Block::vbox(
+                            halign, Base::FirstBase, Default::default(),
+                            vec![name, km]
+                        )
+                    ]
+                }
             )
         }
         else if class.take("bottom") {
             label::Layout::vbox(
                 halign, Base::Start, Default::default(),
-                vec![name, km]
+                if let Some(old_name) = old_name {
+                    vec![old_name, name, km]
+                }
+                else {
+                    vec![name, km]
+                }
             )
         }
         else if class.take("right") {
             label::Layout::hbox(
                 Base::Start, Align::Base, Default::default(),
-                vec![
-                    label::Block::vbox(
-                        halign, Base::FirstBase, Default::default(),
-                        vec![name, km]
-                    )
-                ]
+                if let Some(old_name) = old_name {
+                    vec![
+                        label::Block::vbox(
+                            Align::Start, Base::LastBase, Default::default(),
+                            vec![
+                                old_name,
+                                label::Block::vbox(
+                                    halign, Base::FirstBase, Default::default(),
+                                    vec![name, km]
+                                )
+                            ]
+                        )
+                    ]
+                }
+                else {
+                    vec![
+                        label::Block::vbox(
+                            halign, Base::FirstBase, Default::default(),
+                            vec![name, km]
+                        )
+                    ]
+                }
             )
         }
         else {
