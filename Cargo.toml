@@ -9,7 +9,7 @@ rust-version = "1.65"
 
 [dependencies]
 arc-swap = "1.7.1"
-cairo-rs = { version = "0.19", features = ["png", "svg", "v1_16"] }
+cairo-rs = { version = "0.20", features = ["png", "svg", "v1_16"] }
 clap = { version = "4.3.19", features = ["cargo", "derive"] }
 femtomap = { git = "https://github.com/partim/femtomap.git", features = [ "serde" ] }
 http-body-util = "0.1"
@@ -18,7 +18,7 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 kurbo = "0.11"
 lazy_static = "1.4"
 lru = "0.12"
-notify = "6.1.1"
+notify = "7"
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1.27", features = ["macros", "net", "rt-multi-thread"] }
 toml = "0.8"
