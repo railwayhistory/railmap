@@ -733,14 +733,26 @@ impl ContourShape4 {
             }
         }
 
+        // If we have enough space, we want to operate with full segs so the
+        // electrification and gauge markings are properly centered. Onyl if
+        // that doesn’t work will be fall back to full “dash groups” since we
+        // won’t have those markings.
+
+        let seg = calc_seg(outline, style.measures().seg());
+
         if matches!(class.class.pax(), Pax::None) {
-            calc_seg(
-                outline, style.measures().seg() / NO_PAX_DASH_RATIO,
-            ).map(|dist| {
-                (dist * NO_PAX_DASH_ON, dist * (1. - NO_PAX_DASH_ON))
-            })
+            let dist = match seg {
+                Some(seg) => seg / NO_PAX_DASH_RATIO,
+                None => {
+                    calc_seg(
+                        outline, style.measures().seg() / NO_PAX_DASH_RATIO,
+                    )?
+                }
+            };
+            Some((dist * NO_PAX_DASH_ON, dist * (1. - NO_PAX_DASH_ON)))
         }
         else {
+            // XXX Fix this ...
             calc_seg(outline, style.measures().seg() * 0.25).map(|dist| {
                 (dist * 0.8, dist * 0.2)
             })
@@ -914,8 +926,8 @@ impl ElectricDecor {
         }
 
         let dist = calc_seg(
-            outline, style.measures().seg() / NO_PAX_DASH_RATIO
-        )?;
+            outline, style.measures().seg()
+        )? / NO_PAX_DASH_RATIO;
 
         let (cat, rail) = match (
             style.cat_color(&class.class), style.rail_color(&class.class)
