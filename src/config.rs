@@ -56,12 +56,20 @@ pub struct Region {
     /// Include this region in the detailed map?
     #[serde(default)]
     pub detailed: bool,
+
+    /// The base gauge for the region.
+    #[serde(default = "Region::default_gauge")]
+    pub gauge: u16,
 }
 
 impl Region {
     fn prepare(&mut self, base_dir: &Path) {
         self.paths = base_dir.join(&self.paths);
         self.rules = base_dir.join(&self.rules);
+    }
+
+    fn default_gauge() -> u16 {
+        1435
     }
 }
 

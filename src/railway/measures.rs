@@ -172,9 +172,14 @@ impl Measures {
         self.side_width()
     }
 
+    /// Returns whether we should use main or side track widths.
+    fn is_main(class: &Railway) -> bool {
+        class.category().is_main() && !class.gauge_group().is_narrow()
+    }
+
     /// Returns the line width for the given class.
     pub fn line_width(self, class: &Railway) -> f64 {
-        if class.category().is_main() {
+        if Self::is_main(class) {
             self.main_width()
         }
         else {
@@ -184,7 +189,7 @@ impl Measures {
 
     /// Returns the line inside for the given class.
     pub fn line_inside(self, class: &Railway) -> f64 {
-        if class.category().is_main() {
+        if Self::is_main(class) {
             self.main_inside()
         }
         else {
@@ -192,9 +197,9 @@ impl Measures {
         }
     }
 
-    /// Returns the line casine for the given class.
+    /// Returns the line casing for the given class.
     pub fn line_case(self, class: &Railway) -> f64 {
-        if class.category().is_main() {
+        if Self::is_main(class) {
             self.main_case()
         }
         else {
@@ -314,7 +319,7 @@ pub const BASE_D3: Measures = Measures([
     0.3,    // guide width
     0.6,    // guide case
     0.4,    // border width
-    8.,     // seg              = 5dt
+    12.,     // seg              = 6dt
     4.,     // sw               = 2dt
     4.,    // sh
     5.,     // xsmall font

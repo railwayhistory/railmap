@@ -19,11 +19,16 @@ pub type Value<'s> = eval::Value<'s, Builtin>;
 pub struct Builtin {
     paths: ImportPathSet,
     store: Arc<Mutex<StoreBuilder>>,
+    base_gauge: u16,
 }
 
 impl Builtin {
-    pub fn new(paths: ImportPathSet, store: Arc<Mutex<StoreBuilder>>) -> Self {
-        Self { paths, store }
+    pub fn new(
+        paths: ImportPathSet,
+        store: Arc<Mutex<StoreBuilder>>,
+        base_gauge: u16
+    ) -> Self {
+        Self { paths, store, base_gauge }
     }
 
     pub fn with_store<F, T>(&self, op: F) -> T
@@ -282,6 +287,8 @@ pub trait ScopeExt {
     fn layer(&self) -> i16;
 
     fn railway(&self) -> &Railway;
+
+    fn base_gauge(&self) -> u16;
 }
 
 impl<'s> ScopeExt for Scope<'s> {
@@ -324,6 +331,10 @@ impl<'s> ScopeExt for Scope<'s> {
 
     fn railway(&self) -> &Railway {
         RenderParams::railway(self)
+    }
+
+    fn base_gauge(&self) -> u16 {
+        self.builtin().base_gauge
     }
 }
 

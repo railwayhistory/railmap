@@ -55,6 +55,7 @@ impl Railway {
     pub fn from_symbols(symbols: &mut SymbolSet, scope: &Scope) -> Self {
         let mut class = scope.railway().clone();
         class.apply_symbols(symbols);
+        class.gauge_group = Some(GaugeGroup::new(class.gauge, scope));
         class
     }
 
@@ -93,9 +94,7 @@ impl Railway {
         if let Some(gauge) = Gauge::from_symbols(symbols) {
             self.gauge = Some(gauge)
         }
-        if let Some(gauge_group) = GaugeGroup::from_symbols(symbols) {
-            self.gauge_group = Some(gauge_group)
-        }
+        GaugeGroup::take_symbols(symbols);
 
         if symbols.take("double") {
             self.double = Some(true)
@@ -842,34 +841,92 @@ impl Default for Gauge {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub enum GaugeGroup {
-    Narrower,
+    /// A narrow gauge below the region’s base.
     Narrow,
+
+    /// Standard gauge in regions with a broad base gauge.
+    StandardNarrow,
+
+    /// The base gauge of the region.
     #[default]
-    Standard,
+    Base,
+
+    /// Standard gauge in regions with a narrow base gauge.
+    StandardBroad,
+
+    /// A gauge broader than the region’s base.
     Broad,
-    Broader,
 }
 
 impl GaugeGroup {
-    pub fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
-        if symbols.take("narrower") {
-            Some(GaugeGroup::Narrower)
+    fn new(gauge: Option<Gauge>, scope: &Scope) -> Self {
+        let gauge = match gauge {
+            Some(gauge) => gauge.main,
+            None => return Self::Base,
+        };
+        let base_gauge = scope.base_gauge();
+
+        if base_gauge < 1435 {
+            if gauge == 1435 {
+                Self::StandardBroad
+            }
+            else if gauge < base_gauge {
+                Self::Narrow
+            }
+            else if gauge == base_gauge {
+                Self::Base
+            }
+            else {
+                Self::Broad
+            }
         }
-        else if symbols.take("narrow") {
-            Some(GaugeGroup::Narrow)
-        }
-        else if symbols.take("standard") {
-            Some(GaugeGroup::Standard)
-        }
-        else if symbols.take("broad") {
-            Some(GaugeGroup::Broad)
-        }
-        else if symbols.take("broader") {
-            Some(GaugeGroup::Broader)
+        else if base_gauge == 1435 {
+            if gauge < 1435 {
+                Self::Narrow
+            }
+            else if gauge == 1435 {
+                Self::Base
+            }
+            else {
+                Self::Broad
+            }
         }
         else {
-            None
+            if gauge == 1435 {
+                Self::StandardNarrow
+            }
+            else if gauge < base_gauge {
+                Self::Narrow
+            }
+            else if gauge == base_gauge {
+                Self::Base
+            }
+            else {
+                Self::Broad
+            }
         }
+    }
+
+    fn take_symbols(symbols: &mut SymbolSet) {
+        if symbols.take("narrower") {
+            return
+        }
+        else if symbols.take("narrow") {
+            return
+        }
+        else if symbols.take("standard") {
+            return
+        }
+        else if symbols.take("broad") {
+            return
+        }
+        else if symbols.take("broader") {
+            return
+        }
+    }
+
+    pub fn is_narrow(self) -> bool {
+        matches!(self, Self::Narrow)
     }
 }
 

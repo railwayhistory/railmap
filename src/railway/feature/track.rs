@@ -36,6 +36,7 @@
 //! * `:inner` if the segment is in the middle and markings need to be
 //!   “justified.”
 
+#![allow(unused_imports)]
 use std::f64::consts::{FRAC_PI_2, PI};
 use femtomap::world;
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
@@ -52,8 +53,16 @@ use super::{AnyShape, Category, Feature, Shape, Stage, StageSet};
 
 //------------ Constants -----------------------------------------------------
 
-/// Multiplier over line_width for double track in detail 2.
-pub const D2_DOUBLE_MULTIPLIER: f64 = 1.6;
+/// How many no-pax-dash strokes go into a seg?
+///
+/// Works best with an odd number.
+const NO_PAX_DASH_RATIO: f64 = 9.;
+
+/// Half of NO_PAX_DASH_RATIO rounded down.
+const NO_PAX_DASH_HALF: f64 = 4.;
+
+/// Which portion of the no-pax-dash stroke should be on?
+const NO_PAX_DASH_ON: f64 = 0.7;
 
 
 //------------ TrackClass ----------------------------------------------------
@@ -69,9 +78,6 @@ pub struct TrackClass {
 
     /// What is to our left?
     right: Neighbor,
-
-    /// Should this track be combined with the underlying track?
-    combined: bool,
 }
 
 impl TrackClass {
@@ -89,11 +95,11 @@ impl TrackClass {
     pub fn from_symbols(symbols: &mut SymbolSet, scope: &Scope) -> Self {
         let tight = symbols.take("tight");
         let _ = symbols.take("flip"); // XXX Deprecated.
+        let _ = symbols.take("combined"); // XXX Deprecated.
         TrackClass {
             class: Railway::from_symbols(symbols, scope),
             left: Neighbor::left_from_symbols(symbols, tight),
             right: Neighbor::right_from_symbols(symbols, tight),
-            combined: symbols.take("combined"),
         }
     }
 
@@ -192,7 +198,7 @@ impl Feature for TrackContour {
             return AnyShape::from(ContourShape2::new(self, style));
         }
         else if style.detail() == 3 {
-            return AnyShape::from(ContourShape3::new(self, style));
+            return AnyShape::from(ContourShape2::new(self, style));
         }
         else {
             return ContourShape4::new(self, style)
@@ -265,10 +271,10 @@ impl<'a> ContourShape<'a> {
 //------------ ContourShape2 -------------------------------------------------
 
 struct ContourShape2 {
-    casing: bool,
     open: bool,
     color: Color,
     width: f64,
+    casing_width: Option<f64>,
     dash: Option<DashPattern<2>>,
     outline: Outline,
 }
@@ -284,17 +290,20 @@ impl ContourShape2 {
         ).or_else(|| {
             Self::pax_dash(&contour.class, &outline, style)
         });
+        let width = if contour.class.double() {
+            style.measures().double_width()
+        }
+        else {
+            style.measures().line_width(&contour.class.class)
+        };
 
         Self {
-            casing: contour.casing,
             open: contour.class.class.status().is_open(),
             color: style.track_color(&contour.class.class),
-            width: if contour.class.double() {
-                style.measures().double_width()
-            }
-            else {
-                style.measures().line_width(&contour.class.class)
-            },
+            width,
+            casing_width: contour.casing.then(|| {
+                width + 2. * style.measures().ds()
+            }),
             dash,
             outline
         }
@@ -308,14 +317,14 @@ impl ContourShape2 {
         }
 
         calc_seg(outline, style.measures().seg()).map(|seg| {
-            DashPattern::new([0.7 * seg, 0.3 * seg], 0.85 * seg)
+            DashPattern::new([0.7 * seg, 0.3 * seg], 0.35 * seg)
         })
     }
 
     fn pax_dash(
         class: &TrackClass, outline: &Outline, style: &Style
     ) -> Option<DashPattern<2>> {
-        // For historical reasons, a missing explicit pax defaults to no pax
+        // For historical reasons, an missing explicit pax defaults to no pax
         // for open lines and full pax for closed ones.
         if class.class.status().is_open() {
             if class.class.pax().is_full() {
@@ -330,12 +339,12 @@ impl ContourShape2 {
 
         if matches!(class.class.pax(), Pax::None) {
             calc_seg(outline, style.measures().seg() * 0.125).map(|dist| {
-                DashPattern::new([dist * 0.7, dist * 0.3], dist * 0.15)
+                DashPattern::new([dist * 0.7, dist * 0.3], dist * 0.35)
             })
         }
         else {
             calc_seg(outline, style.measures().seg() * 0.25).map(|dist| {
-                DashPattern::new([dist * 0.8, dist * 0.2], dist * 0.1)
+                DashPattern::new([dist * 0.8, dist * 0.2], dist * 0.4)
             })
         }
     }
@@ -345,11 +354,11 @@ impl<'a> Shape<'a> for ContourShape2 {
     fn render(&self, stage: Stage, _style: &Style, canvas: &mut Canvas) {
         match stage {
             Stage::Casing => {
-                if self.casing {
+                if let Some(width) = self.casing_width {
                     canvas.sketch().apply(
                         Color::rgba(1., 1., 1., 0.8)
                     ).apply(
-                        LineWidth(1.6 * self.width)
+                        LineWidth(width)
                     ).apply(
                         &self.outline
                     ).stroke();
@@ -418,14 +427,19 @@ impl<'a> Shape<'a> for ContourShape2 {
     }
 
     fn stages(&self) -> StageSet {
-        let res = if self.casing {
+        let res = if self.casing_width.is_some() {
             StageSet::from(Stage::Casing)
         }
         else {
             StageSet::empty()
         };
         if !self.open {
-            res.add(Stage::AbandonedBase)
+            if self.dash.is_some() {
+                res.add(Stage::AbandonedBase).add(Stage::AbandonedMarking)
+            }
+            else {
+                res.add(Stage::AbandonedBase)
+            }
         }
         else if self.dash.is_some() {
             res.add(Stage::LimitedBase).add(Stage::LimitedMarking)
@@ -437,6 +451,7 @@ impl<'a> Shape<'a> for ContourShape2 {
 }
 
 
+/*
 //------------ ContourShape3 -------------------------------------------------
 
 struct ContourShape3<'a> {
@@ -630,100 +645,156 @@ impl<'a> ContourShape3<'a> {
     }
     */
 }
+*/
 
 
 //------------ ContourShape4 -------------------------------------------------
 
-struct ContourShape4<'a> {
-    class: &'a TrackClass,
+struct ContourShape4 {
+    open: bool,
+    color: Color,
+    width: f64,
+    casing_width: Option<f64>,
+    dash: Option<(f64, f64)>, // on - off
 
-    #[allow(dead_code)]
-    left: Neighbor,
+    electric: Option<ElectricDecor>,
 
-    right: Neighbor,
-    casing: bool,
-    track: Outline,
-    seg: Option<f64>,
-    has_inside: bool,
-
-    /// Should we render the base during `Stage::LimitedBase`?
-    ///
-    /// This is necessary so that non-open lines don’t draw over the inside
-    /// of open lines.
-    use_inside_base: bool,
+    outline: Outline,
 }
 
-impl<'a> ContourShape4<'a> {
-    fn new(contour: &'a TrackContour, style: &Style) -> AnyShape<'a> {
-        let has_inside = Self::will_have_inside(&contour.class);
-        let use_inside_base = has_inside || !contour.class.class.is_open();
+impl ContourShape4 {
+    fn new<'a>(contour: &'a TrackContour, style: &Style) -> AnyShape<'a> {
+        let open = contour.class.class.status().is_open();
+        let color = style.track_color(&contour.class.class);
+        let width = style.measures().line_width(&contour.class.class);
+        let casing_width = contour.casing.then(|| {
+            width + 2. * style.measures().ds()
+        });
+
         if contour.class.double() {
             let off = style.measures().dt() * 0.5;
             let left = contour.trace.outline_offset(off, style);
-            let seg = calc_seg(&left, style.measures().seg());
+            let dash = Self::pax_dash(&contour.class, &left, style);
+
+            let left_electric = ElectricDecor::new(
+                &contour.class,
+                contour.class.left, Neighbor::Same, width,
+                &left, style
+            );
+            let right_electric = ElectricDecor::new(
+                &contour.class,
+                Neighbor::Same, contour.class.right, width,
+                &left, style
+            );
 
             let left_shape = Self {
-                class: &contour.class,
-                left: contour.class.left,
-                right: Neighbor::Same,
-                casing: contour.casing,
-                track: left,
-                seg,
-                has_inside,
-                use_inside_base,
+                open, color, width, casing_width, dash,
+                electric: left_electric,
+                outline: left,
             };
             let right_shape = Self {
-                class: &contour.class,
-                left: Neighbor::Same,
-                right: contour.class.right,
-                casing: contour.casing,
-                track: contour.trace.outline_offset(-off, style),
-                seg,
-                has_inside,
-                use_inside_base,
+                open, color, width, casing_width, dash,
+                electric: right_electric,
+                outline: contour.trace.outline_offset(-off, style),
             };
             AnyShape::from((left_shape, right_shape))
         }
         else {
-            let track = contour.trace.outline(style);
-            let seg = calc_seg(&track, style.measures().seg());
+            let outline = contour.trace.outline(style);
             AnyShape::from(
                 Self {
-                    class: &contour.class,
-                    left: contour.class.left,
-                    right: contour.class.right,
-                    casing: contour.casing,
-                    track,
-                    seg,
-                    has_inside,
-                    use_inside_base,
+                    open, color, width, casing_width,
+                    dash: Self::pax_dash(&contour.class, &outline, style),
+                    electric: ElectricDecor::new(
+                        &contour.class,
+                        contour.class.left, contour.class.right, width,
+                        &outline,
+                        style
+                    ),
+                    outline
                 }
             )
         }
     }
+
+    fn pax_dash(
+        class: &TrackClass, outline: &Outline, style: &Style
+    ) -> Option<(f64, f64)> {
+        // For historical reasons, an missing explicit pax defaults to no pax
+        // for open lines and full pax for closed ones.
+        if class.class.status().is_open() {
+            if class.class.pax().is_full() {
+                return None
+            }
+        }
+        else {
+            if class.class.opt_pax().unwrap_or(Pax::Full).is_full() {
+                return None
+            }
+        }
+
+        if matches!(class.class.pax(), Pax::None) {
+            calc_seg(
+                outline, style.measures().seg() / NO_PAX_DASH_RATIO,
+            ).map(|dist| {
+                (dist * NO_PAX_DASH_ON, dist * (1. - NO_PAX_DASH_ON))
+            })
+        }
+        else {
+            calc_seg(outline, style.measures().seg() * 0.25).map(|dist| {
+                (dist * 0.8, dist * 0.2)
+            })
+        }
+    }
 }
 
-impl<'a> Shape<'a> for ContourShape4<'a> {
-    fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
+impl<'a> Shape<'a> for ContourShape4 {
+    fn render(&self, stage: Stage, _style: &Style, canvas: &mut Canvas) {
         match stage {
             Stage::Casing => {
-                if self.casing {
-                    self.render_casing(style, &mut canvas.sketch());
+                if let Some(width) = self.casing_width {
+                    self.render_casing(width, &mut canvas.sketch());
+                }
+            }
+            Stage::AbandonedBase => {
+                if !self.open {
+                    self.render_base(&mut canvas.sketch());
+                }
+            }
+            Stage::AbandonedMarking => {
+                if !self.open {
+                    let mut canvas = canvas.sketch();
+                    if let Some(dash) = self.dash {
+                        self.render_dashed_track(dash, &mut canvas)
+                    }
+                    if let Some(electric) = self.electric {
+                        electric.render(&self.outline, &mut canvas)
+                    }
                 }
             }
             Stage::LimitedBase => {
-                if self.use_inside_base {
-                    self.render_base(style, &mut canvas.sketch());
+                if self.open && self.dash.is_some() {
+                    self.render_base(&mut canvas.sketch());
                 }
             }
             Stage::LimitedMarking => {
-                if self.has_inside {
-                    self.render_inside(style, &mut canvas.sketch());
+                if self.open {
+                    let mut canvas = canvas.sketch();
+                    if let Some(dash) = self.dash {
+                        self.render_dashed_track(dash, &mut canvas)
+                    }
+                    if let Some(electric) = self.electric {
+                        electric.render(&self.outline, &mut canvas)
+                    }
                 }
             }
             Stage::Base => {
-                if !self.use_inside_base {
-                    self.render_base(style, &mut canvas.sketch());
+                if self.open && !self.dash.is_some() {
+                    let mut canvas = canvas.sketch();
+                    self.render_base(&mut canvas);
+                    if let Some(electric) = self.electric {
+                        electric.render(&self.outline, &mut canvas)
+                    }
                 }
             }
             _ => { }
@@ -731,10 +802,240 @@ impl<'a> Shape<'a> for ContourShape4<'a> {
     }
 
     fn stages(&self) -> StageSet {
-        StageSet::from(Stage::Casing).add(Stage::Base)
+        let res = if self.casing_width.is_some() {
+            StageSet::from(Stage::Casing)
+        }
+        else {
+            StageSet::empty()
+        };
+        if !self.open {
+            if self.dash.is_some() {
+                res.add(Stage::AbandonedBase).add(Stage::AbandonedMarking)
+            }
+            else {
+                res.add(Stage::AbandonedBase)
+            }
+        }
+        else if self.dash.is_some() {
+            res.add(Stage::LimitedBase).add(Stage::LimitedMarking)
+        }
+        else {
+            res.add(Stage::Base)
+        }
     }
 }
 
+impl ContourShape4 {
+    fn render_casing(&self, width: f64, canvas: &mut Sketch) {
+        canvas.apply(
+            Color::rgba(1., 1., 1., 0.8)
+        ).apply(
+            LineWidth(width)
+        ).apply(
+            &self.outline
+        ).stroke();
+    }
+
+    fn render_base(&self, canvas: &mut Sketch) {
+        canvas
+            .apply(
+                if self.dash.is_some() {
+                    Color::rgba(1., 1., 1., 0.8)
+                }
+                else {
+                    self.color
+                }
+            )
+            .apply(LineWidth(self.width))
+            .apply(&self.outline)
+            .stroke()
+    }
+
+    fn render_dashed_track(
+        &self, (on, off): (f64, f64), canvas: &mut Sketch
+    ) {
+       canvas.apply(self.color).apply(LineWidth(self.width));
+
+        let mut positions = self.outline.positions();
+        if positions.advance(0.5 * off).is_none() {
+            return
+        }
+        loop {
+            match positions.advance_sub(on) {
+                Some(sub) => {
+                    canvas.apply(&sub).stroke()
+                }
+                None => return
+            }
+            if positions.advance(off).is_none() {
+                return
+            }
+        }
+    }
+}
+
+
+//------------ ElectricDecore ------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+struct ElectricDecor {
+    seg: f64,
+    width: f64,
+    cat: Option<CatDecor>,
+    rail: Option<RailDecor>,
+    dl: f64,
+    dr: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CatDecor {
+    color: Color,
+    skip: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct RailDecor {
+    color: Color,
+    skip: f64,
+    offset: f64,
+}
+
+impl ElectricDecor {
+    fn new(
+        class: &TrackClass,
+        _left: Neighbor,
+        right: Neighbor,
+        width: f64,
+        outline: &Outline,
+        style: &Style,
+    ) -> Option<Self> {
+        if class.class.station() {
+            return None
+        }
+
+        let dist = calc_seg(
+            outline, style.measures().seg() / NO_PAX_DASH_RATIO
+        )?;
+
+        let (cat, rail) = match (
+            style.cat_color(&class.class), style.rail_color(&class.class)
+        ) {
+            (Some(cat_color), None) => {
+                (
+                    Some(CatDecor {
+                        color: cat_color,
+                        skip: dist * (NO_PAX_DASH_HALF + 0.5)
+                    }),
+                    None
+                )
+            }
+            (None, Some(rail_color)) => {
+                (
+                    None,
+                    Some(RailDecor {
+                        color: rail_color,
+                        skip: dist * (NO_PAX_DASH_HALF - 0.5),
+                        offset: dist,
+                    })
+                )
+            }
+            (Some(cat_color), Some(rail_color)) => {
+                (
+                    Some(CatDecor {
+                        color: cat_color,
+                        skip: dist * (NO_PAX_DASH_HALF * 0.5 + 0.5)
+                    }),
+                    Some(RailDecor {
+                        color: rail_color,
+                        skip: dist * (NO_PAX_DASH_HALF * 1.5 + 0.5),
+                        offset: dist,
+                    })
+                )
+            }
+            (None, None) => return None
+        };
+
+        let dt = style.measures().dt();
+        let (dl, dr) = match right {
+            Neighbor::None => (0.49 * width, dt),
+            Neighbor::Other => (0.49 * width, 0.4 * dt),
+            _ => return None,
+        };
+
+        
+
+        Some(Self {
+            seg: dist * NO_PAX_DASH_RATIO,
+            width: dist * NO_PAX_DASH_ON,
+            cat, rail, dl, dr
+        })
+
+    }
+
+    fn render(&self, outline: &Outline, canvas: &mut Sketch) {
+        if let Some(cat) = self.cat {
+            self.render_cat(outline, cat, canvas);
+        }
+        if let Some(rail) = self.rail {
+            self.render_rail(outline, rail, canvas);
+        }
+    }
+
+    fn render_cat(
+        &self, outline: &Outline, cat: CatDecor, canvas: &mut Sketch
+    ) {
+        canvas.apply(LineWidth(self.width));
+        canvas.apply(cat.color);
+        outline.iter_positions(
+            self.seg, Some(cat.skip)
+        ).for_each(|(pos, dir)| {
+            let dir = Vec2::from_angle(dir + FRAC_PI_2);
+            canvas.apply([
+                PathEl::MoveTo(pos + dir * self.dl),
+                PathEl::LineTo(pos + dir * self.dr),
+            ]);
+            canvas.stroke()
+        });
+    }
+
+    fn render_rail(
+        &self, outline: &Outline, rail: RailDecor, canvas: &mut Sketch
+    ) {
+        canvas.apply(LineWidth(self.width));
+        canvas.apply(rail.color);
+        let mut positions = outline.positions();
+        let (mut p1, mut d1) = match positions.advance(rail.skip) {
+            Some(some) => some,
+            None => return,
+        };
+
+        loop {
+            let (p2, d2) = match positions.advance(rail.offset) {
+                Some(some) => some,
+                None => return,
+            };
+
+            let dir1 = Vec2::from_angle(d1 + FRAC_PI_2);
+            let dir2 = Vec2::from_angle(d2 + FRAC_PI_2);
+
+            canvas.apply([
+                PathEl::MoveTo(p1 + dir1 * self.dl),
+                PathEl::LineTo(p1 + dir1 * self.dr),
+                PathEl::MoveTo(p2 + dir2 * self.dl),
+                PathEl::LineTo(p2 + dir2 * self.dr),
+            ]);
+            canvas.stroke();
+
+            (p1, d1) = match positions.advance(self.seg - rail.offset) {
+                Some(some) => some,
+                None => return,
+            };
+        }
+    }
+}
+
+
+/*
 impl<'a> ContourShape4<'a> {
     fn render_casing(&self, style: &Style, canvas: &mut Sketch) {
         self.render_track_casing(style, canvas);
@@ -1171,6 +1472,7 @@ impl<'a> ContourShape4<'a> {
         style.measures().line_width(&self.class.class)
     }
 }
+*/
 
 
 //------------ TrackCasing ---------------------------------------------------

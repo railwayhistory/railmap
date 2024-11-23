@@ -30,7 +30,9 @@ impl LoadFeatures {
         watch: &mut WatchSet,
     ) {
         let builtin = match ImportPathSet::load(&region.paths, watch) {
-            Ok(paths) => Builtin::new(paths, self.features.clone()),
+            Ok(paths) => {
+                Builtin::new(paths, self.features.clone(), region.gauge)
+            }
             Err(err) => {
                 self.err.paths.extend(err);
                 return
