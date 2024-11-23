@@ -958,7 +958,7 @@ dependencies = [
 
 [[package]]
 name = "railmap"
-version = "0.1.16"
+version = "0.1.17"
 dependencies = [
  "arc-swap",
  "cairo-rs",
