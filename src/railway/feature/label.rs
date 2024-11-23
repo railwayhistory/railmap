@@ -89,7 +89,7 @@ struct LabelShape<'a> {
 }
 
 const LABEL_STAGES: StageSet = StageSet::from_slice(&[
-    Stage::Back, Stage::Casing, Stage::Base,
+    Stage::MarkerBase, Stage::MarkerCasing, Stage::MarkerBase,
 ]);
 
 impl<'a> Shape<'a> for LabelShape<'a> {
@@ -488,7 +488,17 @@ impl layout::Properties for BlockProperties {
         canvas: &mut Sketch,
     ) {
         match stage {
-            Stage::Back => {
+            Stage::MarkerCasing => {
+                if !layout.is_span() {
+                    return
+                }
+                canvas.apply(LineCap::Butt);
+                canvas.apply(LineJoin::Bevel);
+                canvas.apply(Color::WHITE);
+                canvas.apply(LineWidth(self.size().size(style) * 0.3));
+                layout.stroke_text(canvas);
+            }
+            Stage::MarkerBase => {
                 match self.layout_type {
                     BlockType::BadgeFrame => {
                         let mut canvas = canvas.group();
@@ -504,17 +514,7 @@ impl layout::Properties for BlockProperties {
                     _ => { }
                 }
             }
-            Stage::Casing => {
-                if !layout.is_span() {
-                    return
-                }
-                canvas.apply(LineCap::Butt);
-                canvas.apply(LineJoin::Bevel);
-                canvas.apply(Color::WHITE);
-                canvas.apply(LineWidth(self.size().size(style) * 0.3));
-                layout.stroke_text(canvas);
-            }
-            Stage::Base => {
+            Stage::MarkerMarking => {
                 if layout.is_span() {
                     canvas.apply(style.label_color(&self.class));
                     layout.fill_text(canvas);

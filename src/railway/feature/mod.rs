@@ -193,6 +193,7 @@ pub enum Stage {
 
     MarkerCasing,
     MarkerBase,
+    MarkerMarking,
 }
 
 impl IntoIterator for Stage {
@@ -224,7 +225,8 @@ impl Iterator for StageIter {
                 Stage::Base => Some(Stage::Marking),
                 Stage::Marking => Some(Stage::MarkerCasing),
                 Stage::MarkerCasing => Some(Stage::MarkerBase),
-                Stage::MarkerBase => None,
+                Stage::MarkerBase => Some(Stage::MarkerMarking),
+                Stage::MarkerMarking => None,
             };
             self.0 = next;
         }
