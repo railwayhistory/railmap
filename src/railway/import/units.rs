@@ -59,33 +59,58 @@ pub const MAP_DISTANCES: &[(&str, usize, f64)] = &[
     // The distance between two parallel track lines (“delta track”).
     ("dt", 1, 1.),
 
-    // The space between two parallel tracks ("delta skip")
-    ("ds", 2, 1.),
-
     // Length of a cross-over between two parallel tracks (“delta length”).
     //
     // This is typically a bit shorter than 1dt. In higher detail levels you
     // should use world distances instead.
-    ("dl", 3, 1.),
+    ("dl", 2, 1.),
 
-    // Stroke width of main line track (“stroke track”).
-    ("st", 4, 1.),
+    // The stroke width of a main line track.
+    ("mt", 3, 1.),
 
-    // Stroke width of a double main line track.
-    //
-    // This is only used in lower in detail 2.
-    ("dst", 5, 1.),
+    // The stroke width of a double main line track.
+    ("md", 4, 1.),
+
+    // The empty space (“skip”) between two parallel main line tracks.
+    ("ms", 5, 1.),
+
+    // The offset between two parallel main line tracks.
+    ("mo", 6, 1.),
+
+    // The stroke width of a light track.
+    ("lt", 7, 1.),
+
+    // The stroke width of a double light track.
+    ("ld", 8, 1.),
+
+    // The empty space (“skip“) between two parallel light tracks.
+    ("ls", 9, 1.),
+
+    // The offset between two parallel light tracks.
+    ("lo", 10, 1.),
 
     // Width of the station symbol (“station width”).
-    ("sw", 6, 1.),
+    ("sw", 11, 1.),
+
+    // Height of the station symbol (“station height”).
+    ("sh", 12, 1.),
+
+
+    //--- Deprecated units
+
+    // Stroke width of main line track (“stroke track”).
+    ("st", 3, 1.),
+
+    // Stroke width of a double main line track.
+    ("dst", 4, 1.),
+
+    // Stroke distance of main line track.
+    ("ds", 5, 1.),
 
     // Width of the station symbol (“station width”).
     //
     // XXX Deprecated.
-    ("ssw", 6, 1.),
-
-    // Height of the station symbol (“station height”).
-    ("sh", 7, 1.),
+    ("ssw", 11, 1.),
 ];
 
 /// The length of a millimetre in bp.
@@ -95,3 +120,4 @@ pub const MM: f64 = 72./25.4;
 pub fn dt(value: f64) -> Distance {
     Distance::map(value, 1)
 }
+

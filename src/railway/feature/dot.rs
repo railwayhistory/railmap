@@ -147,7 +147,7 @@ impl<'a> Shape<'a> for DotShape<'a> {
                         Circle::new(
                             self.center,
                             self.feature.size.radius(style)
-                                + style.measures().line_width(
+                                + style.measures().class_track(
                                     &self.feature.class
                                 ) * 0.5
                         )
@@ -159,7 +159,7 @@ impl<'a> Shape<'a> for DotShape<'a> {
             }
             Stage::MarkerBase => {
                 let radius = self.feature.size.radius(style);
-                let sp = style.measures().line_width(&self.feature.class);
+                let sp = style.measures().class_track(&self.feature.class);
                 match self.feature.inner {
                     Inner::Fill => {
                         canvas.sketch().apply(

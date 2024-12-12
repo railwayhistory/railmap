@@ -17,159 +17,165 @@ use super::class::Railway;
 #[derive(Clone, Copy, Debug)]
 pub struct Measures([f64; Self::LEN]);
 
-/// # Access to the individual measures
+/// # Primary measures
 impl Measures {
     /// A Postscript point.
     ///
-    /// This is the basis for all other distance measures and should be 1 in
+    /// This is the basis for all other distance measures is 1. in
     /// unscaled measures.
     pub const fn bp(self) -> f64 {
+        1.
+    }
+
+    /// Nominally the distance between the centre of two parallel main tracks.
+    ///
+    /// Used as a small distance unit all over the place.
+    pub const fn dt(self) -> f64 {
         self.0[0]
     }
 
-    /// The distance between two parallel tracks.
-    pub const fn dt(self) -> f64 {
+    /// The stroke width of a main track.
+    pub const fn main_track(self) -> f64 {
         self.0[1]
     }
 
-    /// The empty space between two parallel tracks.
-    pub const fn ds(self) -> f64 {
+    /// The stroke width of a double main track.
+    ///
+    /// Not used in detail 4 and above.
+    pub const fn main_double(self) -> f64 {
         self.0[2]
     }
 
-    /// The length of a cross-over between two parallel tracks.
-    pub const fn dl(self) -> f64 {
+    /// The empty space between two parallel main tracks.
+    pub const fn main_skip(self) -> f64 {
         self.0[3]
     }
 
-    /// The stroke width of a main line track.
-    pub const fn main_width(self) -> f64 {
+    /// The stroke width of a light track.
+    pub const fn light_track(self) -> f64 {
         self.0[4]
     }
 
-    /// The stroke width of the inside of a main line track.
-    pub const fn main_inside(self) -> f64 {
+    /// The stroke width of a double light track.
+    ///
+    /// Not used in detail 4 and above.
+    pub const fn light_double(self) -> f64 {
         self.0[5]
     }
 
-    /// The stroke width of the casing of a main line track.
-    pub const fn main_case(self) -> f64 {
+    /// The empty space between two parallel light tracks.
+    pub const fn light_skip(self) -> f64 {
         self.0[6]
     }
 
-    /// The stroke width of the a double main line track.
-    pub const fn double_width(self) -> f64 {
-        self.0[7]
-    }
-
-    /// The stroke width of the inside of a double main line track.
-    pub const fn double_inside(self) -> f64 {
-        self.0[8]
-    }
-
-    /// The stroke width of the casing of a double main line track.
-    pub const fn double_case(self) -> f64 {
-        self.0[9]
-    }
-
-    /// The stroke width of a side track.
-    pub const fn side_width(self) -> f64 {
-        self.0[10]
-    }
-
-    /// The stroke width of the inside of a side track.
-    pub const fn side_inside(self) -> f64 {
-        self.0[11]
-    }
-
-    /// The stroke width of the casing of a side track.
-    pub const fn side_case(self) -> f64 {
-        self.0[12]
-    }
-
-    /// The stroke width of a guiding  line.
+    /// The stroke width of a guiding line.
     pub const fn guide_width(self) -> f64 {
-        self.0[13]
-    }
-
-    /// The stroke width of the casing of a guiding line.
-    pub const fn guide_case(self) -> f64 {
-        self.0[14]
+        self.0[7]
     }
 
     /// The stroke width of the border line.
     pub const fn border_width(self) -> f64 {
-        self.0[15]
+        self.0[8]
     }
 
     /// The base length of a segment of line markings.
     pub const fn seg(self) -> f64 {
-        self.0[16]
+        self.0[9]
     }
 
     /// The width of a station symbol.
-    pub const fn sw(self) -> f64 {
-        self.0[17]
+    pub const fn station_width(self) -> f64 {
+        self.0[10]
     }
 
     /// The height of a station symbol.
-    pub const fn sh(self) -> f64 {
-        self.0[18]
+    pub const fn station_height(self) -> f64 {
+        self.0[11]
     }
 
     /// The font size of the xsmall font.
     pub const fn xsmall_font(self) -> f64 {
-        self.0[19]
+        self.0[12]
     }
 
     /// The font size of the small font.
     pub const fn small_font(self) -> f64 {
-        self.0[20]
+        self.0[13]
     }
 
     /// The font size of the medium font.
     pub const fn medium_font(self) -> f64 {
-        self.0[21]
+        self.0[14]
     }
 
     /// The font size of the large font.
     pub const fn large_font(self) -> f64 {
-        self.0[22]
+        self.0[15]
     }
 
     /// The font size of the extra large font.
     pub const fn xlarge_font(self) -> f64 {
-        self.0[23]
+        self.0[16]
     }
-
+    
     /// The font size of the badge font.
     pub const fn badge_font(self) -> f64 {
-       self.0[24]
+       self.0[17]
     }
 
     /// The number of measures.
-    const LEN: usize = 25;
+    const LEN: usize = 18;
 }
+
 
 /// # Derived measures
 impl Measures {
+    /// The length of a cross-over between two parallel tracks.
+    pub fn dl(self) -> f64 {
+        self.dt() * 2./3.
+    }
+
+    pub fn main_offset(self) -> f64 {
+        self.main_track() + self.main_skip()
+    }
+
+    pub fn light_offset(self) -> f64 {
+        self.light_track() + self.light_skip()
+    }
+
+    pub const fn sw(self) -> f64 {
+        self.station_width()
+    }
+
+    pub const fn sh(self) -> f64 {
+        self.station_height()
+    }
+}
+
+/// # Other measures
+impl Measures {
     /// Returns the import map units array.
-    pub fn map_units(self) -> [f64; 8] {
+    pub fn map_units(self) -> [f64; 13] {
         [
             self.bp(),
             self.dt(),
-            self.ds(),
             self.dl(),
-            self.main_width(), // "st"
-            self.double_width(), // "dst"
-            self.sw(),
-            self.sh(),
+            self.main_track(),
+            self.main_double(),
+            self.main_skip(),
+            self.main_offset(),
+            self.light_track(),
+            self.light_double(),
+            self.light_skip(),
+            self.light_offset(),
+            self.station_width(),
+            self.station_height(),
         ]
     }
 
     /// The deprecated sp measure.
     pub fn sp(self) -> f64 {
-        self.side_width()
+        self.light_track()
     }
 
     /// Returns whether we should use main or side track widths.
@@ -178,32 +184,42 @@ impl Measures {
     }
 
     /// Returns the line width for the given class.
-    pub fn line_width(self, class: &Railway) -> f64 {
+    pub fn class_track(self, class: &Railway) -> f64 {
         if Self::is_main(class) {
-            self.main_width()
+            self.main_track()
         }
         else {
-            self.side_width()
+            self.light_track()
         }
     }
 
-    /// Returns the line inside for the given class.
-    pub fn line_inside(self, class: &Railway) -> f64 {
+    /// Returns the double track width for the given class.
+    pub fn class_double(self, class: &Railway) -> f64 {
         if Self::is_main(class) {
-            self.main_inside()
+            self.main_double()
         }
         else {
-            self.side_width()
+            self.light_double()
         }
     }
 
-    /// Returns the line casing for the given class.
-    pub fn line_case(self, class: &Railway) -> f64 {
+    /// Returns the skip for the given class.
+    pub fn class_skip(self, class: &Railway) -> f64 {
         if Self::is_main(class) {
-            self.main_case()
+            self.main_skip()
         }
         else {
-            self.side_case()
+            self.light_skip()
+        }
+    }
+
+    /// Returns the offset for the given class.
+    pub fn class_offset(self, class: &Railway) -> f64 {
+        if Self::is_main(class) {
+            self.main_offset()
+        }
+        else {
+            self.light_offset()
         }
     }
 }
@@ -242,21 +258,14 @@ impl ops::MulAssign<f64> for Measures {
 
 /// The standard measures for detail level 0.
 pub const BASE_D0: Measures = Measures([
-    1.,     // bp
-    2.,     // dt
-    1.2,    // ds
-    1.33,   // dl               = 2/3dt
-    0.8,    // main width
-    0.5,    // main inside
-    1.6,    // main case
-    1.4,    // double width
-    0.5,    // double inside
-    1.6,    // double case
-    0.5,    // side width
-    0.3,    // side inside
-    1.0,    // side case
+    2.0,    // dt
+    0.8,    // main track
+    0.85,   // main double
+    0.3,    // main skip
+    0.6,    // light track
+    0.65,   // light double
+    0.2,    // light skip
     0.3,    // guide width
-    0.6,    // guide case
     0.4,    // border width
     12.,    // seg              = 6dt
     6.,     // sw               = 3dt
@@ -274,21 +283,14 @@ pub const BASE_D1: Measures = BASE_D0;
 
 /// The standard measures for detail level 2.
 pub const BASE_D2: Measures = Measures([
-    1.,     // bp
-    2.,     // dt
-    0.4,    // ds
-    0.9,    // dl               = 2/3dt
-    1.1,    // main width
-    0.9,    // main inside
-    1.6,    // main case
-    1.8,    // double width
-    0.5,    // double inside
-    1.6,    // double case
-    0.6,    // side width
-    0.4,    // side inside
-    1.0,    // side case
+    2.0,    // dt
+    1.1,    // main track
+    1.8,    // main double
+    0.4,    // main skip
+    0.6,    // light track
+    1.4,    // light double
+    0.3,    // light skip
     0.3,    // guide width
-    0.6,    // guide case
     0.4,    // border width
     12.,    // seg              = 6dt
     6.,     // sw               = 3dt
@@ -303,25 +305,18 @@ pub const BASE_D2: Measures = Measures([
 
 /// The standard measures for detail level 3.
 pub const BASE_D3: Measures = Measures([
-    1.,     // bp
     1.8,    // dt
-    0.4,    // ds
-    1.5,    // dl
-    1.4,    // main width
-    0.2,    // main inside
-    1.6,    // main case
-    2.6,    // double width
-    0.4,    // double inside
-    1.6,    // double case
-    1.0,    // side width
-    0.4,    // side inside
-    1.0,    // side case
+    1.4,    // main track
+    2.6,    // main double
+    0.4,    // main skip
+    1.0,    // light track
+    1.8,    // light double
+    0.3,    // light skip
     0.3,    // guide width
-    0.6,    // guide case
     0.4,    // border width
-    12.,     // seg              = 6dt
-    4.,     // sw               = 2dt
-    4.,    // sh
+    10.8,   // seg              = 6dt
+    4.,     // sw
+    4.,     // sh
     5.,     // xsmall font
     6.,     // small font
     7.,     // medium font
@@ -332,24 +327,17 @@ pub const BASE_D3: Measures = Measures([
 
 /// The standard measures for detail level 4.
 pub const BASE_D4: Measures = Measures([
-    1.,     // bp
-    2.,     // dt
-    0.9,    // ds
-    1.33,   // dl               = 2/3dt
-    1.1,    // main width
-    0.9,    // main inside
-    1.6,    // main case
-    0.8,    // double width
-    0.5,    // double inside
-    1.6,    // double case
-    0.6,    // side width
-    0.4,    // side inside
-    1.0,    // side case
+    2.0,    // dt
+    1.1,    // main track
+    1.1,    // main double
+    0.9,    // main skip
+    0.6,    // light track
+    0.6,    // light double
+    1.4,    // light skip
     0.3,    // guide width
-    0.6,    // guide case
     0.4,    // border width
     12.,    // seg              = 6dt
-    6.,     // sw               = 3dt
+    6.,     // sw
     6.,     // sh
     5.,     // xsmall font
     6.,     // small font

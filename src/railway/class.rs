@@ -303,6 +303,13 @@ impl Category {
         }
     }
 
+    /// Returns whether the category is a railway line.
+    ///
+    /// This excludes trams, private, and sidings.
+    pub fn is_railway(self) -> bool {
+        !matches!(self, Self::Tram | Self::Private | Self::Siding)
+    }
+
     /// Returns whether the category is a tram.
     pub fn is_tram(self) -> bool {
         matches!(self, Category::Tram)

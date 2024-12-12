@@ -244,13 +244,13 @@ impl<'a> Shape<'a> for ContourShape<'a> {
 impl<'a> ContourShape<'a> {
     fn apply_line_width(&self, style: &Style, canvas: &mut Group) {
         let line_width = if style.detail() < 1 {
-            style.measures().main_width()
+            style.measures().main_track()
         }
         else if self.class.double() {
-            style.measures().line_width(&self.class.class) * 1.4
+            style.measures().class_double(&self.class.class) * 1.4
         }
         else {
-            style.measures().line_width(&self.class.class)
+            style.measures().class_track(&self.class.class)
         };
         canvas.apply_line_width(line_width);
     }
@@ -291,10 +291,10 @@ impl ContourShape2 {
             Self::pax_dash(&contour.class, &outline, style)
         });
         let width = if contour.class.double() {
-            style.measures().double_width()
+            style.measures().class_double(&contour.class.class)
         }
         else {
-            style.measures().line_width(&contour.class.class)
+            style.measures().class_track(&contour.class.class)
         };
 
         Self {
@@ -302,7 +302,7 @@ impl ContourShape2 {
             color: style.track_color(&contour.class.class),
             width,
             casing_width: contour.casing.then(|| {
-                width + 2. * style.measures().ds()
+                width + 2. * style.measures().class_skip(&contour.class.class)
             }),
             dash,
             outline
@@ -666,13 +666,13 @@ impl ContourShape4 {
     fn new<'a>(contour: &'a TrackContour, style: &Style) -> AnyShape<'a> {
         let open = contour.class.class.status().is_open();
         let color = style.track_color(&contour.class.class);
-        let width = style.measures().line_width(&contour.class.class);
+        let width = style.measures().class_track(&contour.class.class);
         let casing_width = contour.casing.then(|| {
-            width + 2. * style.measures().ds()
+            width + 2. * style.measures().class_skip(&contour.class.class)
         });
 
         if contour.class.double() {
-            let off = style.measures().dt() * 0.5;
+            let off = style.measures().class_offset(&contour.class.class) * 0.5;
             let left = contour.trace.outline_offset(off, style);
             let dash = Self::pax_dash(&contour.class, &left, style);
 
@@ -921,7 +921,7 @@ impl ElectricDecor {
         outline: &Outline,
         style: &Style,
     ) -> Option<Self> {
-        if class.class.station() {
+        if class.class.station() || !class.class.category().is_railway() {
             return None
         }
 

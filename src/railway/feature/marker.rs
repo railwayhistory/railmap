@@ -209,19 +209,20 @@ macro_rules! make_marker {
 markers! {
     ("de.abzw", "junction") => (
         |canvas: &mut Group, u: Measures| {
-            chevron(canvas,
-                0.5 * u.sw() - 0.5 * u.sp(),
-                0.25 * u.sh() + 0.5 * u.sp(), 0.75 * u.sh() - 0.5 * u.sp()
-            );
-            chevron(canvas,
-                0.5 * u.sw() - 0.5 * u.sp(),
-                0.5 * u.sh() + 0.5 * u.sp(), 1.0 * u.sh() - 0.5 * u.sp()
-            );
+            let st = u.main_track();
+            let sw = 0.9 * u.sw();
+            let sh = 0.9 * u.sh();
+            let hsh = 0.5 * sh;
+
             canvas.move_to(0., 0.);
-            canvas.line_to(0., 0.25 * u.sh());
-            canvas.move_to(0., 0.5 * u.sh() + u.sp());
-            canvas.line_to(0., u.sh() - 0.5 * u.sp());
-            canvas.apply_line_width(u.sp());
+            canvas.line_to(0., hsh + 0.3 * st);
+            canvas.line_to(-0.45 * sw, sh);
+            canvas.move_to(0., hsh + 0.3 * st);
+            canvas.line_to(0.45 * sw, sh);
+            canvas.move_to(-0.5 * sw, hsh);
+            canvas.line_to(0.5 * sw, hsh);
+
+            canvas.apply_line_width(u.main_track());
             stroke_round(canvas)
         },
         |canvas: &mut Group, u: Measures| {
@@ -365,12 +366,7 @@ markers! {
 
     ("de.bf", "de.kbf", "station") => (
         |canvas: &mut Group, u: Measures| {
-            canvas.move_to(-0.5 * u.sw(), 2. * u.sp());
-            canvas.line_to(-0.5 * u.sw(), u.sh());
-            canvas.line_to(0.5 * u.sw(), u.sh());
-            canvas.line_to(0.5 * u.sw(), 2. * u.sp());
-            canvas.close_path();
-            canvas.fill()
+            station(canvas, u)
         },
         |canvas: &mut Group, u: Measures| {
             station_small(canvas, u)
@@ -651,13 +647,21 @@ markers! {
 
     ("de.dkst") => (
         |canvas: &mut Group, u: Measures| {
-            chevron(canvas,
-                0.5 * u.sw() - 0.5 * u.sp(),
-                0.3 * u.sh() + 0.5 * u.sp(), 0.8 * u.sh() - 0.5 * u.sp()
-            );
+            let dt = u.dt();
+            let sw = 0.9 * u.sw();
+            let sh = 0.9 * u.sh();
+            let hsh = 0.5 * sh;
+
             canvas.move_to(0., 0.);
-            canvas.line_to(0., u.sh());
-            canvas.apply_line_width(u.sp());
+            canvas.line_to(0., hsh);
+            canvas.move_to(-0.5 * sw, hsh);
+            canvas.line_to(0.5 * sw, hsh);
+            canvas.move_to(-0.5 * dt, hsh);
+            canvas.line_to(-0.5 * dt, sh);
+            canvas.line_to(0.5 * dt, sh);
+            canvas.line_to(0.5 * dt, hsh);
+
+            canvas.apply_line_width(u.main_track());
             stroke_round(canvas)
         },
         |canvas: &mut Group, u: Measures| {
@@ -924,13 +928,21 @@ markers! {
 
     ("de.uest", "crossover") => (
         |canvas: &mut Group, u: Measures| {
-            chevron(canvas,
-                0.5 * u.sw() - 0.5 * u.sp(),
-                0.3 * u.sh() + 0.5 * u.sp(), 0.8 * u.sh() - 0.5 * u.sp()
-            );
+            let dt = u.dt();
+            let sw = 0.9 * u.sw();
+            let sh = 0.9 * u.sh();
+            let hsh = 0.5 * sh;
+
             canvas.move_to(0., 0.);
-            canvas.line_to(0., u.sh() - u.sp());
-            canvas.apply_line_width(u.sp());
+            canvas.line_to(0., hsh);
+            canvas.move_to(-0.5 * sw, hsh);
+            canvas.line_to(0.5 * sw, hsh);
+            canvas.move_to(-0.5 * dt, hsh);
+            canvas.line_to(-0.5 * dt, sh);
+            canvas.move_to(0.5 * dt, hsh);
+            canvas.line_to(0.5 * dt, sh);
+
+            canvas.apply_line_width(u.main_track());
             stroke_round(canvas)
         },
         |canvas: &mut Group, u: Measures| {
@@ -1008,6 +1020,33 @@ markers! {
         }
     ),
 
+    ("de.tram.inbf") => (
+        |canvas: &mut Group, u: Measures| {
+            let dt = u.light_double() + u.light_track() * 0.5;
+
+            canvas.move_to(-dt, -dt);
+            canvas.line_to(dt, -dt);
+            canvas.line_to(dt, dt);
+            canvas.line_to(-dt, dt);
+            canvas.close_path();
+            canvas.fill();
+        }
+    ),
+
+    ("de.tram.inhp") => (
+        |canvas: &mut Group, u: Measures| {
+            let dt = u.light_double();
+
+            canvas.move_to(-dt, -dt);
+            canvas.line_to(dt, -dt);
+            canvas.line_to(dt, dt);
+            canvas.line_to(-dt, dt);
+            canvas.close_path();
+            canvas.apply_line_width(u.light_track());
+            canvas.stroke();
+        }
+    ),
+
     ("ltd-stop") => (
         |canvas: &mut Group, u: Measures| {
             let hsp = 0.5 * u.sp();
@@ -1040,7 +1079,7 @@ markers! {
     ),
     ("statdt") => (
         |canvas: &mut Group, u: Measures| {
-            canvas.apply_line_width(u.sp());
+            canvas.apply_line_width(u.main_track());
             canvas.move_to(0., 0.);
             canvas.line_to(0., u.dt());
             canvas.stroke()
@@ -1078,6 +1117,18 @@ markers! {
 
 
 //------------ Component Functions -------------------------------------------
+
+fn station(
+    canvas: &mut Group, u: Measures
+) {
+    canvas.move_to(-0.5 * u.sw(), 0.);
+    canvas.line_to(-0.5 * u.sw(), u.sh());
+    canvas.line_to(0.5 * u.sw(), u.sh());
+    canvas.line_to(0.5 * u.sw(), 0.);
+    canvas.close_path();
+    canvas.fill()
+}
+
 
 fn station_small(
     canvas: &mut Group, u: Measures
@@ -1159,13 +1210,13 @@ fn station_small_casing(
 fn stop(
     canvas: &mut Group, u: Measures
 )  {
-    let hsp = 0.5 * u.sp();
-    canvas.move_to(-0.5 * u.sw() + hsp, 2.5 * u.sp());
+    let hsp = 0.5 * u.main_track();
+    canvas.move_to(-0.5 * u.sw() + hsp, 0.);
     canvas.line_to(-0.5 * u.sw() + hsp, u.sh() - 0.5 * u.sp());
     canvas.line_to(0.5 * u.sw() - hsp, u.sh() - 0.5 * u.sp());
-    canvas.line_to(0.5 * u.sw() - hsp, 2.5 * u.sp());
-    canvas.close_path();
-    canvas.apply_line_width(u.sp());
+    canvas.line_to(0.5 * u.sw() - hsp, 0.);
+    //canvas.close_path();
+    canvas.apply_line_width(u.main_track());
     canvas.stroke();
     canvas.new_path();
 }
