@@ -256,7 +256,7 @@ impl Inner {
         else if symbols.contains("casing") {
             Inner::None
         }
-        else if class.status().is_open() && !class.pax().is_full() {
+        else if !class.pax().is_full() {
             Inner::Stroke
         }
         else {
@@ -266,7 +266,7 @@ impl Inner {
 
     fn from_scope(scope: &Scope) -> Self {
         let class = scope.railway();
-        if class.status().is_open() && !class.pax().is_full() {
+        if !class.pax().is_full() {
             Inner::Stroke
         }
         else {
