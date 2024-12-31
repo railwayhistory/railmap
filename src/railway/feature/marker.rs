@@ -1112,6 +1112,29 @@ markers! {
             canvas.line_to(0., u.dt());
             canvas.stroke()
         }
+    ),
+
+    ("sigr") => (
+        |canvas: &mut Group, u: Measures| {
+            let u = u.main_offset() * 0.3;
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., 2. * u);
+            canvas.move_to(0., 1.5 * u);
+            canvas.line_to(2. * u, 1.5 * u);
+            canvas.arc(2.5 * u, 1.5 * u, 0.5 * u, 0., 2. * PI);
+            canvas.stroke()
+        }
+    ),
+    ("sigl") => (
+        |canvas: &mut Group, u: Measures| {
+            let u = u.main_offset() * 0.3;
+            canvas.move_to(0., 0.);
+            canvas.line_to(0., -2. * u);
+            canvas.move_to(0., -1.5 * u);
+            canvas.line_to(2. * u, -1.5 * u);
+            canvas.arc(2.5 * u, -1.5 * u, 0.5 * u, 0., 2. * PI);
+            canvas.stroke()
+        }
     )
 }
 
