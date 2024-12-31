@@ -97,6 +97,13 @@ impl Colors {
         use self::class::ElectricSystem::*;
 
         class.cat().and_then(|cat| {
+            if !class.status().is_open() {
+                return match cat.status {
+                    class::ElectricStatus::None => None,
+                    _ => Some(self.track_color(class)),
+                }
+            }
+
             if class.category().is_tram() {
                 return match cat.status {
                     class::ElectricStatus::None => None,
@@ -124,6 +131,13 @@ impl Colors {
     /// Returns the color for third rail markings if they should be drawn.
     pub fn rail_color(&self, class: &class::Railway) -> Option<Color> {
         class.rail().and_then(|rail| {
+            if !class.status().is_open() {
+                return match rail.status {
+                    class::ElectricStatus::None => None,
+                    _ => Some(self.track_color(class)),
+                }
+            }
+
             if class.category().is_tram() {
                 match rail.status {
                     class::ElectricStatus::None => None,
