@@ -73,11 +73,8 @@ pub struct TrackClass {
     /// The feature class.
     class: Railway,
 
-    /// What is to our left?
-    left: Neighbor,
-
-    /// What is to our left?
-    right: Neighbor,
+    /// The setup of the track and neighboring tracks.
+    setup: Setup,
 }
 
 impl TrackClass {
@@ -93,13 +90,16 @@ impl TrackClass {
     }
 
     pub fn from_symbols(symbols: &mut SymbolSet, scope: &Scope) -> Self {
-        let tight = symbols.take("tight");
+        let _ = symbols.take("tight"); // XXX Deprecated.
         let _ = symbols.take("flip"); // XXX Deprecated.
         let _ = symbols.take("combined"); // XXX Deprecated.
+        let _ = symbols.take("leftsame"); // XXX Deprecated.
+        let _ = symbols.take("leftother"); // XXX Deprecated.
+        let _ = symbols.take("rightsame"); // XXX Deprecated.
+        let _ = symbols.take("rightother"); // XXX Deprecated.
         TrackClass {
             class: Railway::from_symbols(symbols, scope),
-            left: Neighbor::left_from_symbols(symbols, tight),
-            right: Neighbor::right_from_symbols(symbols, tight),
+            setup: Setup::from_symbols(symbols),
         }
     }
 
@@ -113,49 +113,155 @@ impl TrackClass {
 }
 
 
+//------------ Direction -----------------------------------------------------
+
+/// The direction of a track of a multi-track line.
+///
+/// Despite being named “direction,” this is independent of whether trains
+/// usually use the left or right track. Instead, we define it through the
+/// left and right tracks of a double track line. If the track would be used
+/// by traffic usually using the left track on double track lines, it is a
+/// down track, otherwise an up track.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Direction {
+    /// An up track of a multi-track line.
+    ///
+    /// On a double track line, up is the right track in direction of
+    /// increasing chainage.
+    Up,
+
+    /// A down track of a multi-track line.
+    ///
+    /// On a double track line, down is the left track in direction of
+    /// increasing chainage.
+    Down,
+
+    /// A track both up and down.
+    ///
+    /// This should be used for the middle tracks of trippled lines.
+    Updown,
+}
+
+impl Direction {
+    fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
+        if symbols.take("up") {
+            Some(Self::Up)
+        }
+        else if symbols.take("dn") {
+            Some(Self::Down)
+        }
+        else if symbols.take("ud") {
+            Some(Self::Updown)
+        }
+        else {
+            None
+        }
+    }
+}
+
+
 //------------ Neighbor ------------------------------------------------------
 
+/// Describes the purpose of a neighboring track.
+///
+/// This is used for drawing track and line decorations and describes the
+/// purpose of a track running parallel to this track.
 #[derive(Clone, Copy, Debug, Default)]
 pub enum Neighbor {
     /// There is no neighbor at all.
     #[default]
     None,
 
-    /// The neighboring track is part of the same line.
-    Same,
+    /// The neighboring track is part of the same line for the same direction.
+    Same(Direction),
 
     /// The neighboring track is part of a different line.
     Other,
 }
 
 impl Neighbor {
-    fn left_from_symbols(symbols: &mut SymbolSet, tight: bool) -> Self {
-        if tight {
+    fn left_from_symbols(symbols: &mut SymbolSet) -> Self {
+        if symbols.take("lup") { // left up
+            Self::Same(Direction::Up)
+        }
+        else if symbols.take("ldn") { // left down
+            Self::Same(Direction::Down)
+        }
+        else if symbols.take("lud") { // left updown
+            Self::Same(Direction::Updown)
+        }
+        else if symbols.take("lor") { // left other
             Self::Other
         }
-        else if symbols.take("leftsame") {
-            Self::Same
-        }
-        else if symbols.take("leftother") {
-            Self::Other
+        else if symbols.take("lno") { // let none
+            Self::None
         }
         else {
             Self::None
         }
     }
 
-    fn right_from_symbols(symbols: &mut SymbolSet, tight: bool) -> Self {
-        if tight {
+    fn right_from_symbols(symbols: &mut SymbolSet) -> Self {
+        if symbols.take("rup") { // right up
+            Self::Same(Direction::Up)
+        }
+        else if symbols.take("rdn") { // right down
+            Self::Same(Direction::Down)
+        }
+        else if symbols.take("rud") { // right updown
+            Self::Same(Direction::Updown)
+        }
+        else if symbols.take("ror") { // right other
             Self::Other
         }
-        else if symbols.take("rightsame") {
-            Self::Same
-        }
-        else if symbols.take("rightother") {
-            Self::Other
+        else if symbols.take("rno") { // right none
+            Self::None
         }
         else {
             Self::None
+        }
+    }
+}
+
+
+//------------ Setup ---------------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+struct Setup {
+    /// The direction of the track for a multitrack line.
+    ///
+    /// If this is `None`, the line is considered single track.
+    direction: Option<Direction>,
+
+    /// What is to our left?
+    left: Neighbor,
+
+    /// What is to our left?
+    right: Neighbor,
+}
+
+impl Setup {
+    fn from_symbols(symbols: &mut SymbolSet) -> Self {
+        Self {
+            direction: Direction::from_symbols(symbols),
+            left: Neighbor::left_from_symbols(symbols),
+            right: Neighbor::right_from_symbols(symbols),
+        }
+    }
+
+    fn double_left(self) -> Self {
+        Self {
+            direction: Some(Direction::Down),
+            left: self.left,
+            right: Neighbor::Same(Direction::Up),
+        }
+    }
+
+    fn double_right(self) -> Self {
+        Self {
+            direction: Some(Direction::Up),
+            left: Neighbor::Same(Direction::Down),
+            right: self.right,
         }
     }
 }
@@ -677,14 +783,12 @@ impl ContourShape4 {
             let dash = Self::pax_dash(&contour.class, &left, style);
 
             let left_electric = ElectricDecor::new(
-                &contour.class,
-                contour.class.left, Neighbor::Same, width,
-                &left, style
+                &contour.class, contour.class.setup.double_left(),
+                width, &left, style
             );
             let right_electric = ElectricDecor::new(
-                &contour.class,
-                Neighbor::Same, contour.class.right, width,
-                &left, style
+                &contour.class, contour.class.setup.double_right(),
+                width, &left, style
             );
 
             let left_shape = Self {
@@ -706,9 +810,7 @@ impl ContourShape4 {
                     open, color, width, casing_width,
                     dash: Self::pax_dash(&contour.class, &outline, style),
                     electric: ElectricDecor::new(
-                        &contour.class,
-                        contour.class.left, contour.class.right, width,
-                        &outline,
+                        &contour.class, contour.class.setup, width, &outline,
                         style
                     ),
                     outline
@@ -915,8 +1017,7 @@ struct RailDecor {
 impl ElectricDecor {
     fn new(
         class: &TrackClass,
-        _left: Neighbor,
-        right: Neighbor,
+        setup: Setup,
         width: f64,
         outline: &Outline,
         style: &Style,
@@ -967,21 +1068,54 @@ impl ElectricDecor {
             (None, None) => return None
         };
 
-        let dt = style.measures().dt();
-        let (dl, dr) = match right {
-            Neighbor::None => (0.49 * width, dt),
-            Neighbor::Other => (0.49 * width, 0.4 * dt),
-            _ => return None,
-        };
-
-        
+        let (dl, dr) = Self::dl_dr(
+            setup, width,
+            style.measures().class_skip(&class.class),
+            style.measures().class_track(&class.class),
+        );
 
         Some(Self {
             seg: dist * NO_PAX_DASH_RATIO,
-            width: dist * NO_PAX_DASH_ON,
+            width: dist * NO_PAX_DASH_ON * 0.9,
             cat, rail, dl, dr
         })
+    }
 
+    fn dl(setup: Setup, width: f64, skip: f64, track: f64) -> f64 {
+        if matches!(setup.direction, Some(Direction::Updown)) {
+            return 0.
+        }
+        match setup.left {
+            Neighbor::None => -0.5 * width - track,
+            Neighbor::Same(Direction::Updown) => 0.,
+            Neighbor::Same(dir) if Some(dir) == setup.direction => {
+                0.
+            }
+            Neighbor::Other => -0.5 * width - 0.2 * skip,
+            _ => -0.5 * width - 0.5 * skip,
+        }
+    }
+
+    fn dr(setup: Setup, width: f64, skip: f64, track: f64) -> f64 {
+        if matches!(setup.direction, Some(Direction::Updown)) {
+            return 0.
+        }
+        match setup.right {
+            Neighbor::None => 0.5 * width + track,
+            Neighbor::Same(Direction::Updown) => 0.,
+            Neighbor::Same(dir) if Some(dir) == setup.direction => {
+                0.
+            }
+            Neighbor::Other => 0.5 * width + 0.2 * skip,
+            _ => 0.5 * width + 0.5 * skip,
+        }
+    }
+
+    fn dl_dr(setup: Setup, width: f64, skip: f64, track: f64) -> (f64, f64) {
+        (
+            Self::dl(setup, width, skip, track),
+            Self::dr(setup, width, skip, track)
+        )
     }
 
     fn render(&self, outline: &Outline, canvas: &mut Sketch) {
@@ -996,7 +1130,7 @@ impl ElectricDecor {
     fn render_cat(
         &self, outline: &Outline, cat: CatDecor, canvas: &mut Sketch
     ) {
-        canvas.apply(LineWidth(self.width));
+        canvas.apply(LineWidth(self.width * 0.5));
         canvas.apply(cat.color);
         outline.iter_positions(
             self.seg, Some(cat.skip)
