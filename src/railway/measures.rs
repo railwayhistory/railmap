@@ -347,3 +347,47 @@ pub const BASE_D4: Measures = Measures([
     5.4,    // badge font
 ]);
 
+/// The standard measures for detail level 4.
+pub const BASE_D5: Measures = Measures([
+    2.0,    // dt
+    1.2,    // main track
+    1.2,    // main double
+    1.4,    // main skip
+    0.8,    // light track
+    0.8,    // light double
+    1.2,    // light skip
+    0.3,    // guide width
+    0.4,    // border width
+    12.,    // seg              = 6dt
+    6.,     // sw
+    6.,     // sh
+    5.,     // xsmall font
+    6.,     // small font
+    7.,     // medium font
+    9.,     // large font
+    11.,    // xlarge font
+    5.4,    // badge font
+]);
+
+/// The standard measures for detail level 5.
+pub const BASE_D6: Measures = Measures([
+    2.0,    // dt
+    1.2,    // main track
+    1.1,    // main double
+    3.8,    // main skip
+    1.0,    // light track
+    0.6,    // light double
+    1.4,    // light skip
+    0.3,    // guide width
+    0.4,    // border width
+    12.,    // seg              = 6dt
+    6.,     // sw
+    6.,     // sh
+    5.,     // xsmall font
+    6.,     // small font
+    7.,     // medium font
+    9.,     // large font
+    11.,    // xlarge font
+    5.4,    // badge font
+]);
+
