@@ -655,6 +655,43 @@ const PROCEDURES: &[(
         })
     }),
 
+    // Renders a badge containing a track label.
+    //
+    // ```text
+    // track_badge(class: symbol-set, position: position, text: Text)
+    // ```
+    ("track_badge", &|pos, args, scope, err| {
+        let mut args = BadgeArgs::from_args(args, scope, err)?;
+        args.properties.set_layout_type(
+            label::BlockType::BadgeFrame
+        );
+        args.properties.update_size(FontSize::Xsmall);
+        args.properties.set_packed(true);
+        args.block.properties_mut().set_layout_type(
+            label::BlockType::ReverseBadge
+        );
+        let mut block = label::Layout::hbox(
+            Base::Center, Align::Center, args.properties,
+            vec![args.block.into()]
+        );
+        block.properties_mut().set_layout_type(label::BlockType::Normal);
+        let label = label::Label::new(
+            block,
+            args.position,
+            true,
+            Default::default(),
+        );
+
+        scope.builtin().with_store(|store| {
+            store.line_labels.insert(
+                label,
+                scope.detail(pos, err)?,
+                scope.layer(),
+            );
+            Ok(())
+        })
+    }),
+
     // Renders a badge containing a timetable label.
     //
     // ```text

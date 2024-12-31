@@ -476,6 +476,12 @@ impl layout::Properties for BlockProperties {
                     self.size().size(style) * 0.2,
                 )
             }
+            BlockType::ReverseBadge => {
+                Margins::vh(
+                    self.size().size(style) * 0.1,
+                    self.size().size(style) * 0.2,
+                )
+            }
             _ => Margins::default()
         }
     }
@@ -489,7 +495,9 @@ impl layout::Properties for BlockProperties {
     ) {
         match stage {
             Stage::MarkerCasing => {
-                if !layout.is_span() {
+                if !layout.is_span()
+                    || matches!(self.layout_type, BlockType::ReverseBadge)
+                {
                     return
                 }
                 canvas.apply(LineCap::Butt);
@@ -511,12 +519,22 @@ impl layout::Properties for BlockProperties {
                         canvas.apply(Color::WHITE);
                         canvas.fill();
                     }
+                    BlockType::ReverseBadge => {
+                        canvas.apply(layout.outer());
+                        canvas.apply(style.label_color(&self.class));
+                        canvas.fill();
+                    }
                     _ => { }
                 }
             }
             Stage::MarkerMarking => {
                 if layout.is_span() {
-                    canvas.apply(style.label_color(&self.class));
+                    if matches!(self.layout_type, BlockType::ReverseBadge) {
+                        canvas.apply(Color::WHITE);
+                    }
+                    else {
+                        canvas.apply(style.label_color(&self.class));
+                    }
                     layout.fill_text(canvas);
                 }
                 if layout.has_frame() {
@@ -542,6 +560,9 @@ pub enum BlockType {
 
     /// The layout lives inside a frame and needs to grow a bit of margin.
     Framed,
+
+    /// A badge with the foreground and background colors reversed.
+    ReverseBadge,
 }
 
 
