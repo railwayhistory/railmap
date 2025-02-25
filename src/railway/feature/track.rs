@@ -295,12 +295,15 @@ impl Feature for TrackContour {
     fn shape(
         &self, style: &Style, _canvas: &Canvas
     ) -> AnyShape {
+        /*
         if style.detail() <= 1 {
             AnyShape::from(
                 ContourShape::new(&self.class, self.trace.outline(style))
             )
         }
-        else if style.detail() == 2 {
+        else
+        */
+        if style.detail() <= 2 {
             return AnyShape::from(ContourShape2::new(self, style));
         }
         else if style.detail() == 3 {
@@ -313,6 +316,7 @@ impl Feature for TrackContour {
 }
 
 
+/*
 //------------ ContourShape --------------------------------------------------
 
 struct ContourShape<'a> {
@@ -372,6 +376,7 @@ impl<'a> ContourShape<'a> {
         );
     }
 }
+*/
 
 
 //------------ ContourShape2 -------------------------------------------------
