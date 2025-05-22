@@ -691,15 +691,15 @@ markers! {
 
     ("de.exbf") => (
         |canvas: &mut Group, u: Measures| {
-            canvas.move_to(-0.5 * u.sw() + 0.5 * u.sp(), u.sh() + 1.5 * u.sp());
-            canvas.line_to(0.5 * u.sw() - 0.5 * u.sp(), u.sh() + 1.5 * u.sp());
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas)
+            let d = u.main_track();
+            canvas.move_to(-0.5 * u.sw() + 0.5 * u.sp(), u.sh() + 1.5 * d);
+            canvas.line_to(0.5 * u.sw() - 0.5 * u.sp(), u.sh() + 1.5 * d);
+            canvas.apply_line_width(d);
+            stroke_round(canvas);
         },
         |canvas: &mut Group, u: Measures| {
             canvas.move_to(-0.5 * u.sw() + 0.5 * u.sp(), u.sh() + 1. * u.sp());
             canvas.line_to(0.5 * u.sw() - 0.5 * u.sp(), u.sh() + 1. * u.sp());
-            canvas.apply_line_width(u.sp());
             stroke_round(canvas)
         }
     ),
