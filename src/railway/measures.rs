@@ -260,10 +260,10 @@ impl ops::MulAssign<f64> for Measures {
 pub const BASE_D0: Measures = Measures([
     2.0,    // dt
     1.1,    // main track
-    1.6,   // main double
+    1.6,    // main double
     0.4,    // main skip
-    0.6,    // light track
-    1.2,   // light double
+    0.7,    // light track
+    1.2,    // light double
     0.3,    // light skip
     0.3,    // guide width
     0.4,    // border width
@@ -287,7 +287,7 @@ pub const BASE_D2: Measures = Measures([
     1.1,    // main track
     1.8,    // main double
     0.4,    // main skip
-    0.6,    // light track
+    0.7,    // light track
     1.4,    // light double
     0.3,    // light skip
     0.3,    // guide width
@@ -361,9 +361,9 @@ pub const BASE_D5: Measures = Measures([
     12.,    // seg              = 6dt
     6.,     // sw
     6.,     // sh
-    5.,     // xsmall font
-    6.,     // small font
-    7.,     // medium font
+    5.5,    // xsmall font
+    6.25,   // small font
+    7.5,    // medium font
     9.,     // large font
     11.,    // xlarge font
     5.4,    // badge font
