@@ -78,6 +78,20 @@ impl DotMarker {
         Ok(DotMarker { position, class, size, inner, casing })
     }
 
+    pub fn km_from_arg(
+        mut arg: SymbolSet,
+        position: Position,
+        scope: &Scope,
+        err: &mut EvalErrors,
+    ) -> Result<Self, Failed> {
+        let size = Size::km_from_symbols(&mut arg);
+        let class = Railway::from_symbols(&mut arg, scope);
+        let inner = Inner::from_symbols(&class, &mut arg);
+        let casing = Self::casing_from_symbols(&mut arg);
+        arg.check_exhausted(err)?;
+        Ok(DotMarker { position, class, size, inner, casing })
+    }
+
     pub fn from_position(
         position: Position,
         scope: &Scope,
@@ -86,6 +100,19 @@ impl DotMarker {
             position,
             class: scope.railway().clone(),
             size: Size::default(),
+            inner: Inner::from_scope(scope),
+            casing: true
+        })
+    }
+
+    pub fn km_from_position(
+        position: Position,
+        scope: &Scope,
+    ) -> Result<Self, Failed> {
+        Ok(DotMarker {
+            position,
+            class: scope.railway().clone(),
+            size: Size::Small,
             inner: Inner::from_scope(scope),
             casing: true
         })
@@ -210,6 +237,21 @@ enum Size {
 }
 
 impl Size {
+    fn km_from_symbols(symbols: &mut SymbolSet) -> Self {
+        if symbols.take("small") {
+            Size::Small
+        }
+        else if symbols.take("large") {
+            Size::Large
+        }
+        else if symbols.take("medium") {
+            Size::Medium
+        }
+        else {
+            Size::Small
+        }
+    }
+
     fn from_symbols(symbols: &mut SymbolSet) -> Self {
         if symbols.take("small") {
             Size::Small

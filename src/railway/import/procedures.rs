@@ -155,6 +155,36 @@ const PROCEDURES: &[(
         })
     }),
 
+    ("kmdot", &|pos, args, scope, err| {
+        let marker = match args.try_into_array() {
+            Ok([class, position]) => {
+                let class = class.eval(err)?;
+                let position = position.eval(err)?;
+                DotMarker::km_from_arg(
+                    class, position, scope, err
+                )?
+            }
+            Err(args) => match args.try_into_array() {
+                Ok([position]) => {
+                    let position = position.eval(err)?;
+                    DotMarker::km_from_position(position, scope)?
+                }
+                Err(_) => {
+                    err.add(pos, "expected 1 or 2 arguments");
+                    return Err(Failed)
+                }
+            }
+        };
+        scope.builtin().with_store(|store| {
+            store.railway.insert(
+                marker,
+                scope.detail(pos, err)?,
+                scope.layer(),
+            );
+            Ok(())
+        })
+    }),
+
     // Draws a label.
     //
     // ```text
