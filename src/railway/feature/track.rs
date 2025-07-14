@@ -193,7 +193,7 @@ impl Neighbor {
         else if symbols.take("lor") { // left other
             Self::Other
         }
-        else if symbols.take("lno") { // let none
+        else if symbols.take("lno") { // left none
             Self::None
         }
         else {

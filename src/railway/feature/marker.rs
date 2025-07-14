@@ -700,6 +700,7 @@ markers! {
         |canvas: &mut Group, u: Measures| {
             canvas.move_to(-0.5 * u.sw() + 0.5 * u.sp(), u.sh() + 1. * u.sp());
             canvas.line_to(0.5 * u.sw() - 0.5 * u.sp(), u.sh() + 1. * u.sp());
+            canvas.apply_line_width(u.sp());
             stroke_round(canvas)
         }
     ),
@@ -840,17 +841,17 @@ markers! {
 
     ("de.inbf") => (
         |canvas: &mut Group, u: Measures| {
-            canvas.move_to(-0.5 * u.sw(), 2. * u.sp());
-            canvas.line_to(-0.5 * u.sw(), 4. * u.dt() - 2. * u.sp());
-            canvas.line_to(0.5 * u.sw(), 4. * u.dt() - 2. * u.sp());
-            canvas.line_to(0.5 * u.sw(), 2. * u.sp());
+            canvas.move_to(-0.5 * u.sw(), 0.);
+            canvas.line_to(-0.5 * u.sw(), u.insh());
+            canvas.line_to(0.5 * u.sw(), u.insh());
+            canvas.line_to(0.5 * u.sw(), 0.);
             canvas.close_path();
             canvas.fill()
         },
         |canvas: &mut Group, u: Measures| {
             canvas.move_to(-0.5 * u.sw(), 0.);
-            canvas.line_to(-0.5 * u.sw(), 2. * u.dt());
-            canvas.line_to(0.5 * u.sw(), 2. * u.dt());
+            canvas.line_to(-0.5 * u.sw(), u.insh());
+            canvas.line_to(0.5 * u.sw(), u.insh());
             canvas.line_to(0.5 * u.sw(), 0.);
             canvas.close_path();
             canvas.fill();

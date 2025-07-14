@@ -95,6 +95,9 @@ pub const MAP_DISTANCES: &[(&str, usize, f64)] = &[
     // Height of the station symbol (“station height”).
     ("sh", 12, 1.),
 
+    // Height of an inside station symbol (“station height”).
+    ("insh", 13, 1.),
+
 
     //--- Deprecated units
 

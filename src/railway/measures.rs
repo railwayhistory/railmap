@@ -93,38 +93,43 @@ impl Measures {
         self.0[11]
     }
 
+    /// The height of a station symbol.
+    pub const fn inside_station_height(self) -> f64 {
+        self.0[12]
+    }
+
     /// The font size of the xsmall font.
     pub const fn xsmall_font(self) -> f64 {
-        self.0[12]
+        self.0[13]
     }
 
     /// The font size of the small font.
     pub const fn small_font(self) -> f64 {
-        self.0[13]
+        self.0[14]
     }
 
     /// The font size of the medium font.
     pub const fn medium_font(self) -> f64 {
-        self.0[14]
+        self.0[15]
     }
 
     /// The font size of the large font.
     pub const fn large_font(self) -> f64 {
-        self.0[15]
+        self.0[16]
     }
 
     /// The font size of the extra large font.
     pub const fn xlarge_font(self) -> f64 {
-        self.0[16]
+        self.0[17]
     }
     
     /// The font size of the badge font.
     pub const fn badge_font(self) -> f64 {
-       self.0[17]
+       self.0[18]
     }
 
     /// The number of measures.
-    const LEN: usize = 18;
+    const LEN: usize = 19;
 }
 
 
@@ -150,12 +155,16 @@ impl Measures {
     pub const fn sh(self) -> f64 {
         self.station_height()
     }
+
+    pub const fn insh(self) -> f64 {
+        self.inside_station_height()
+    }
 }
 
 /// # Other measures
 impl Measures {
     /// Returns the import map units array.
-    pub fn map_units(self) -> [f64; 13] {
+    pub fn map_units(self) -> [f64; 14] {
         [
             self.bp(),
             self.dt(),
@@ -170,6 +179,7 @@ impl Measures {
             self.light_offset(),
             self.station_width(),
             self.station_height(),
+            self.inside_station_height(),
         ]
     }
 
@@ -270,6 +280,7 @@ pub const BASE_D0: Measures = Measures([
     12.,    // seg              = 6dt
     6.,     // sw               = 3dt
     5.5,    // sh
+    3.7,    // insh
     5.,     // xsmall font
     6.,     // small font
     7.,     // medium font
@@ -295,6 +306,7 @@ pub const BASE_D2: Measures = Measures([
     12.,    // seg              = 6dt
     6.,     // sw               = 3dt
     5.5,    // sh
+    5.5,    // insh
     5.,     // xsmall font
     6.,     // small font
     7.,     // medium font
@@ -317,6 +329,7 @@ pub const BASE_D3: Measures = Measures([
     10.8,   // seg              = 6dt
     4.,     // sw
     4.,     // sh
+    2.7,    // insh
     5.,     // xsmall font
     6.,     // small font
     7.,     // medium font
@@ -339,6 +352,7 @@ pub const BASE_D4: Measures = Measures([
     12.,    // seg              = 6dt
     6.,     // sw
     6.,     // sh
+    4.,     // insh
     5.,     // xsmall font
     6.,     // small font
     7.,     // medium font
@@ -361,6 +375,7 @@ pub const BASE_D5: Measures = Measures([
     12.,    // seg              = 6dt
     6.,     // sw
     6.,     // sh
+    4.,     // insh
     5.5,    // xsmall font
     6.25,   // small font
     7.5,    // medium font
@@ -383,6 +398,7 @@ pub const BASE_D6: Measures = Measures([
     12.,    // seg              = 6dt
     6.,     // sw
     6.,     // sh
+    4.,     // insh
     5.,     // xsmall font
     6.,     // small font
     7.,     // medium font

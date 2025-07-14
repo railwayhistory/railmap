@@ -126,7 +126,7 @@ pub struct Style {
     measures: Measures,
 
     /// The map unit array for use with Femtomap transformation.
-    map_units: [f64; 13],
+    map_units: [f64; 14],
 
     /// The coloring rules.
     colors: Colors,
