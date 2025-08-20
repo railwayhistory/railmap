@@ -858,6 +858,28 @@ markers! {
         }
     ),
 
+    ("de.inhp") => (
+        |canvas: &mut Group, u: Measures| {
+            let hsp = 0.5 * u.main_track();
+            canvas.move_to(-0.5 * u.sw() + hsp, 0.);
+            canvas.line_to(-0.5 * u.sw() + hsp, u.insh() - 0.5 * u.sp());
+            canvas.line_to(0.5 * u.sw() - hsp, u.insh() - 0.5 * u.sp());
+            canvas.line_to(0.5 * u.sw() - hsp, 0.);
+            canvas.apply_line_width(u.main_track());
+            canvas.stroke();
+        },
+        |canvas: &mut Group, u: Measures| {
+            let hsp = 0.5 * u.sp();
+            canvas.move_to(-0.5 * u.sw() + hsp, 0.);
+            canvas.line_to(-0.5 * u.sw() + hsp, u.insh() - hsp);
+            canvas.line_to(0.5 * u.sw() - hsp, u.insh() - hsp);
+            canvas.line_to(0.5 * u.sw() - hsp, 0.);
+            canvas.apply_line_width(u.sp());
+            stroke_round(canvas);
+            canvas.new_path();
+        }
+    ),
+
     ("de.ldst") => (
         |canvas: &mut Group, u: Measures| {
             let hsp = 0.5 * u.sp();
