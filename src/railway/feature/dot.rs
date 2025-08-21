@@ -148,7 +148,7 @@ impl Feature for DotMarker {
 
     fn shape(
         &self, style: &Style, _canvas: &Canvas
-    ) -> AnyShape {
+    ) -> AnyShape<'_> {
         DotShape {
             feature: self,
             center: self.position.resolve(style).0

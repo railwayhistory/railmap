@@ -67,7 +67,7 @@ pub trait Feature {
 
     fn shape(
         &self, style: &Style, canvas: &Canvas
-    ) -> AnyShape;
+    ) -> AnyShape<'_>;
 }
 
 //------------ Shape ---------------------------------------------------------

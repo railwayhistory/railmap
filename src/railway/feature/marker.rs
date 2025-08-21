@@ -150,7 +150,7 @@ impl Feature for StandardMarker {
 
     fn shape(
         &self, _style: &Style, _canvas: &Canvas
-    ) -> AnyShape {
+    ) -> AnyShape<'_> {
         AnyShape::single_stage(|style: &Style, canvas: &mut Canvas| {
             self.render(style, canvas)
         })

@@ -32,7 +32,7 @@ impl Feature for AreaContour {
 
     fn shape(
         &self, style: &Style, _canvas: &Canvas
-    ) -> AnyShape {
+    ) -> AnyShape<'_> {
         let color = style.track_color(&self.class);
         let outline = self.trace.outline(style);
 
@@ -71,7 +71,7 @@ impl Feature for PlatformContour {
 
     fn shape(
         &self, style: &Style, _canvas: &Canvas
-    ) -> AnyShape {
+    ) -> AnyShape<'_> {
         let color = style.track_color(&self.class);
         let outline = self.trace.outline(style);
 

@@ -294,7 +294,7 @@ impl Feature for TrackContour {
 
     fn shape(
         &self, style: &Style, _canvas: &Canvas
-    ) -> AnyShape {
+    ) -> AnyShape<'_> {
         /*
         if style.detail() <= 1 {
             AnyShape::from(
@@ -1654,7 +1654,7 @@ impl Feature for TrackCasing {
 
     fn shape(
         &self, style: &Style, _canvas: &Canvas
-    ) -> AnyShape {
+    ) -> AnyShape<'_> {
         let line_width = if self.class.double() {
             2.2 * style.measures().dt()
         }

@@ -55,7 +55,7 @@ impl Feature for GuideContour {
 
     fn shape(
         &self, style: &Style, _canvas: &Canvas
-    ) -> AnyShape {
+    ) -> AnyShape<'_> {
         GuideShape {
             contour: self, trace: self.trace.outline(style)
         }.into()

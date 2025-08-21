@@ -101,7 +101,7 @@ impl Feature for BorderContour {
 
     fn shape(
         &self, style: &Style, _canvas: &Canvas
-    ) -> AnyShape {
+    ) -> AnyShape<'_> {
         let outline = self.trace.outline(style);
         if style.detail() < 3 {
             AnyShape::single_stage(move |style: &Style, canvas: &mut Canvas| {

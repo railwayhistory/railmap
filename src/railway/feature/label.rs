@@ -72,7 +72,7 @@ impl Feature for Label {
 
     fn shape(
         &self, style: &Style, canvas: &Canvas
-    ) -> AnyShape {
+    ) -> AnyShape<'_> {
         let (point, angle) = self.position.resolve_label(style, self.on_path);
         let matrix = Matrix::identity().translate(point).rotate(angle);
         let layout = self.block.shape(Default::default(), style, canvas);
