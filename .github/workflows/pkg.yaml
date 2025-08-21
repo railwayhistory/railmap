@@ -8,7 +8,7 @@ on:
 
 jobs:
   package:
-    uses: NLnetLabs/ploutos/.github/workflows/pkg-rust.yml@v7
+    uses: NLnetLabs/ploutos/.github/workflows/pkg-rust.yml@v8
     with:
       package_build_rules: |
         image:
