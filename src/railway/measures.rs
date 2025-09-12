@@ -326,7 +326,7 @@ pub const BASE_D3: Measures = Measures([
     0.3,    // light skip
     0.3,    // guide width
     0.4,    // border width
-    10.8,   // seg              = 6dt
+    9.0,   // seg
     4.,     // sw
     4.,     // sh
     2.7,    // insh
