@@ -207,12 +207,12 @@ impl Default for Colors {
 
 //------------ Color Constants -----------------------------------------------
 
-const NONE: &str = "5a3a29ff";
-const AC_HIGH: &str  = "6c2b86ff";
-const AC_LOW: &str = "812c5cff";
-const DC_HIGH: &str = "9b2321ff";
-const DC_LOW: &str = "b64f0dff";
-const RAIL: &str = "007e40ff";
-const FOUR: &str = "53633bff";
-const TRAM: &str = "005387ff";
+const NONE: &str = "452d20ff";
+const AC_HIGH: &str  = "7700d2ff";
+const AC_LOW: &str = "ba048fff";
+const DC_HIGH: &str = "d30000ff";
+const DC_LOW: &str = "e56a00ff";
+const RAIL: &str = "029b3eff";
+const FOUR: &str = "697d4cff";
+const TRAM: &str = "005f9aff";
 
