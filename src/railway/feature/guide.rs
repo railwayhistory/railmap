@@ -11,6 +11,7 @@ use crate::railway::import::eval::Scope;
 use crate::railway::style::Style;
 use super::{AnyShape, Category, Group, Feature, Shape, Stage, StageSet};
 
+
 //------------ GuideContour --------------------------------------------------
 
 /// A contour drawing a guide.

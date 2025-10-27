@@ -1155,7 +1155,7 @@ impl ElectricDecor {
     fn render_rail(
         &self, outline: &Outline, rail: RailDecor, canvas: &mut Sketch
     ) {
-        canvas.apply(LineWidth(self.width));
+        canvas.apply(LineWidth(self.width * 0.5));
         canvas.apply(rail.color);
         let mut positions = outline.positions();
         let (mut p1, mut d1) = match positions.advance(rail.skip) {

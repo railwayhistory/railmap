@@ -128,8 +128,13 @@ impl Measures {
        self.0[18]
     }
 
+    /// The stroke width of station symbols.
+    pub const fn station_stroke(self) -> f64 {
+        self.0[19]
+    }
+
     /// The number of measures.
-    const LEN: usize = 19;
+    const LEN: usize = 20;
 }
 
 
@@ -287,6 +292,7 @@ pub const BASE_D0: Measures = Measures([
     9.,     // large font
     11.,    // xlarge font
     5.4,    // badge font
+    0.9,    // station stroke
 ]);
 
 /// The standard measures for detail level 1.
@@ -313,6 +319,7 @@ pub const BASE_D2: Measures = Measures([
     9.,     // large font
     11.,    // xlarge font
     5.4,    // badge font
+    0.9,    // station stroke
 ]);
 
 /// The standard measures for detail level 3.
@@ -326,7 +333,7 @@ pub const BASE_D3: Measures = Measures([
     0.3,    // light skip
     0.3,    // guide width
     0.4,    // border width
-    10.8,   // seg              = 6dt
+    9.0,   // seg
     4.,     // sw
     4.,     // sh
     2.7,    // insh
@@ -336,6 +343,7 @@ pub const BASE_D3: Measures = Measures([
     9.,     // large font
     11.,    // xlarge font
     5.4,    // badge font
+    0.8,    // station stroke
 ]);
 
 /// The standard measures for detail level 4.
@@ -359,6 +367,7 @@ pub const BASE_D4: Measures = Measures([
     9.,     // large font
     11.,    // xlarge font
     5.4,    // badge font
+    0.8,    // station stroke
 ]);
 
 /// The standard measures for detail level 4.
@@ -382,6 +391,7 @@ pub const BASE_D5: Measures = Measures([
     9.,     // large font
     11.,    // xlarge font
     5.4,    // badge font
+    0.8,    // station stroke
 ]);
 
 /// The standard measures for detail level 5.
@@ -405,5 +415,6 @@ pub const BASE_D6: Measures = Measures([
     9.,     // large font
     11.,    // xlarge font
     5.4,    // badge font
+    0.8,    // station stroke
 ]);
 
