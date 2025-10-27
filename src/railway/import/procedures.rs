@@ -389,13 +389,24 @@ const PROCEDURES: &[(
     // Draw a symbol.
     //
     // ```text
-    // marker(marker: symbol-set, position: position)
+    // marker(marker: symbol-set, position: position [, position: position])
     // ```
     ("marker", &|pos, args, scope, err| {
-        let [class, position] = args.into_array(err)?;
+        let (class, position, extent) = match args.try_into_array() {
+            Ok([class, position, extent]) => (class, position, Some(extent)),
+            Err(args) => {
+                let [class, position] = args.into_array(err)?;
+                (class, position, None)
+            }
+        };
         let class = class.eval::<SymbolSet>(err);
-        let position = position.eval::<Position>(err)?;
+        let position = position.eval::<Position>(err);
+        let extent = match extent {
+            Some(extent) => Some(extent.eval::<Position>(err)?),
+            None => None
+        };
         let mut class = class?;
+        let position = position?;
 
         scope.builtin().with_store(|store| {
             match DotMarker::try_from_arg(
@@ -410,7 +421,7 @@ const PROCEDURES: &[(
                 }
                 None => {
                     let marker = marker::from_args(
-                        class, position, scope, err
+                        class, position, extent, scope, err
                     )?;
                     store.railway.insert(
                         marker,
