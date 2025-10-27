@@ -14,6 +14,7 @@ pub mod label;
 pub mod marker;
 pub mod track;
 
+pub mod oldmarker;
 
 //------------ Store and StoreBuilder ----------------------------------------
 

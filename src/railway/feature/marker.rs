@@ -1,33 +1,16 @@
-/// Rendering of markers.
-///
-/// How a marker is rendered is selected via the symbol set passed to the
-/// marker. Each known base marker has its own designated symbol. This base
-/// can be modified via the following additional symbols:
-///
-/// *  `:right`, `:top`, `:left`, `:bottom`: Apply the marker to the right,
-///    top, left, bottom of the position, respectively. The default of none
-///    of these is provided is `:right`.
-///
-/// *  `:closed`, `:removed`: The entity described by the marker has been
-///    closed or removed.
 
-use std::collections::HashMap;
 use std::f64::consts::PI;
-use femtomap::world;
+use femtomap::import::ast::ShortString;
 use femtomap::import::eval::{EvalErrors, Failed, SymbolSet};
 use femtomap::path::Position;
-use femtomap::render::{
-    Canvas, Color, DashPattern, Group, LineCap, Matrix, Operator
-};
-use lazy_static::lazy_static;
+use femtomap::render::{Canvas, Color, Group, LineCap, Matrix};
+use femtomap::world::Rect;
+use kurbo::Point;
 use crate::railway::class::Railway;
 use crate::railway::import::eval::Scope;
 use crate::railway::measures::Measures;
 use crate::railway::style::Style;
-use super::{AnyFeature, AnyShape, Category, Feature};
-
-
-const CASING_COLOR: Color = Color::rgba(1., 1., 1., 0.7);
+use super::{AnyFeature, AnyShape, Category, Feature, Shape, Stage, StageSet};
 
 
 //------------ from_args -----------------------------------------------------
@@ -35,19 +18,22 @@ const CASING_COLOR: Color = Color::rgba(1., 1., 1., 0.7);
 pub fn from_args(
     symbols: SymbolSet,
     position: Position,
+    extent: Option<Position>,
     scope: &Scope,
     err: &mut EvalErrors,
 ) -> Result<AnyFeature, Failed> {
-    StandardMarker::from_arg(symbols, position, scope, err).map(Into::into)
+    Marker::from_args(symbols, position, extent, scope, err)
 }
 
 
-//------------ StandardMarker ------------------------------------------------
+//------------ Marker --------------------------------------------------------
 
-/// The rendering rule for a standard marker.
-pub struct StandardMarker {
+pub struct Marker {
     /// The position the marker is attached to.
     position: Position,
+
+    /// The position of the extent of the marker’s validity.
+    extent: Option<Position>,
 
     /// Orientation of the marker.
     ///
@@ -56,24 +42,27 @@ pub struct StandardMarker {
     /// position.
     orientation: f64,
 
+    /// Are we drawing casing?
+    casing: bool,
+
     /// The feature class.
     class: Railway,
 
-    /// The marker to use.
-    marker: Marker,
+    /// The marker
+    marker: &'static dyn RenderMarker,
 }
 
-
-impl StandardMarker {
-    pub fn from_arg(
+impl Marker {
+    pub fn from_args(
         mut symbols: SymbolSet,
         position: Position,
+        extent: Option<Position>,
         scope: &Scope,
         err: &mut EvalErrors,
-    ) -> Result<Self, Failed> {
+    ) -> Result<AnyFeature, Failed> {
         let orientation = Self::rotation_from_symbols(&mut symbols, err)?;
         let class = Railway::from_symbols(&mut symbols, scope);
-        let _ = symbols.take("casing");
+        let casing = symbols.take("casing");
         let pos = symbols.pos();
         let marker = match symbols.take_final(err)? {
             Some(marker) => marker,
@@ -82,14 +71,27 @@ impl StandardMarker {
                 return Err(Failed)
             }
         };
-        let marker = match OLD_MARKERS.get(marker.as_str()) {
-            Some(marker) => *marker,
-            None => {
-                err.add(pos, "missing marker");
-                return Err(Failed)
+
+        // We only need a d3 marker.
+        match Self::find_marker(&marker, MARKERS) {
+            Some(marker) => {
+                return Ok(Marker {
+                    position, orientation, extent, casing, class,
+                    marker,
+                }.into())
             }
-        };
-        Ok(StandardMarker { position, orientation, class, marker })
+            None => {
+                /*
+                err.add(pos, "unknown marker");
+                return Err(Failed)
+                */
+            }
+        }
+
+        // Didn’t find anything. Try the old marker for now.
+        super::oldmarker::StandardMarker::new(
+            position, orientation, class, marker, pos, err
+        )
     }
 
     fn rotation_from_symbols(
@@ -117,30 +119,22 @@ impl StandardMarker {
         }
     }
 
+    fn find_marker(
+        marker: &ShortString,
+        collection: &[(&str, &'static dyn RenderMarker)]
+    ) -> Option<&'static dyn RenderMarker> {
+        collection.iter().find_map(|(name, fun)| {
+            (*name == marker.as_str()).then_some(*fun)
+        })
+    }
+
     pub fn class(&self) -> &Railway {
         &self.class
     }
-
-    fn render(&self, style: &Style, canvas: &mut Canvas) {
-        let mut canvas = canvas.sketch().into_group();
-        let (point, angle) = self.position.resolve(style);
-        canvas.apply(
-            Matrix::identity().translate(
-                point
-            ).rotate(angle + self.orientation)
-        );
-        canvas.apply(style.primary_marker_color(&self.class));
-        if style.detail() >= 4 {
-            (self.marker.large)(&mut canvas, style.measures())
-        }
-        else {
-            (self.marker.small)(&mut canvas, style.measures())
-        }
-    }
 }
 
-impl Feature for StandardMarker {
-    fn storage_bounds(&self) -> world::Rect {
+impl Feature for Marker {
+    fn storage_bounds(&self) -> Rect {
         self.position.storage_bounds()
     }
 
@@ -149,1175 +143,712 @@ impl Feature for StandardMarker {
     }
 
     fn shape(
-        &self, _style: &Style, _canvas: &Canvas
+        &self, style: &Style, _canvas: &Canvas
     ) -> AnyShape<'_> {
-        AnyShape::single_stage(|style: &Style, canvas: &mut Canvas| {
-            self.render(style, canvas)
-        })
+        MarkerShape {
+            marker: self,
+            info: RenderInfo::from_style(style, &self.class),
+        }.into()
     }
 }
 
 
-//------------ Marker --------------------------------------------------------
+//------------ MarkerShape ---------------------------------------------------
 
-#[derive(Clone, Copy)]
-struct Marker {
-    large: RenderFn,
-    small: RenderFn,
+struct MarkerShape<'a> {
+    marker: &'a Marker,
+    info: RenderInfo,
 }
 
-type RenderFn = &'static (
-    dyn Fn(&mut Group, Measures) + Sync
-);
+impl MarkerShape<'_> {
+    fn prepare_canvas<'c>(
+        &self, style: &Style, canvas: &'c mut Canvas
+    ) -> (Group<'c>, Option<Point>) {
+        let mut canvas = canvas.sketch().into_group();
+        let (point, angle) = self.marker.position.resolve(style);
+        let matrix = Matrix::identity().translate(
+            point
+        ).rotate(angle + self.marker.orientation);
+        let extent = self.marker.extent.as_ref().map(|extent| {
+            let (extent, _) = extent.resolve(style);
+            matrix.clone().invert().transform_point(extent)
+        });
+
+        canvas.apply(matrix);
+        (canvas, extent)
+    }
+}
+
+impl<'a> Shape<'a> for MarkerShape<'a> {
+    fn render(&self, stage: Stage, style: &Style, canvas: &mut Canvas) {
+        match stage {
+            Stage::Casing
+                if self.marker.casing && self.marker.extent.is_some() =>
+            {
+                let (mut canvas, extent) = self.prepare_canvas(
+                    style, canvas
+                );
+                self.marker.marker.track_casing(
+                    &self.info, extent, &mut canvas
+                );
+            }
+            Stage::MarkerCasing if self.marker.casing => {
+                let (mut canvas, extent) = self.prepare_canvas(
+                    style, canvas
+                );
+                self.marker.marker.casing(&self.info, extent, &mut canvas);
+            }
+            Stage::MarkerBase => {
+                let (mut canvas, extent) = self.prepare_canvas(
+                    style, canvas
+                );
+                self.marker.marker.base(&self.info, extent, &mut canvas);
+            }
+            _ => { }
+        }
+    }
+
+    fn stages(&self) -> StageSet {
+        let mut res = StageSet::empty();
+        res = res.add(Stage::MarkerBase);
+        if self.marker.casing {
+            res = res.add(Stage::MarkerCasing);
+            if self.marker.extent.is_some() {
+                res = res.add(Stage::Casing);
+            }
+        }
+        res
+    }
+}
 
 
-macro_rules! markers {
-    (
-        $(
-            ( $( $name:expr ),* ) => ( $( $closure:expr ),* )
-        ),*
-    )
-    => {
-        lazy_static! {
-            static ref OLD_MARKERS: HashMap<&'static str, Marker> = {
-                let mut set = HashMap::new();
-                $(
-                    let marker = make_marker!( $( $closure, )* );
-                    $(
-                        set.insert($name, marker);
-                    )*
-                )*
-                set
-            };
+
+//------------ RenderInfo ----------------------------------------------------
+
+/// Information we need to render a shaped marker.
+#[allow(dead_code)]
+struct RenderInfo {
+    /// The detail level.
+    detail: u8,
+
+    /// The measures according to the style.
+    m: Measures,
+
+    /// The track width according to the class.
+    ct: f64,
+
+    /// Double track width according to the class.
+    cd: f64,
+
+    /// Space between two tracks according to the class.
+    cs: f64,
+
+    /// The foreground color for the marker.
+    color: Color,
+
+    /// The fill color for the marker.
+    empty_color: Color,
+
+    /// The casing color for the marker.
+    casing_color: Color,
+}
+
+impl RenderInfo {
+    fn from_style(style: &Style, class: &Railway) -> Self {
+        RenderInfo {
+            detail: style.detail(),
+            m: style.measures(),
+            ct: style.measures().class_track(class),
+            cd: style.measures().class_double(class),
+            cs: style.measures().class_skip(class),
+            color: style.primary_marker_color(class),
+            empty_color: Color::WHITE,
+            casing_color: style.casing_color(),
         }
     }
 }
 
-macro_rules! make_marker {
-    ( $large:expr, ) => {
-        Marker { large: &$large, small: &$large }
-    };
-    ( $large:expr, $small:expr, ) => {
-        Marker { large: &$large, small: &$small }
-    };
 
+//------------ RenderMarker --------------------------------------------------
+
+trait RenderMarker: Send + Sync {
+    fn base(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        let _ = (info, extent, canvas);
+    }
+
+    fn casing(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        let _ = (info, extent, canvas);
+    }
+
+    fn track_casing(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        let _ = (info, extent, canvas);
+    }
 }
 
 
-//------------ Actual Markers ------------------------------------------------
+//------------ DetailRenderMarker --------------------------------------------
 
-markers! {
-    ("de.abzw", "junction") => (
-        |canvas: &mut Group, u: Measures| {
-            let st = u.main_track();
-            let sw = 0.9 * u.sw();
-            let sh = 0.9 * u.sh();
-            let hsh = 0.5 * sh;
+trait DetailRenderMarker: Send + Sync {
+    fn d3_base(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        let _ = (info, extent, canvas);
+    }
 
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., hsh + 0.3 * st);
-            canvas.line_to(-0.45 * sw, sh);
-            canvas.move_to(0., hsh + 0.3 * st);
-            canvas.line_to(0.45 * sw, sh);
-            canvas.move_to(-0.5 * sw, hsh);
-            canvas.line_to(0.5 * sw, hsh);
+    fn d3_casing(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        let _ = (info, extent, canvas);
+    }
 
-            canvas.apply_line_width(u.main_track());
-            stroke_round(canvas)
-        },
-        |canvas: &mut Group, u: Measures| {
-            chevron(canvas, 0.4 * u.sw(), 0., u.sh());
-            canvas.fill()
-        }
-    ),
-    ("de.abzw.casing", "junction.casing") => (
-        |canvas: &mut Group, u: Measures| {
-            chevron(canvas,
-                0.5 * u.sw() - 0.5 * u.sp(),
-                0.25 * u.sh() + 0.5 * u.sp(), 0.75 * u.sh() - 0.5 * u.sp()
-            );
-            chevron(canvas,
-                0.5 * u.sw() - 0.5 * u.sp(),
-                0.5 * u.sh() + 0.5 * u.sp(), 1.0 * u.sh() - 0.5 * u.sp()
-            );
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., 0.25 * u.sh());
-            canvas.move_to(0., 0.5 * u.sh() + u.sp());
-            canvas.line_to(0., u.sh() - 0.5 * u.sp());
-            canvas.apply_line_width(u.sp() * 2.);
-            canvas.apply(CASING_COLOR);
-            //canvas.apply(Operator::DestinationOut);
-            stroke_round(canvas);
-        },
-        |canvas: &mut Group, u: Measures| {
-            junction_small_casing(canvas, u)
-        }
-    ),
-    ("de.abzw.first", "junction.first") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(-0.5 * u.sw() + 0.5 * u.sp(), 0.75 * u.sh() - 0.5 * u.sp());
-            canvas.line_to(0., 0.25 * u.sh() + 0.5 * u.sp());
-            canvas.line_to(0., 0.);
-            canvas.move_to(-0.5 * u.sw() + 0.5 * u.sp(), 1.0 * u.sh() - 0.5 * u.sp());
-            canvas.line_to(0., 0.5 * u.sh() + 0.5 * u.sp());
-            canvas.line_to(0., 1.0 * u.sh() - 0.5 * u.sp());
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas)
-        }
-    ),
-    ("de.abzw.second", "junction.second") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(0.5 * u.sw() - 0.5 * u.sp(), 0.75 * u.sh() - 0.5 * u.sp());
-            canvas.line_to(0., 0.25 * u.sh() + 0.5 * u.sp());
-            canvas.line_to(0., 0.);
-            canvas.move_to(0.5 * u.sw() - 0.5 * u.sp(), 1.0 * u.sh() - 0.5 * u.sp());
-            canvas.line_to(0., 0.5 * u.sh() + 0.5 * u.sp());
-            canvas.line_to(0., 1.0 * u.sh() - 0.5 * u.sp());
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas)
-        }
-    ),
+    fn d3_track_casing(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        let _ = (info, extent, canvas);
+    }
 
-    ("de.anst") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., u.sh() - 0.5 * u.sp());
-            canvas.move_to(-0.3 * u.sw(), u.sh() - 0.5 * u.sp());
-            canvas.line_to(0.3 * u.sw(), u.sh() - 0.5 * u.sp());
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas)
-        },
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., u.sh() - 0.75 * u.sp());
-            canvas.move_to(-0.3 * u.sw(), u.sh() - 0.75 * u.sp());
-            canvas.line_to(0.3 * u.sw(), u.sh() - 0.75 * u.sp());
-            canvas.apply_line_width(1.5 * u.sp());
-            stroke_round(canvas)
-        }
-    ),
+    fn d4_base(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        let _ = (info, extent, canvas);
+    }
 
-    ("de.aw") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.apply_line_width(2. * u.sp());
-            canvas.new_path();
-            canvas.arc(0., 0.5 * u.sh(), 0.5 * u.sh() - u.sp(), 0., 2. * PI);
-            let seg = PI * (0.5 * u.sh() - u.sp()) / 6.;
-            canvas.apply(DashPattern::new([seg, seg], 0.));
-            canvas.stroke();
-            canvas.apply(DashPattern::empty());
-            canvas.apply_line_width(u.sp());
-            canvas.new_path();
-            canvas.arc(0., 0.5 * u.sh(), 0.5 * u.sh() - u.sp(), 0., 2. * PI);
-            canvas.fill()
-        }
-    ),
+    fn d4_casing(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        let _ = (info, extent, canvas);
+    }
 
-    ("de.awanst") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., u.sh() - 0.5 * u.sp());
+    fn d4_track_casing(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        let _ = (info, extent, canvas);
+    }
+}
 
-            canvas.move_to(-0.3 * u.sw(), 0.7 * u.sh() - 0.5 * u.sp());
-            canvas.line_to(0.3 * u.sw(), 0.7 * u.sh() - 0.5 * u.sp());
-            canvas.move_to(-0.3 * u.sw(), u.sh() - 0.5 * u.sp());
-            canvas.line_to(0.3 * u.sw(), u.sh() - 0.5 * u.sp());
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas)
-        },
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., u.sh() - 0.75 * u.sp());
-            canvas.move_to(-0.3 * u.sw(), u.sh() - 0.75 * u.sp());
-            canvas.line_to(0.3 * u.sw(), u.sh() - 0.75 * u.sp());
-            canvas.apply_line_width(1.5 * u.sp());
-            stroke_round(canvas)
+impl<T: DetailRenderMarker> RenderMarker for T {
+    fn base(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        if info.detail < 4 {
+            self.d3_base(info, extent, canvas)
         }
-    ),
+        else {
+            self.d4_base(info, extent, canvas)
+        }
+    }
 
-    ("de.bbf", "servicestation") => (
-        |canvas: &mut Group, u: Measures| {
-            let hsp = 0.5 * u.sp();
-            canvas.move_to(-0.5 * u.sw() + hsp, 2.5 * u.sp());
-            canvas.line_to(-0.5 * u.sw() + hsp, u.sh() - 0.5 * u.sp());
-            canvas.line_to(0.5 * u.sw() - hsp, u.sh() - 0.5 * u.sp());
-            canvas.line_to(0.5 * u.sw() - hsp, 2.5 * u.sp());
-            canvas.close_path();
-            canvas.apply_line_width(u.sp());
-            canvas.stroke();
+    fn casing(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        if info.detail < 4 {
+            self.d3_casing(info, extent, canvas)
+        }
+        else {
+            self.d4_casing(info, extent, canvas)
+        }
+    }
 
-            canvas.new_path();
-            canvas.move_to(-0.5 * u.sw() + hsp, 2.5 * u.sp());
-            canvas.line_to(-0.5 * u.sw() + hsp, u.sh() - 0.5 * u.sp());
-            canvas.line_to(0.5 * u.sw() - hsp, 2.5 * u.sp());
-            canvas.close_path();
-            canvas.fill()
-        },
-        |canvas: &mut Group, u: Measures| {
-            stop_small(canvas, u);
-            canvas.move_to(-0.5 * u.sw(), 0.);
-            canvas.line_to(-0.5 * u.sw(), u.sh());
-            canvas.line_to(0.5 * u.sw() - u.sp(), u.sp());
-            canvas.line_to(0.5 * u.sw() - u.sp(), 0.);
-            canvas.close_path();
-            canvas.fill()
+    fn track_casing(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        if info.detail < 4 {
+            self.d3_track_casing(info, extent, canvas)
         }
-    ),
-
-    ("de.bf", "de.kbf", "station") => (
-        |canvas: &mut Group, u: Measures| {
-            station(canvas, u)
-        },
-        |canvas: &mut Group, u: Measures| {
-            station_small(canvas, u)
+        else {
+            self.d4_track_casing(info, extent, canvas)
         }
-    ),
-    ("de.kbf") => (
-        |canvas: &mut Group, u: Measures| {
-            let hsp = 0.5 * u.sp();
-            canvas.move_to(-0.5 * u.sw() + hsp, 2.5 * u.sp());
-            canvas.line_to(-0.5 * u.sw() + hsp, u.sh() - hsp);
-            canvas.line_to(0.5 * u.sw() - hsp, u.sh() - hsp);
-            canvas.line_to(0.5 * u.sw() - hsp, 2.5 * u.sp());
-            canvas.close_path();
-            canvas.apply_line_width(u.sp());
-            canvas.stroke();
-
-            let hsp = 2. * u.sp();
-            canvas.new_path();
-            canvas.move_to(-0.5 * u.sw() + hsp, 2.5 * u.sp());
-            canvas.line_to(-0.5 * u.sw() + hsp, u.sh() - hsp);
-            canvas.line_to(0.5 * u.sw() - hsp, u.sh() - hsp);
-            canvas.line_to(0.5 * u.sw() - hsp, 2.5 * u.sp());
-            canvas.close_path();
-            canvas.fill()
-        },
-        |canvas: &mut Group, u: Measures| {
-            station_xsmall(canvas, u)
-        }
-    ),
-    ("de.bf.casing", "station.casing") => (
-        |canvas: &mut Group, u: Measures| {
-            station_casing(canvas, u)
-        },
-        |canvas: &mut Group, u: Measures| {
-            station_small_casing(canvas, u)
-        }
-    ),
-    ("de.bf.first", "station.first") => (
-        |canvas: &mut Group, u: Measures| {
-            let hsp = 0.5 * u.sp();
-            canvas.move_to(-0.5 * u.sw() + hsp, 2.5 * u.sp());
-            canvas.line_to(-0.5 * u.sw() + hsp, u.sh() - hsp);
-            canvas.line_to(0., u.sh() - hsp);
-            canvas.line_to(0., 2.5 * u.sp());
-            canvas.close_path();
-            canvas.apply_line_width(u.sp());
-            canvas.stroke();
-
-            let hsp = 2. * u.sp();
-            canvas.new_path();
-            canvas.move_to(-0.5 * u.sw() + hsp, 2.5 * u.sp());
-            canvas.line_to(-0.5 * u.sw() + hsp, u.sh() - hsp);
-            canvas.line_to(0., u.sh() - hsp);
-            canvas.line_to(0., 2.5 * u.sp());
-            canvas.close_path();
-            canvas.fill()
-        }
-    ),
-    ("de.bf.second", "station.second") => (
-        |canvas: &mut Group, u: Measures| {
-            let hsp = 0.5 * u.sp();
-            canvas.move_to(0.5 * u.sw() - hsp, 2.5 * u.sp());
-            canvas.line_to(0.5 * u.sw() - hsp, u.sh() - hsp);
-            canvas.line_to(0., u.sh() - hsp);
-            canvas.line_to(0., 2.5 * u.sp());
-            canvas.close_path();
-            canvas.apply_line_width(u.sp());
-            canvas.stroke();
-
-            let hsp = 2. * u.sp();
-            canvas.new_path();
-            canvas.move_to(0.5 * u.sw() - hsp, 2.5 * u.sp());
-            canvas.line_to(0.5 * u.sw() - hsp, u.sh() - hsp);
-            canvas.line_to(0., u.sh() - hsp);
-            canvas.line_to(0., 2.5 * u.sp());
-            canvas.close_path();
-            canvas.fill()
-        }
-    ),
-
-    ("de.bft") => (
-        |canvas: &mut Group, u: Measures| {
-            chevron(canvas,
-                0.5 * u.sw() - 0.5 * u.sp(),
-                0.25 * u.sh() + 0.5 * u.sp(), 0.75 * u.sh() - 0.5 * u.sp()
-            );
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., 0.25 * u.sh());
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas);
-            canvas.new_path();
-            chevron(canvas,
-                0.5 * u.sw(),
-                0.5 * u.sh(), 1.0 * u.sh()
-            );
-            canvas.close_path();
-            canvas.fill();
-        },
-        |canvas: &mut Group, u: Measures| {
-            /*
-            canvas.move_to(-0.01 * u.sw(), 0.);
-            canvas.line_to(-0.5 * u.sw(), 0.7 * u.sh());
-            canvas.line_to(-0.5 * u.sw(), u.sh());
-            canvas.line_to(0.5 * u.sw(), u.sh());
-            canvas.line_to(0.5 * u.sw(), 0.7 * u.sh());
-            canvas.line_to(0.01 * u.sw(), 0.);
-            */
-            canvas.move_to(0., 0.);
-            canvas.line_to(-0.3 * u.sw(), u.sh() - u.sp());
-            canvas.line_to(-0.5 * u.sw(), u.sh() - u.sp());
-            canvas.line_to(-0.5 * u.sw(), u.sh());
-            canvas.line_to(0.5 * u.sw(), u.sh());
-            canvas.line_to(0.5 * u.sw(), u.sh() - u.sp());
-            canvas.line_to(0.3 * u.sw(), u.sh() - u.sp());
-            canvas.close_path();
-            canvas.fill();
-        }
-    ),
-    ("de.bft.casing") => (
-        |canvas: &mut Group, u: Measures| {
-            chevron(canvas,
-                0.5 * u.sw() - 0.5 * u.sp(),
-                0.25 * u.sh() + 0.5 * u.sp(), 0.75 * u.sh() - 0.5 * u.sp()
-            );
-            chevron(canvas,
-                0.5 * u.sw() - 0.5 * u.sp(),
-                0.5 * u.sh() + 0.5 * u.sp(), 1.0 * u.sh() - 0.5 * u.sp()
-            );
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., 0.25 * u.sh());
-            canvas.move_to(0., 0.5 * u.sh() + u.sp());
-            canvas.line_to(0., u.sh() - 0.5 * u.sp());
-            canvas.apply_line_width(u.sp() * 2.);
-            canvas.apply(CASING_COLOR);
-            stroke_round(canvas)
-        }
-    ),
-    ("de.bft.first") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., 0.25 * u.sh());
-            canvas.line_to(-0.5 * u.sw() + 0.5 * u.sp(), 0.75 * u.sh() - 0.5 * u.sp());
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas);
-
-            canvas.new_path();
-            canvas.move_to(0., 0.5 * u.sh());
-            canvas.line_to(0., 1.0 * u.sh());
-            canvas.line_to(-0.5 * u.sw(), 1.0 * u.sh());
-            canvas.close_path();
-            canvas.fill()
-        }
-    ),
-    ("de.bft.second") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., 0.25 * u.sh());
-            canvas.line_to(0.5 * u.sw() - 0.5 * u.sp(), 0.75 * u.sh() - 0.5 * u.sp());
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas);
-
-            canvas.new_path();
-            canvas.move_to(0., 0.5 * u.sh());
-            canvas.line_to(0., 1.0 * u.sh());
-            canvas.line_to(0.5 * u.sw(), 1.0 * u.sh());
-            canvas.close_path();
-            canvas.fill()
-        }
-    ),
-
-    ("de.bk", "block") => (
-        |canvas: &mut Group, u: Measures| {
-            chevron(canvas,
-                0.5 * u.sw() - 0.5 * u.sp(),
-                0.3 * u.sh() + 0.5 * u.sp(), 0.8 * u.sh() - 0.5 * u.sp()
-            );
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., 0.3 * u.sh());
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas)
-        },
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(0., 0.);
-            canvas.line_to(-0.4 * u.sw(), u.sh());
-            canvas.line_to(-0.4 * u.sw() + 0.8 * u.sp(), u.sh());
-            canvas.line_to(0., 2. * u.sp());
-            canvas.line_to(0.4 * u.sw() - 0.8 * u.sp(), u.sh());
-            canvas.line_to(0.4 * u.sw(), u.sh());
-            canvas.close_path();
-            canvas.fill();
-            /*
-            chevron(canvas,
-                0.4 * u.sw() - 0.5 * u.sp(), 0.5 * u.sp(), u.sh() - 0.5 * u.sp(),
-            );
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas)
-            */
-        }
-    ),
-    ("de.bk.casing", "block.casing") => (
-        |canvas: &mut Group, u: Measures| {
-            chevron(canvas,
-                0.5 * u.sw() - 0.5 * u.sp(),
-                0.3 * u.sh() + 0.5 * u.sp(), 0.8 * u.sh() - 0.5 * u.sp()
-            );
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., 0.3 * u.sh());
-            canvas.apply_line_width(u.sp() * 2.);
-            stroke_round(canvas)
-        },
-        |canvas: &mut Group, u: Measures| {
-            chevron(canvas,
-                0.4 * u.sw() - 0.5 * u.sp(), 0.5 * u.sp(), u.sh() - 0.5 * u.sp(),
-            );
-            canvas.apply_line_width(u.sp() * 2.);
-            stroke_round(canvas)
-        }
-    ),
-    ("de.bk.first", "block.first") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., 0.3 * u.sh());
-            canvas.line_to(-0.5 * u.sw() + 0.5 * u.sp(), 0.8 * u.sh() - 0.5 * u.sp());
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas)
-        }
-    ),
-    ("de.bk.second", "block.second") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., 0.3 * u.sh());
-            canvas.line_to(0.5 * u.sw() - 0.5 * u.sp(), 0.8 * u.sh() - 0.5 * u.sp());
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas)
-        }
-    ),
-
-    ("de.bw") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.apply_line_width(2. * u.sp());
-            canvas.new_path();
-            canvas.arc(0., 0.5 * u.sh(), 0.5 * u.sh() - u.sp(), 0., 2. * PI);
-            let seg = PI * (0.5 * u.sh() - u.sp()) / 6.;
-            canvas.apply(DashPattern::new([seg, seg], 0.));
-            canvas.stroke();
-            canvas.apply(DashPattern::empty());
-            canvas.apply_line_width(u.sp());
-            canvas.new_path();
-            canvas.arc(0., 0.5 * u.sh(), 0.5 * u.sh() - 1.5 * u.sp(), 0., 2. * PI);
-            canvas.stroke();
-            canvas.arc(0., 0.5 * u.sh(), 0.15 * u.sh(), 0., 2. * PI);
-            canvas.fill()
-        }
-    ),
-
-    ("de.dirgr") => (
-        |canvas: &mut Group, u: Measures| {
-            let r = 0.8 * u.dt();
-            canvas.apply_line_width(u.sp());
-            canvas.move_to(0., -0.5 * u.dt());
-            canvas.line_to(0., 2. * r);
-            canvas.stroke();
-            canvas.arc(0., 3. * r, r, 0., 2. * PI);
-            canvas.stroke();
-            canvas.arc(0., 3. * r, 0.5 * r, 0., 2. * PI);
-            canvas.fill()
-        },
-        |canvas: &mut Group, u: Measures| {
-            let r = 0.25 * u.sh();
-            canvas.arc(0., 3. * r, r, 0., 2. * PI);
-            canvas.fill();
-            canvas.apply_line_width(u.sp());
-            canvas.move_to(0., -0.5 * u.dt());
-            canvas.line_to(0., 2. * r);
-            canvas.stroke();
-        }
-    ),
-
-    ("de.dkst") => (
-        |canvas: &mut Group, u: Measures| {
-            let dt = u.dt();
-            let sw = 0.9 * u.sw();
-            let sh = 0.9 * u.sh();
-            let hsh = 0.5 * sh;
-
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., hsh);
-            canvas.move_to(-0.5 * sw, hsh);
-            canvas.line_to(0.5 * sw, hsh);
-            canvas.move_to(-0.5 * dt, hsh);
-            canvas.line_to(-0.5 * dt, sh);
-            canvas.line_to(0.5 * dt, sh);
-            canvas.line_to(0.5 * dt, hsh);
-
-            canvas.apply_line_width(u.main_track());
-            stroke_round(canvas)
-        },
-        |canvas: &mut Group, u: Measures| {
-            chevron(canvas,
-                0.4 * u.sw() - 0.5 * u.sp(), 0.5 * u.sp(), u.sh() - 0.5 * u.sp(),
-            );
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas)
-        }
-    ),
-
-    ("de.est") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.apply_line_width(2. * u.sp());
-            canvas.new_path();
-            canvas.arc(0., 0.5 * u.sh(), 0.5 * u.sh() - u.sp(), 0., 2. * PI);
-            let seg = PI * (0.5 * u.sh() - u.sp()) / 6.;
-            canvas.apply(DashPattern::new([seg, seg], 0.));
-            canvas.stroke();
-            canvas.apply(DashPattern::empty());
-            canvas.apply_line_width(u.sp());
-            canvas.new_path();
-            canvas.arc(0., 0.5 * u.sh(), 0.5 * u.sh() - 1.5 * u.sp(), 0., 2. * PI);
-            canvas.stroke()
-        }
-    ),
-
-    ("de.exbf") => (
-        |canvas: &mut Group, u: Measures| {
-            let d = u.main_track();
-            canvas.move_to(-0.5 * u.sw() + 0.5 * u.sp(), u.sh() + 1.5 * d);
-            canvas.line_to(0.5 * u.sw() - 0.5 * u.sp(), u.sh() + 1.5 * d);
-            canvas.apply_line_width(d);
-            stroke_round(canvas);
-        },
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(-0.5 * u.sw() + 0.5 * u.sp(), u.sh() + 1. * u.sp());
-            canvas.line_to(0.5 * u.sw() - 0.5 * u.sp(), u.sh() + 1. * u.sp());
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas)
-        }
-    ),
-
-    ("de.gbf", "goodsstation") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(-0.5 * u.sw(), 2. * u.sp());
-            canvas.line_to(-0.5 * u.sw(), u.sh() - 2. * u.sp());
-            canvas.line_to(0., u.sh());
-            canvas.line_to(0.5 * u.sw(), u.sh() - 2. * u.sp());
-            canvas.line_to(0.5 * u.sw(), 2. * u.sp());
-            canvas.close_path();
-            canvas.fill();
-
-
-            /*
-            let hsp = 0.5 * u.sp();
-            canvas.move_to(-0.5 * u.sw() + hsp, 2.5 * u.sp());
-            canvas.line_to(-0.5 * u.sw() + hsp, 0.7 * u.sh());
-            canvas.line_to(0., u.sh() - hsp);
-            canvas.line_to(0.5 * u.sw() - hsp, 0.7 * u.sh());
-            canvas.line_to(0.5 * u.sw() - hsp, 2.5 * u.sp());
-            canvas.close_path();
-            canvas.apply_line_width(u.sp());
-            canvas.stroke();
-
-            canvas.new_path();
-            let hsp = 2. * u.sp();
-            canvas.move_to(-0.5 * u.sw() + hsp, 2.5 * u.sp());
-            canvas.line_to(-0.5 * u.sw() + hsp, 0.8 * u.sh() - 1.5 * u.sp());
-            canvas.line_to(0., u.sh() - 2. * u.sp());
-            canvas.line_to(0.5 * u.sw() - hsp, 0.8 * u.sh() -  1.5 * u.sp());
-            canvas.line_to(0.5 * u.sw() - hsp, 2.5 * u.sp());
-            canvas.close_path();
-            canvas.fill()
-            */
-        },
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(-0.5 * u.sw(), 0.);
-            canvas.line_to(-0.5 * u.sw(), 0.4 * u.sh());
-            canvas.line_to(0., u.sh());
-            canvas.line_to(0.5 * u.sw(), 0.4 * u.sh());
-            canvas.line_to(0.5 * u.sw(), 0.);
-            canvas.close_path();
-            canvas.fill()
-        }
-    ),
-
-    ("de.hp", "de.khp", "stop") => (
-        |canvas: &mut Group, u: Measures| {
-            stop(canvas, u)
-        },
-        |canvas: &mut Group, u: Measures| {
-            stop_small(canvas, u)
-        }
-    ),
-    ("de.khp") => (
-        |canvas: &mut Group, u: Measures| {
-            stop(canvas, u)
-        },
-        |canvas: &mut Group, u: Measures| {
-            stop_xsmall(canvas, u)
-        }
-    ),
-    ("de.hp.casing", "stop.casing") => (
-        |canvas: &mut Group, u: Measures| {
-            station_casing(canvas, u)
-        },
-        |canvas: &mut Group, u: Measures| {
-            station_small_casing(canvas, u)
-        }
-    ),
-    ("de.hp.first", "stop.first") => (
-        |canvas: &mut Group, u: Measures| {
-            let hsp = 0.5 * u.sp();
-            canvas.move_to(-0.5 * u.sw() + hsp, 2.5 * u.sp());
-            canvas.line_to(-0.5 * u.sw() + hsp, u.sh() - 0.5 * u.sp());
-            canvas.line_to(0., u.sh() - 0.5 * u.sp());
-            canvas.line_to(0., 2.5 * u.sp());
-            canvas.close_path();
-            canvas.apply_line_width(u.sp());
-            canvas.stroke()
-        }
-    ),
-    ("de.hp.second", "stop.second") => (
-        |canvas: &mut Group, u: Measures| {
-            let hsp = 0.5 * u.sp();
-            canvas.move_to(0.5 * u.sw() - hsp, 2.5 * u.sp());
-            canvas.line_to(0.5 * u.sw() - hsp, u.sh() - 0.5 * u.sp());
-            canvas.line_to(0., u.sh() - 0.5 * u.sp());
-            canvas.line_to(0., 2.5 * u.sp());
-            canvas.close_path();
-            canvas.apply_line_width(u.sp());
-            canvas.stroke()
-         }
-    ),
-
-    ("de.hp.bft") => (
-        |canvas: &mut Group, u: Measures| {
-            stop(canvas, u);
-            chevron(canvas,
-                0.5 * u.sw() - 0.5 * u.sp(),
-                0.25 * u.sh() + 0.5 * u.sp(), 0.75 * u.sh() - 0.5 * u.sp()
-            );
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas);
-            chevron(canvas,
-                0.5 * u.sw(),
-                0.5 * u.sh(), 1.0 * u.sh()
-            );
-            canvas.close_path();
-            canvas.fill()
-        }
-    ),
-
-    ("de.hst") => (
-        |canvas: &mut Group, u: Measures| {
-            let hsp = 0.5 * u.sp();
-            canvas.move_to(-0.5 * u.sw() + hsp, 2.5 * u.sp());
-            canvas.line_to(-0.5 * u.sw() + hsp, u.sh() - 0.5 * u.sp());
-            canvas.line_to(0.5 * u.sw() - hsp, u.sh() - 0.5 * u.sp());
-            canvas.line_to(0.5 * u.sw() - hsp, 2.5 * u.sp());
-            canvas.close_path();
-            canvas.move_to(0., 2.5 * u.sp());
-            canvas.line_to(0., u.sh() - 0.5 * u.sp());
-            canvas.close_path();
-            canvas.apply_line_width(u.sp());
-            canvas.stroke()
-        },
-        |canvas: &mut Group, u: Measures| {
-            stop_small(canvas, u);
-            canvas.move_to(0., 1.75 * u.sp());
-            canvas.line_to(0., u.sh() - 0.5 * u.sp());
-            canvas.apply_line_width(0.8 * u.sp());
-            canvas.stroke()
-        }
-    ),
-
-    ("de.inbf") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(-0.5 * u.sw(), 0.);
-            canvas.line_to(-0.5 * u.sw(), u.insh());
-            canvas.line_to(0.5 * u.sw(), u.insh());
-            canvas.line_to(0.5 * u.sw(), 0.);
-            canvas.close_path();
-            canvas.fill()
-        },
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(-0.5 * u.sw(), 0.);
-            canvas.line_to(-0.5 * u.sw(), u.insh());
-            canvas.line_to(0.5 * u.sw(), u.insh());
-            canvas.line_to(0.5 * u.sw(), 0.);
-            canvas.close_path();
-            canvas.fill();
-        }
-    ),
-
-    ("de.inhp") => (
-        |canvas: &mut Group, u: Measures| {
-            let hsp = 0.5 * u.main_track();
-            canvas.move_to(-0.5 * u.sw() + hsp, 0.);
-            canvas.line_to(-0.5 * u.sw() + hsp, u.insh() - 0.5 * u.sp());
-            canvas.line_to(0.5 * u.sw() - hsp, u.insh() - 0.5 * u.sp());
-            canvas.line_to(0.5 * u.sw() - hsp, 0.);
-            canvas.apply_line_width(u.main_track());
-            canvas.stroke();
-        },
-        |canvas: &mut Group, u: Measures| {
-            let hsp = 0.5 * u.sp();
-            canvas.move_to(-0.5 * u.sw() + hsp, 0.);
-            canvas.line_to(-0.5 * u.sw() + hsp, u.insh() - hsp);
-            canvas.line_to(0.5 * u.sw() - hsp, u.insh() - hsp);
-            canvas.line_to(0.5 * u.sw() - hsp, 0.);
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas);
-            canvas.new_path();
-        }
-    ),
-
-    ("de.ldst") => (
-        |canvas: &mut Group, u: Measures| {
-            let hsp = 0.5 * u.sp();
-            canvas.move_to(-0.5 * u.sw() + hsp, 2.5 * u.sp());
-            canvas.line_to(-0.5 * u.sw() + hsp, 0.7 * u.sh());
-            canvas.line_to(0., u.sh() - hsp);
-            canvas.line_to(0.5 * u.sw() + hsp, 0.7 * u.sh());
-            canvas.line_to(0.5 * u.sw() + hsp, 2.5 * u.sp());
-            canvas.close_path();
-            canvas.apply_line_width(u.sp());
-            canvas.stroke()
-        },
-        |canvas: &mut Group, u: Measures| {
-            let hsp = 0.5 * u.sp();
-            canvas.move_to(-0.5 * u.sw() + hsp, 1.75 * u.sp());
-            canvas.line_to(-0.5 * u.sw() + hsp, 0.6 * u.sh());
-            canvas.line_to(0., u.sh() - hsp);
-            canvas.line_to(0.5 * u.sw() - hsp, 0.6 * u.sh());
-            canvas.line_to(0.5 * u.sw() - hsp, 1.75 * u.sp());
-            canvas.close_path();
-            canvas.apply_line_width(u.sp());
-            canvas.stroke()
-        }
-    ),
-
-    ("de.lgr") => (
-        |canvas: &mut Group, u: Measures| {
-            let r = 0.8 * u.dt();
-            canvas.arc(0., 3. * r, r, 0., 2. * PI);
-            canvas.fill();
-            canvas.apply_line_width(u.sp());
-            canvas.move_to(0., -0.5 * u.dt());
-            canvas.line_to(0., 2. * r);
-            canvas.stroke();
-        },
-        |canvas: &mut Group, u: Measures| {
-            let r = 0.25 * u.sh();
-            canvas.arc(0., 3. * r, r, 0., 2. * PI);
-            canvas.fill();
-            canvas.apply_line_width(u.sp());
-            canvas.move_to(0., -0.5 * u.dt());
-            canvas.line_to(0., 2. * r);
-            canvas.stroke();
-        }
-    ),
-
-    ("de.stw", "signalbox") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.apply_line_width(u.sp());
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., 2. * u.dt());
-            canvas.move_to(-u.dt(), u.dt());
-            canvas.line_to(u.dt(), u.dt());
-            canvas.stroke()
-        }
-    ),
-
-    ("de.stw.casing", "signalbox.casing") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.apply_line_width(1.5 * u.sp());
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., 2. * u.dt());
-            canvas.move_to(-u.dt(), u.dt());
-            canvas.line_to(u.dt(), u.dt());
-            canvas.apply(Operator::DestinationOut);
-            canvas.stroke();
-        }
-    ),
-
-    ("de.uest", "crossover") => (
-        |canvas: &mut Group, u: Measures| {
-            let dt = u.dt();
-            let sw = 0.9 * u.sw();
-            let sh = 0.9 * u.sh();
-            let hsh = 0.5 * sh;
-
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., hsh);
-            canvas.move_to(-0.5 * sw, hsh);
-            canvas.line_to(0.5 * sw, hsh);
-            canvas.move_to(-0.5 * dt, hsh);
-            canvas.line_to(-0.5 * dt, sh);
-            canvas.move_to(0.5 * dt, hsh);
-            canvas.line_to(0.5 * dt, sh);
-
-            canvas.apply_line_width(u.main_track());
-            stroke_round(canvas)
-        },
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(0., 0.);
-            canvas.line_to(-0.4 * u.sw(), u.sh());
-            canvas.line_to(0.4 * u.sw(), u.sh());
-            canvas.close_path();
-            canvas.move_to(-0.4 * u.sw() + 0.8 * u.sp(), u.sh() - 0.8 * u.sp());
-            canvas.line_to(0., 2. * u.sp());
-            canvas.line_to(0.4 * u.sw() - 0.8 * u.sp(), u.sh() - 0.8 * u.sp());
-            canvas.fill();
-            /*
-            chevron(canvas,
-                0.4 * u.sw() - 0.5 * u.sp(), 0.5 * u.sp(), u.sh() - 0.5 * u.sp(),
-            );
-            canvas.line_to(-0.4 * u.sw() + 0.5 * u.sp(), u.sh() - 0.5 * u.sp());
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas)
-            */
-        }
-    ),
-    ("de.uest.casing", "crossover.casing") => (
-        |canvas: &mut Group, u: Measures| {
-            chevron(canvas,
-                0.5 * u.sw() - 0.5 * u.sp(),
-                0.3 * u.sh() + 0.5 * u.sp(), 0.8 * u.sh() - 0.5 * u.sp()
-            );
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., u.sh() - u.sp());
-            canvas.apply_line_width(u.sp() * 2.);
-            canvas.apply(Operator::DestinationOut);
-            stroke_round(canvas);
-        },
-        |canvas: &mut Group, u: Measures| {
-            junction_small_casing(canvas, u)
-        }
-    ),
-    ("de.uest.first", "crossover.first") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(
-                -0.5 * u.sw() + 0.5 * u.sp(), 0.8 * u.sh() - 0.5 * u.sp()
-            );
-            canvas.line_to(0., 0.3 * u.sh() + 0.5 * u.sp());
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., u.sh() - u.sp());
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas)
-        }
-    ),
-    ("de.uest.second", "crossover.second") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(
-                0.5 * u.sw() - 0.5 * u.sp(), 0.8 * u.sh() - 0.5 * u.sp()
-            );
-            canvas.line_to(0., 0.3 * u.sh() + 0.5 * u.sp());
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., u.sh() - u.sp());
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas)
-        }
-    ),
-
-    ("de.zst", "de.kzst") => (
-        |canvas: &mut Group, u: Measures| {
-            stop(canvas, u);
-            canvas.arc(
-                0., u.sh() - 0.5 * (u.sh() - 2. * u.sp()),
-                0.5 * (u.sh() - 5. * u.sp()),
-                0., 2. * PI,
-            );
-            canvas.fill()
-        },
-        |canvas: &mut Group, u: Measures| {
-            stop_small(canvas, u)
-        }
-    ),
-
-    ("de.tram.inbf") => (
-        |canvas: &mut Group, u: Measures| {
-            let dt = u.light_double() + u.light_track() * 0.5;
-
-            canvas.move_to(-dt, -dt);
-            canvas.line_to(dt, -dt);
-            canvas.line_to(dt, dt);
-            canvas.line_to(-dt, dt);
-            canvas.close_path();
-            canvas.fill();
-        }
-    ),
-
-    ("de.tram.inhp") => (
-        |canvas: &mut Group, u: Measures| {
-            let dt = u.light_double();
-
-            canvas.move_to(-dt, -dt);
-            canvas.line_to(dt, -dt);
-            canvas.line_to(dt, dt);
-            canvas.line_to(-dt, dt);
-            canvas.close_path();
-            canvas.apply_line_width(u.light_track());
-            canvas.stroke();
-        }
-    ),
-
-    ("ltd-stop") => (
-        |canvas: &mut Group, u: Measures| {
-            let hsp = 0.5 * u.sp();
-            stop(canvas, u);
-            canvas.move_to(-0.5 * u.sw() + hsp, 2.5 * u.sp());
-            canvas.line_to(0.5 * u.sw() - hsp, u.sh() - 0.5 * u.sp());
-            canvas.apply_line_width(u.sp());
-            stroke_round(canvas)
-        },
-        |canvas: &mut Group, u: Measures| {
-            stop_small(canvas, u)
-        }
-    ),
-
-    ("ref") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.apply_line_width(u.sp());
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., 0.5 * u.sh());
-            canvas.stroke()
-        }
-    ),
-    ("refdt") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.apply_line_width(u.sp());
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., u.dt());
-            canvas.stroke()
-        }
-    ),
-    ("statdt") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.apply_line_width(u.main_track());
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., u.dt());
-            canvas.stroke()
-        }
-    ),
-
-    ("tunnel.l") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(0., 0.);
-            canvas.move_to(0., 0.);
-            canvas.line_to(1.0 * u.dt(), 0.0);
-            canvas.line_to(1.75 * u.dt(), -0.75 * u.dt());
-            canvas.apply_line_width(u.sp());
-            canvas.stroke()
-        }
-    ),
-    ("tunnel.r") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.move_to(0., 0.);
-            canvas.line_to(-1.0 * u.dt(), 0.0);
-            canvas.line_to(-1.75 * u.dt(), -0.75 * u.dt());
-            canvas.apply_line_width(u.sp());
-            canvas.stroke()
-        }
-    ),
-    ("tunnel.dt") => (
-        |canvas: &mut Group, u: Measures| {
-            canvas.apply_line_width(u.sp());
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., u.dt());
-            canvas.stroke()
-        }
-    ),
-
-    ("sigr") => (
-        |canvas: &mut Group, u: Measures| {
-            let u = u.main_offset() * 0.3;
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., 2. * u);
-            canvas.move_to(0., 1.5 * u);
-            canvas.line_to(2. * u, 1.5 * u);
-            canvas.arc(2.5 * u, 1.5 * u, 0.5 * u, 0., 2. * PI);
-            canvas.stroke()
-        }
-    ),
-    ("sigl") => (
-        |canvas: &mut Group, u: Measures| {
-            let u = u.main_offset() * 0.3;
-            canvas.move_to(0., 0.);
-            canvas.line_to(0., -2. * u);
-            canvas.move_to(0., -1.5 * u);
-            canvas.line_to(2. * u, -1.5 * u);
-            canvas.arc(2.5 * u, -1.5 * u, 0.5 * u, 0., 2. * PI);
-            canvas.stroke()
-        }
-    )
+    }
 }
 
 
-//------------ Component Functions -------------------------------------------
+//============ The individual markers ========================================
 
-fn station(
-    canvas: &mut Group, u: Measures
-) {
-    canvas.move_to(-0.5 * u.sw(), 0.);
-    canvas.line_to(-0.5 * u.sw(), u.sh());
-    canvas.line_to(0.5 * u.sw(), u.sh());
-    canvas.line_to(0.5 * u.sw(), 0.);
-    canvas.close_path();
-    canvas.fill()
+
+const MARKERS: &[(&str, &'static dyn RenderMarker)] = &[
+    ("bk", &Block),
+    ("h", &Halt),
+    ("exst", &ExStation),
+    ("gh", &GoodsHalt),
+    ("gst", &GoodsStation),
+    ("inst", &IslandStation),
+    ("jn", &Junction),
+    ("opbound", &OperatorBoundary),
+    ("st", &Station),
+    ("sst", &ServiceStation),
+
+    ("de.abzw", &Junction),
+    ("de.bbf", &ServiceStation),
+    ("de.bf", &Station),
+    ("de.bk", &Block),
+    ("de.dirgr", &OperatorBoundary),
+    ("de.exbf", &ExStation),
+    ("de.gbf", &GoodsStation),
+    ("de.hp", &Halt),
+    ("de.hp.bk", &Halt), // XXX Fix
+    ("de.hst", &Hst),
+    ("de.inbf", &IslandStation),
+    ("de.ldst", &GoodsHalt),
+];
+
+
+//------------ Station -------------------------------------------------------
+
+pub struct Station;
+
+impl RenderMarker for Station {
+    fn base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        station(info, canvas);
+        canvas.apply(info.color);
+        canvas.fill();
+    }
+
+    fn casing(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        station(info, canvas);
+        canvas.apply(info.casing_color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
 }
 
 
-fn station_small(
-    canvas: &mut Group, u: Measures
-) {
-    canvas.move_to(-0.5 * u.sw(), 0.);
-    canvas.line_to(-0.5 * u.sw(), u.sh());
-    canvas.line_to(0.5 * u.sw(), u.sh());
-    canvas.line_to(0.5 * u.sw(), 0.);
-    canvas.close_path();
+//------------ IslandStation -------------------------------------------------
 
-    /*
-    top_ds_rect(
-        canvas, -0.5 * u.sw(), 0.5 * u.sw(), 0., u.sh(), u.ds,
-    );
-    */
-    canvas.fill();
-    canvas.new_path();
+pub struct IslandStation;
+
+impl RenderMarker for IslandStation {
+    fn base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        Self::frame(info, canvas);
+        canvas.apply(info.color);
+        canvas.fill();
+    }
+
+    fn casing(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        Self::frame(info, canvas);
+        canvas.apply(info.casing_color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
 }
 
-fn station_xsmall(
-    canvas: &mut Group, u: Measures
-) {
-    let sp = 0.8 * u.sp();
-    let hsp = 0.5 * u.sp();
-    let x = 0.4 * u.sw();
-    let (y0, y1) = (2.6 * sp - hsp, 0.9 * u.sh());
-    canvas.move_to(-x, y0);
-    canvas.line_to(-x, y1);
-    canvas.line_to(x, y1);
-    canvas.line_to(x, y0);
-    canvas.close_path();
-
-    /*
-    top_ds_rect(
-        canvas, -0.5 * u.sw(), 0.5 * u.sw(), 0., u.sh(), u.ds,
-    );
-    */
-    canvas.fill();
-    canvas.new_path();
+impl IslandStation {
+    fn frame(info: &RenderInfo, canvas: &mut Group) {
+        canvas.move_to(x0(info), y0(info));
+        canvas.line_to(x0(info), y1(info) - y0(info));
+        canvas.line_to(x1(info), y1(info) - y0(info));
+        canvas.line_to(x1(info), y0(info));
+        canvas.close_path();
+    }
 }
 
-fn station_casing(
-    canvas: &mut Group, u: Measures
-) {
-    let hsp = 0.5 * (u.sp() * 2. - u.sp());
-    canvas.move_to(-0.5 * u.sw() - hsp, 2.5 * u.sp() - hsp);
-    canvas.line_to(-0.5 * u.sw() - hsp, u.sh() + hsp);
-    canvas.line_to(0.5 * u.sw() + hsp, u.sh() + hsp);
-    canvas.line_to(0.5 * u.sw() + hsp, 2.5 * u.sp() - hsp);
-    canvas.close_path();
-    canvas.apply(CASING_COLOR);
-    canvas.fill();
+
+//------------ GoodsStation --------------------------------------------------
+
+pub struct GoodsStation;
+
+impl RenderMarker for GoodsStation {
+    fn base(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        Station.base(info, extent, canvas);
+        canvas.new_path();
+        canvas.move_to(x0(info) + w(info), y0(info) + w(info));
+        canvas.line_to(x0(info) + w(info), y1(info) - w(info));
+        canvas.line_to(x1(info) - w(info), y1(info) - w(info));
+        canvas.close_path();
+        canvas.apply(info.empty_color);
+        canvas.fill();
+    }
+
+    fn casing(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        Halt.casing(info, extent, canvas);
+    }
 }
 
-fn station_small_casing(
-    canvas: &mut Group, u: Measures
-) {
-    let hsp = 0.5 * u.sp();
-    canvas.move_to(-0.5 * u.sw(), 1.75 * u.sp() - hsp);
-    canvas.line_to(-0.5 * u.sw(), u.sh());
-    canvas.line_to(0.5 * u.sw(), u.sh());
-    canvas.line_to(0.5 * u.sw(), 1.75 * u.sp() - hsp);
-    canvas.close_path();
-    canvas.apply(CASING_COLOR);
-    canvas.apply_line_width(u.sp() * 2.);
-    /*
-    top_ds_rect(canvas,
-        -0.5 * u.sw() + 0.5 * u.sp(),
-        0.5 * u.sw() - 0.5 * u.sp(),
-        0.,
-        u.sh() - 0.5 * u.sp(),
-        u.ds,
-    );
-    canvas.apply_line_width(u.sp() * 2.);
-    */
-    stroke_round(canvas)
+
+//------------ ServiceStation ------------------------------------------------
+
+pub struct ServiceStation;
+
+impl RenderMarker for ServiceStation {
+    fn base(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        Station.base(info, extent, canvas);
+        canvas.new_path();
+        canvas.move_to(Self::xi0(info), Self::yi1(info));
+        canvas.line_to(0., Self::yi0(info));
+        canvas.line_to(Self::xi1(info), Self::yi1(info));
+        canvas.close_path();
+        canvas.apply(info.empty_color);
+        canvas.fill();
+    }
+
+    fn casing(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        Halt.casing(info, extent, canvas);
+    }
 }
 
-fn stop(
-    canvas: &mut Group, u: Measures
-)  {
-    let hsp = 0.5 * u.main_track();
-    canvas.move_to(-0.5 * u.sw() + hsp, 0.);
-    canvas.line_to(-0.5 * u.sw() + hsp, u.sh() - 0.5 * u.sp());
-    canvas.line_to(0.5 * u.sw() - hsp, u.sh() - 0.5 * u.sp());
-    canvas.line_to(0.5 * u.sw() - hsp, 0.);
-    //canvas.close_path();
-    canvas.apply_line_width(u.main_track());
-    canvas.stroke();
-    canvas.new_path();
+impl ServiceStation {
+    fn xi0(info: &RenderInfo) -> f64 {
+        -Self::xi1(info)
+    }
+
+    fn xi1(info: &RenderInfo) -> f64 {
+        if info.detail < 4 {
+            x0(info) + 0.75 * w(info)
+        }
+        else {
+            x0(info) + 0.5 * w(info)
+        }
+    }
+
+    fn yi0(info: &RenderInfo) -> f64 {
+        if info.detail < 4 {
+            y0(info) + 0.75 * w(info)
+        }
+        else {
+            y0(info) + 0.5 * w(info)
+        }
+    }
+
+    fn yi1(info: &RenderInfo) -> f64 {
+        if info.detail < 4 {
+            y1(info) - w(info)
+        }
+        else {
+            y1(info) - 0.75 * w(info)
+        }
+    }
 }
 
-fn stop_small(
-    canvas: &mut Group, u: Measures
-) {
-    let hsp = 0.5 * u.sp();
-    canvas.move_to(-0.5 * u.sw() + hsp, 0.);
-    canvas.line_to(-0.5 * u.sw() + hsp, u.sh() - hsp);
-    canvas.line_to(0.5 * u.sw() - hsp, u.sh() - hsp);
-    canvas.line_to(0.5 * u.sw() - hsp, 0.);
 
-    /*
-    top_ds_rect(canvas,
-        -0.5 * u.sw() + 0.5 * u.sp(),
-        0.5 * u.sw() - 0.5 * u.sp(),
-        0.,
-        u.sh() - 0.5 * u.sp(),
-        u.ds,
-    );
-    */
-    canvas.apply_line_width(u.sp());
-    stroke_round(canvas);
-    canvas.new_path();
+//------------ ExStation -----------------------------------------------------
+
+pub struct ExStation;
+
+impl RenderMarker for ExStation {
+    fn base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        canvas.move_to(x0s(info), Self::y(info));
+        canvas.line_to(x1s(info), Self::y(info));
+        canvas.apply(info.color);
+        canvas.apply_line_width(Self::width(info));
+        canvas.apply(LineCap::Round);
+        canvas.stroke();
+    }
+
+    fn casing(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        canvas.move_to(x0s(info), y1(info) + 1.5 * w(info));
+        canvas.line_to(x1s(info), y1(info) + 1.5 * w(info));
+        canvas.apply(info.casing_color);
+        canvas.apply_line_width(Self::width(info) + w(info));
+        canvas.apply(LineCap::Round);
+        canvas.stroke();
+    }
 }
 
-fn stop_xsmall(
-    canvas: &mut Group, u: Measures
-) {
-    let sp = 0.8 * u.sp();
-    let hsp = 0.5 * sp;
-    let x = 0.4 * u.sw() - hsp;
-    let (y0, y1) = (2.6 * sp, 0.9 * u.sh() - hsp);
-    canvas.move_to(-x, y0);
-    canvas.line_to(-x, y1);
-    canvas.line_to(x, y1);
-    canvas.line_to(x, y0);
-    canvas.close_path();
+impl ExStation {
+    fn y(info: &RenderInfo) -> f64 {
+        if info.detail < 4 {
+            y1(info) + 1.5 * w(info)
+        }
+        else {
+            y1(info) + 2. * w(info)
+        }
+    }
 
-    canvas.apply_line_width(sp);
-    stroke_round(canvas);
-    canvas.new_path();
+    fn width(info: &RenderInfo) -> f64 {
+        if info.detail < 4 {
+            w(info)
+        }
+        else {
+            1.5 * w(info)
+        }
+    }
 }
 
-fn junction_small_casing(
-    canvas: &mut Group, u: Measures
-)  {
-    chevron(canvas, 0.4 * u.sw() - 0.5 * u.sp(), 0., u.sh() - 0.5 * u.sp());
-    canvas.apply_line_width(u.sp() * 2.);
-    canvas.stroke()
+
+//------------ Halt ----------------------------------------------------------
+
+pub struct Halt;
+
+impl RenderMarker for Halt {
+    fn base(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        halt(info, canvas);
+        canvas.apply(info.empty_color);
+        canvas.fill();
+        if let Some(extent) = extent {
+            canvas.move_to(0., y0s(info));
+            canvas.line_to(0., extent.y);
+        }
+        canvas.apply(info.color);
+        canvas.apply_line_width(w(info));
+        canvas.apply(LineCap::Round);
+        canvas.stroke();
+    }
+
+    fn casing(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        halt(info, canvas);
+        canvas.apply(info.casing_color);
+        canvas.apply_line_width(2. * w(info));
+        canvas.stroke();
+    }
+
+    fn track_casing(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        if let Some(extent) = extent {
+            canvas.move_to(0., y0s(info));
+            canvas.line_to(extent.x, extent.y);
+            canvas.apply(info.casing_color);
+            canvas.apply_line_width(2. * w(info));
+            canvas.apply(LineCap::Round);
+            canvas.stroke();
+        }
+    }
+}
+
+
+//------------ Hst -----------------------------------------------------------
+
+pub struct Hst;
+
+impl RenderMarker for Hst {
+    fn base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        halt(info, canvas);
+        canvas.apply(info.empty_color);
+        canvas.fill();
+        canvas.move_to(0., y0s(info));
+        canvas.line_to(0., y1s(info));
+        canvas.apply(info.color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+
+    fn casing(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        station(info, canvas);
+        canvas.apply(info.casing_color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+
+    fn track_casing(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        Halt.track_casing(info, extent, canvas)
+    }
+}
+
+
+//------------ GoodsHalt -----------------------------------------------------
+
+pub struct GoodsHalt;
+
+impl DetailRenderMarker for GoodsHalt {
+    fn d3_base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        halt(info, canvas);
+        canvas.apply(info.empty_color);
+        canvas.fill();
+        canvas.apply(info.color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+        canvas.new_path();
+        canvas.move_to(x0s(info), y0s(info) + 0.5 * w(info));
+        canvas.line_to(x1s(info), y1s(info) - 0.5 * w(info));
+        canvas.apply_line_width(0.75 * w(info));
+        canvas.stroke();
+    }
+
+    fn d3_casing(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        station(info, canvas);
+        canvas.apply(info.casing_color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+
+    fn d4_base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        halt(info, canvas);
+        canvas.apply(info.empty_color);
+        canvas.fill();
+        canvas.move_to(x0s(info), y0s(info));
+        canvas.line_to(x1s(info), y1s(info));
+        canvas.apply(info.color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+
+    fn d4_casing(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        station(info, canvas);
+        canvas.apply(info.casing_color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+}
+
+
+//------------ Junction ------------------------------------------------------
+
+pub struct Junction;
+
+impl DetailRenderMarker for Junction {
+    fn d3_base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        chevron(canvas, 0.4 * info.m.sw(), info.cs, info.m.sh());
+        canvas.apply(info.color);
+        canvas.fill();
+    }
+
+    fn d4_base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        canvas.move_to(0.7 * x0(info), y1s(info));
+        canvas.line_to(0., 0.5 * w(info));
+        canvas.line_to(0.7 * x1(info), y1s(info));
+        canvas.apply(info.color);
+        canvas.fill();
+    }
+}
+
+
+//------------ Block ---------------------------------------------------------
+
+pub struct Block;
+
+impl DetailRenderMarker for Block {
+    fn d3_base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        chevron(canvas, 0.4 * info.m.sw(), info.cs, info.m.sh());
+        canvas.apply(info.color);
+        canvas.fill();
+    }
+
+    fn d4_base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        canvas.move_to(0.7 * x0(info) + 0.5 * w(info), y1s(info));
+        canvas.line_to(0., 1.5 * w(info));
+        canvas.line_to(0.7 * x1(info) - 0.5 * w(info), y1s(info));
+        canvas.apply(info.color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+}
+
+
+//------------ OperatorBoundary ----------------------------------------------
+
+pub struct OperatorBoundary;
+
+impl RenderMarker for OperatorBoundary {
+    fn base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        canvas.apply(info.color);
+        canvas.move_to(0., 0.,);
+        canvas.line_to(0., y1(info));
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+        canvas.new_path();
+        let radius = Self::radius(info);
+        canvas.arc(0., y1(info) - radius, radius, 0., 2. * PI);
+        canvas.fill();
+    }
+}
+
+impl OperatorBoundary {
+    fn radius(info: &RenderInfo) -> f64 {
+        if info.detail < 4 {
+            0.5 * (0.8 * (y1(info) - y0(info)))
+        }
+        else {
+            0.5 * (0.66 * (y1(info) - y0(info)))
+        }
+    }
 }
 
 
 //------------ Helper Functions ----------------------------------------------
+
+fn x0(info: &RenderInfo) -> f64 {
+    -x1(info)
+}
+
+fn x1(info: &RenderInfo) -> f64 {
+    0.5 * info.m.sw()
+}
+
+fn y0(info: &RenderInfo) -> f64 {
+    if info.detail < 4 {
+        1.5 * info.m.main_skip()
+    }
+    else {
+        info.m.main_track()
+    }
+}
+
+fn y1(info: &RenderInfo) -> f64 {
+    info.m.sh()
+}
+
+fn w(info: &RenderInfo) -> f64 {
+    info.m.station_stroke()
+}
+
+fn x0s(info: &RenderInfo) -> f64 {
+    -x1s(info)
+}
+
+fn x1s(info: &RenderInfo) -> f64 {
+    x1(info) - 0.5 * w(info)
+}
+
+fn y0s(info: &RenderInfo) -> f64 {
+    y0(info) +  0.5 * w(info)
+}
+
+fn y1s(info: &RenderInfo) -> f64 {
+    y1(info)  -  0.5 * w(info)
+}
 
 fn chevron(canvas: &mut Group, x: f64, y0: f64, y1: f64) {
     canvas.move_to(-x, y1);
@@ -1325,22 +856,20 @@ fn chevron(canvas: &mut Group, x: f64, y0: f64, y1: f64) {
     canvas.line_to(x, y1);
 }
 
-fn stroke_round(canvas: &mut Group) {
-    canvas.apply(LineCap::Round);
-    canvas.stroke();
-    canvas.apply(LineCap::Butt);
+fn station(info: &RenderInfo, canvas: &mut Group) {
+    canvas.move_to(x0(info), y0(info));
+    canvas.line_to(x0(info), y1(info));
+    canvas.line_to(x1(info), y1(info));
+    canvas.line_to(x1(info), y0(info));
+    canvas.close_path();
 }
 
-/*
-fn top_ds_rect(canvas: &mut Group, x0: f64, x1: f64, y0: f64, y1: f64, ds: f64) {
-    let hds = 0.5 * ds; // half ds
-
-    canvas.move_to(x0, y0);
-    canvas.line_to(x0, y1 - ds);
-    canvas.curve_to(x0, y1 - hds,   x0 + hds, y1,   x0 + ds, y1);
-    canvas.line_to(x1 - ds, y1);
-    canvas.curve_to(x1 - hds, y1,   x1, y1 - hds,   x1, y1 - ds);
-    canvas.line_to(x1, y0);
+fn halt(info: &RenderInfo, canvas: &mut Group) {
+    canvas.move_to(x0s(info), y0s(info));
+    canvas.line_to(x0s(info), y1s(info));
+    canvas.line_to(x1s(info), y1s(info));
+    canvas.line_to(x1s(info), y0s(info));
+    canvas.close_path();
 }
-*/
+
 
