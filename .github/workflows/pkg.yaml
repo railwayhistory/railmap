@@ -12,7 +12,30 @@ jobs:
     with:
       package_build_rules: |
         image:
+          - "debian:bookworm"
           - "debian:trixie"
         target: x86_64
       deb_extra_build_packages: libcairo2-dev libpango1.0-dev
-      
+  release:
+    needs: package
+    if: ${{ ! startsWith(github.ref, 'refs/tags/v') }}
+    steps:
+      - name: Install gh
+        run: sudo apt install -y gh
+      - name: Create dist directory
+        run: mkdir -p $GITHUB_WORKSPACE/dist
+      - name: Dowload artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: $GITHUB_WORKSPACE/dist
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          tag: ${{ github.ref_name }}
+        run: |
+          gh release create "$tag" \
+              --repo="$GITHUB_REPOSITORY" \
+              --title="${GITHUB_REPOSITORY#*/} ${tag#v}" \
+              --latest --verify-tag \
+              $GITHUB_WORKSPACE/dist/*
+
