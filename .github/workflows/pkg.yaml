@@ -18,6 +18,7 @@ jobs:
       deb_extra_build_packages: libcairo2-dev libpango1.0-dev
   release:
     needs: package
+    runs-on: ${{ inputs.runs_on }}
     if: ${{ ! startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - name: Install gh
