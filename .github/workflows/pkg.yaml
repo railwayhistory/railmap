@@ -31,6 +31,8 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - name: Show what we downloaded
+        run: ls -R ${{ steps.download.outputs.download-path }}
       - name: Create release
         env:
           GITHUB_TOKEN: ${{ github.token }}
