@@ -12,7 +12,7 @@ jobs:
     with:
       package_build_rules: |
         image:
-          - "debian:bookworm"
+          - "debian:trixie"
         target: x86_64
       deb_extra_build_packages: libcairo2-dev libpango1.0-dev
       
