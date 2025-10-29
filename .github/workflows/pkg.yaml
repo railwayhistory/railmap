@@ -26,9 +26,10 @@ jobs:
       - name: Create dist directory
         run: mkdir -p $GITHUB_WORKSPACE/dist
       - name: Dowload artifacts
+        id: download
         uses: actions/download-artifact@v6
         with:
-          path: $GITHUB_WORKSPACE/dist
+          path: dist
       - name: Create release
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -38,5 +39,5 @@ jobs:
               --repo="$GITHUB_REPOSITORY" \
               --title="${GITHUB_REPOSITORY#*/} ${tag#v}" \
               --latest --verify-tag \
-              $GITHUB_WORKSPACE/dist/*
+              ${{ steps.download.outputs.download-path }}/*
 
