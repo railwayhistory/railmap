@@ -42,5 +42,5 @@ jobs:
               --repo="$GITHUB_REPOSITORY" \
               --title="${GITHUB_REPOSITORY#*/} ${tag#v}" \
               --latest --verify-tag \
-              ${{ steps.download.outputs.download-path }}/*
+              ${{ steps.download.outputs.download-path }}/debian/*
 
