@@ -169,7 +169,7 @@ impl Measures {
 /// # Other measures
 impl Measures {
     /// Returns the import map units array.
-    pub fn map_units(self) -> [f64; 14] {
+    pub fn map_units(self) -> [f64; 15] {
         [
             self.bp(),
             self.dt(),
@@ -185,6 +185,7 @@ impl Measures {
             self.station_width(),
             self.station_height(),
             self.inside_station_height(),
+            self.seg(),
         ]
     }
 

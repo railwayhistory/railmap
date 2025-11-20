@@ -98,6 +98,9 @@ pub const MAP_DISTANCES: &[(&str, usize, f64)] = &[
     // Height of an inside station symbol (“station height”).
     ("insh", 13, 1.),
 
+    // The length of a stroking segment.
+    ("seg", 14, 1.),
+
 
     //--- Deprecated units
 
