@@ -112,37 +112,37 @@ impl Railway {
     }
 
     pub fn update(&mut self, class: &Self) {
-        if self.category.is_none() {
+        if class.category.is_some() {
             self.category = class.category
         }
-        if self.status.is_none() {
+        if class.status.is_some() {
             self.status = class.status
         }
-        if self.surface.is_none() {
+        if class.surface.is_some() {
             self.surface = class.surface
         }
-        if self.cat.is_none() {
+        if class.cat.is_some() {
             self.cat = class.cat
         }
-        if self.rail.is_none() {
+        if class.rail.is_some() {
             self.rail = class.rail
         }
-        if self.speed.is_none() {
+        if class.speed.is_some() {
             self.speed = class.speed
         }
-        if self.pax.is_none() {
+        if class.pax.is_some() {
             self.pax = class.pax
         }
-        if self.gauge.is_none() {
+        if class.gauge.is_some() {
             self.gauge = class.gauge
         }
-        if self.gauge_group.is_none() {
+        if class.gauge_group.is_some() {
             self.gauge_group = class.gauge_group
         }
-        if self.double.is_none() {
+        if class.double.is_some() {
             self.double = class.double
         }
-        if self.station.is_none() {
+        if class.station.is_some() {
             self.station = class.station
         }
     }
