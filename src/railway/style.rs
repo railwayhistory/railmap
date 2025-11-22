@@ -54,28 +54,6 @@ const ZOOM: &[Zoom] = &[
     Zoom::new(6.5, 6, 2.5, measures::BASE_D6),
 ];
 
-const PROOF_ZOOM: &[Zoom] = &[
-    Zoom::new(0.0, 0, 1.0, measures::BASE_D0),  // 0
-    Zoom::new(0.0, 0, 1.0, measures::BASE_D0),
-    Zoom::new(0.0, 0, 1.0, measures::BASE_D0),
-    Zoom::new(0.0, 0, 1.0, measures::BASE_D0),
-    Zoom::new(0.0, 0, 1.0, measures::BASE_D0),
-    Zoom::new(0.0, 0, 1.0, measures::BASE_D0),  // 5
-    Zoom::new(0.5, 0, 1.0, measures::BASE_D0),
-    Zoom::new(1.0, 1, 1.0, measures::BASE_D1),
-    Zoom::new(1.5, 1, 1.3, measures::BASE_D1),
-    Zoom::new(2.0, 2, 1.0, measures::BASE_D2),
-    Zoom::new(3.0, 3, 1.0, measures::BASE_D3), // 10
-    Zoom::new(3.5, 3, 1.3, measures::BASE_D3),
-    Zoom::new(4.0, 4, 1.0, measures::BASE_D4),
-    Zoom::new(4.5, 4, 1.3, measures::BASE_D4),
-    Zoom::new(5.0, 5, 1.0, measures::BASE_D5),
-    Zoom::new(5.5, 5, 1.3, measures::BASE_D5), // 15
-    Zoom::new(6.0, 6, 1.6, measures::BASE_D6),
-    Zoom::new(6.5, 6, 1.9, measures::BASE_D6),
-    Zoom::new(6.5, 6, 2.1, measures::BASE_D6),
-];
-
 /// Size correction for feature bounds.
 ///
 /// This value will be multiplied with detail level, then length and height of
@@ -153,12 +131,7 @@ pub struct Style {
 
 impl Style {
     pub fn new(layer_id: LayerId, tile_id: &TileId, colors: &ColorSet) -> Self {
-        let zoom = if tile_id.proof {
-            PROOF_ZOOM[usize::from(tile_id.zoom)]
-        }
-        else {
-            ZOOM[usize::from(tile_id.zoom)]
-        };
+        let zoom = ZOOM[usize::from(tile_id.zoom)];
         let measures = zoom.measures * tile_id.format.canvas_bp() * zoom.mag;
         let equator_scale = tile_id.scale();
         let style_id = layer_id.style_id();
