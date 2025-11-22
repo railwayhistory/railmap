@@ -180,6 +180,10 @@ impl Colors {
     pub fn primary_marker_color(&self, class: &class::Railway) -> Color {
         self.track_color(class)
     }
+
+    pub fn proof_color(&self) -> Color {
+        self.removed
+    }
 }
 
 impl Default for Colors {

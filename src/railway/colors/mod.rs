@@ -61,6 +61,13 @@ impl Colors {
         }
     }
 
+    pub fn proof_color(&self) -> Color {
+        match self {
+            Colors::El(colors) => colors.proof_color(),
+            Colors::Pax(colors) => colors.proof_color(),
+        }
+    }
+
     pub fn casing_color(&self) -> Color {
         Color::rgba(1., 1., 1., 0.7)
     }

@@ -120,6 +120,9 @@ pub struct Style {
     /// Is this a pax-only map?
     pax_only: bool,
 
+    /// Are we in proof mode?
+    proof: bool,
+
     /// The measures for this style.
     ///
     /// These are already scaled into canvas co-ordinates.
@@ -165,6 +168,7 @@ impl Style {
             store_scale: zoom.store_scale,
             detail: zoom.detail,
             pax_only: matches!(style_id, StyleId::Pax),
+            proof: tile_id.proof,
             map_units: measures.map_units(),
             measures,
             colors: style_id.colors(colors),
@@ -190,6 +194,10 @@ impl Style {
 
     pub fn pax_only(&self) -> bool {
         self.pax_only
+    }
+
+    pub fn proof(&self) -> bool {
+        self.proof
     }
 
     pub fn measures(&self) -> Measures {
@@ -222,6 +230,10 @@ impl Style {
 
     pub fn primary_marker_color(&self, class: &class::Railway) -> Color {
         self.colors.primary_marker_color(class)
+    }
+
+    pub fn proof_color(&self) -> Color {
+        self.colors.proof_color()
     }
 
     pub fn casing_color(&self) -> Color {

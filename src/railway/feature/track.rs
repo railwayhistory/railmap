@@ -2,39 +2,6 @@
 //!
 //! Track is a contour feature with complex rendering rules depending on the
 //! class, style, and detail level.
-//!
-//! # Track classes
-//!
-//! All line classes.
-//!
-//! Placement within multiple parallel tracks:
-//!
-//! * `:leftsame` if the track has another track of the same line on its left.
-//! * `:leftother` if the track has another track of a different line on its
-//!   left.
-//! * `:rightsame` if the track has another track of the same line of its
-//!   right.
-//! * `:rightother` if the track has another track of a different line on its
-//!   right.
-//!
-//! * In detail levels 3 and up, `:double` indicates two tracks of the same
-//!   line offset half a dt to the left and right. The `:leftsame` and
-//!   `:leftother` symbols apply to the left track only, while
-//!   `:rightsame` and `:rightother` apply to the right track.
-//!
-//! * In detail levels 0 to 2, `:double` marks a track as double track.
-//!
-//! * `:tight` is a deprecated shortcut for `:leftother:rightother`.
-//!
-//! Placement within a sequence of segments that whose markings should look
-//! consecutive:
-//!
-//! * `:start` if the segment is at the start of the sequence, i.e., extra
-//!   spacing can be added at its beginning.
-//! * `:end` if the segment is at the end of the sequence, i.e., extra
-//!   spacing can be added at its end.
-//! * `:inner` if the segment is in the middle and markings need to be
-//!   “justified.”
 
 #![allow(unused_imports)]
 use std::f64::consts::{FRAC_PI_2, PI};
@@ -1071,6 +1038,15 @@ impl ElectricDecor {
                         skip: dist * (NO_PAX_DASH_HALF * 1.5 + 0.5),
                         offset: dist,
                     })
+                )
+            }
+            (None, None) if style.proof() => {
+                (
+                    Some(CatDecor {
+                        color: style.proof_color(),
+                        skip: dist * (NO_PAX_DASH_HALF + 0.5)
+                    }),
+                    None
                 )
             }
             (None, None) => return None
