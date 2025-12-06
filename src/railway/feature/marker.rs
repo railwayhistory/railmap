@@ -36,11 +36,7 @@ pub struct Marker {
     extent: Option<Position>,
 
     /// Orientation of the marker.
-    ///
-    /// If this in `None` the marker doesn’t need to be oriented at all.
-    /// Otherwise the value is the angle to be added to rotation from the
-    /// position.
-    orientation: f64,
+    orientation: Orientation,
 
     /// Are we drawing casing?
     casing: bool,
@@ -60,7 +56,7 @@ impl Marker {
         scope: &Scope,
         err: &mut EvalErrors,
     ) -> Result<AnyFeature, Failed> {
-        let orientation = Self::rotation_from_symbols(&mut symbols, err)?;
+        let orientation = Orientation::from_symbols(&mut symbols, err)?;
         let class = Railway::from_symbols(&mut symbols, scope);
         let casing = symbols.take("casing");
         let pos = symbols.pos();
@@ -90,33 +86,8 @@ impl Marker {
 
         // Didn’t find anything. Try the old marker for now.
         super::oldmarker::StandardMarker::new(
-            position, orientation, class, marker, pos, err
+            position, orientation.into_rotation(), class, marker, pos, err
         )
-    }
-
-    fn rotation_from_symbols(
-        symbols: &mut SymbolSet,
-        _err: &mut EvalErrors
-    ) -> Result<f64, Failed> {
-        if symbols.take("top") {
-            Ok(1.5 * PI)
-        }
-        else if symbols.take("left") {
-            Ok(PI)
-        }
-        else if symbols.take("bottom") {
-            Ok(0.5 * PI)
-        }
-        else if symbols.take("right") {
-            Ok(0.)
-        }
-        else {
-            Ok(0.)
-            /*
-            err.add(pos, "missing orientation");
-            Err(Failed)
-                */
-        }
     }
 
     fn find_marker(
@@ -147,8 +118,55 @@ impl Feature for Marker {
     ) -> AnyShape<'_> {
         MarkerShape {
             marker: self,
-            info: RenderInfo::from_style(style, &self.class),
+            info: RenderInfo::new(self.orientation, style, &self.class),
         }.into()
+    }
+}
+
+
+//------------ Orientation ---------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+enum Orientation {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+impl Orientation {
+    fn from_symbols(
+        symbols: &mut SymbolSet,
+        _err: &mut EvalErrors
+    ) -> Result<Self, Failed> {
+        if symbols.take("top") {
+            Ok(Self::Top)
+        }
+        else if symbols.take("left") {
+            Ok(Self::Left)
+        }
+        else if symbols.take("bottom") {
+            Ok(Self::Bottom)
+        }
+        else if symbols.take("right") {
+            Ok(Self::Right)
+        }
+        else {
+            Ok(Self::Right)
+            /*
+            err.add(pos, "missing orientation");
+            Err(Failed)
+                */
+        }
+    }
+
+    fn into_rotation(self) -> f64 {
+        match self {
+            Self::Left => PI,
+            Self::Right => 0.,
+            Self::Top => 1.5 * PI,
+            Self::Bottom => 0.5 * PI,
+        }
     }
 }
 
@@ -168,7 +186,7 @@ impl MarkerShape<'_> {
         let (point, angle) = self.marker.position.resolve(style);
         let matrix = Matrix::identity().translate(
             point
-        ).rotate(angle + self.marker.orientation);
+        ).rotate(angle + self.marker.orientation.into_rotation());
         let extent = self.marker.extent.as_ref().map(|extent| {
             let (extent, _) = extent.resolve(style);
             matrix.clone().invert().transform_point(extent)
@@ -231,6 +249,9 @@ struct RenderInfo {
     /// The detail level.
     detail: u8,
 
+    /// The orientation.
+    orientation: Orientation,
+
     /// The measures according to the style.
     m: Measures,
 
@@ -254,9 +275,10 @@ struct RenderInfo {
 }
 
 impl RenderInfo {
-    fn from_style(style: &Style, class: &Railway) -> Self {
+    fn new(orientation: Orientation, style: &Style, class: &Railway) -> Self {
         RenderInfo {
             detail: style.detail(),
+            orientation,
             m: style.measures(),
             ct: style.measures().class_track(class),
             cd: style.measures().class_double(class),
@@ -382,6 +404,9 @@ const MARKERS: &[(&str, &'static dyn RenderMarker)] = &[
     ("opbound", &OperatorBoundary),
     ("st", &Station),
     ("sst", &ServiceStation),
+    ("tuna", &TunnelStart),
+    ("tunf", &TunnelEnd),
+    ("tuno", &TunnelOffset),
 
     ("de.abzw", &Junction),
     ("de.bbf", &ServiceStation),
@@ -805,6 +830,95 @@ impl OperatorBoundary {
         }
     }
 }
+
+
+//------------ TunnelStart ---------------------------------------------------
+
+pub struct TunnelStart;
+
+impl TunnelStart {
+    fn s(info: &RenderInfo) -> f64 {
+        info.m.sh() * 0.25
+    }
+}
+
+impl RenderMarker for TunnelStart {
+    fn base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        let s = TunnelStart::s(info);
+        canvas.apply(info.color);
+        match info.orientation {
+            Orientation::Top | Orientation::Bottom => {
+                canvas.move_to(-0.5 * info.ct, 0.);
+                canvas.line_to(0.5 * info.ct, 0.);
+            }
+            Orientation::Right => {
+                canvas.move_to(0., -0.5 * info.ct);
+                canvas.line_to(0., s + 0.5 * info.ct);
+                canvas.line_to(-s, 2. * s + 0.5 * info.ct);
+            }
+            Orientation::Left => {
+                canvas.move_to(0., -0.5 * info.ct);
+                canvas.line_to(0., s + 0.5 * info.ct);
+                canvas.line_to(s, 2. * s + 0.5 * info.ct);
+            }
+        }
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+}
+
+
+//------------ TunnelEnd -----------------------------------------------------
+
+pub struct TunnelEnd;
+
+impl RenderMarker for TunnelEnd {
+    fn base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        let s = TunnelStart::s(info);
+        canvas.apply(info.color);
+        match info.orientation {
+            Orientation::Top | Orientation::Bottom => {
+                canvas.move_to(-0.5 * info.ct, 0.);
+                canvas.line_to(0.5 * info.ct, 0.);
+            }
+            Orientation::Right => {
+                canvas.move_to(0., -0.5 * info.ct);
+                canvas.line_to(0., s + 0.5 * info.ct);
+                canvas.line_to(s, 2. * s + 0.5 * info.ct);
+            }
+            Orientation::Left => {
+                canvas.move_to(0., -0.5 * info.ct);
+                canvas.line_to(0., s + 0.5 * info.ct);
+                canvas.line_to(-s, 2. * s + 0.5 * info.ct);
+            }
+        }
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+}
+
+
+//------------ TunnelOffset --------------------------------------------------
+
+pub struct TunnelOffset;
+
+impl RenderMarker for TunnelOffset {
+    fn base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        let co = info.ct + info.cs;
+        canvas.apply(info.color);
+        canvas.move_to(0., -0.5 * co);
+        canvas.line_to(0., 0.5 * co);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+}
+
 
 
 //------------ Helper Functions ----------------------------------------------
