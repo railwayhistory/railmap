@@ -402,6 +402,7 @@ const MARKERS: &[(&str, &'static dyn RenderMarker)] = &[
     ("inst", &IslandStation),
     ("jn", &Junction),
     ("opbound", &OperatorBoundary),
+    ("sbox", &SignalBox),
     ("st", &Station),
     ("sst", &ServiceStation),
     ("tuna", &TunnelStart),
@@ -420,6 +421,7 @@ const MARKERS: &[(&str, &'static dyn RenderMarker)] = &[
     ("de.hst", &Hst),
     ("de.inbf", &IslandStation),
     ("de.ldst", &GoodsHalt),
+    ("de.stw", &SignalBox),
 ];
 
 
@@ -472,9 +474,11 @@ impl RenderMarker for IslandStation {
 
 impl IslandStation {
     fn frame(info: &RenderInfo, canvas: &mut Group) {
+        let y1 = info.m.inside_station_height() - y0(info);
+
         canvas.move_to(x0(info), y0(info));
-        canvas.line_to(x0(info), y1(info) - y0(info));
-        canvas.line_to(x1(info), y1(info) - y0(info));
+        canvas.line_to(x0(info), y1);
+        canvas.line_to(x1(info), y1);
         canvas.line_to(x1(info), y0(info));
         canvas.close_path();
     }
@@ -799,6 +803,26 @@ impl DetailRenderMarker for Block {
     }
 }
 
+
+//------------ SignalBox -----------------------------------------------------
+
+pub struct SignalBox;
+
+impl RenderMarker for SignalBox {
+    fn base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        canvas.apply(info.color);
+        canvas.move_to(0., 0.5 * info.ct);
+        canvas.line_to(0., 2. * info.m.main_offset() - info.ct);
+        let x1 = info.m.main_offset() - 0.5 * info.ct;
+        let mid = info.m.main_offset() - 0.25 * info.ct;
+        canvas.move_to(-x1, mid);
+        canvas.line_to(x1, mid);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+}
 
 //------------ OperatorBoundary ----------------------------------------------
 
