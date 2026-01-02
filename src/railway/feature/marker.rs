@@ -578,43 +578,27 @@ impl RenderMarker for ExStation {
     fn base(
         &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
     ) {
-        canvas.move_to(x0s(info), Self::y(info));
-        canvas.line_to(x1s(info), Self::y(info));
+        Self::frame(info, canvas);
         canvas.apply(info.color);
-        canvas.apply_line_width(Self::width(info));
-        canvas.apply(LineCap::Round);
-        canvas.stroke();
+        canvas.fill();
     }
 
     fn casing(
         &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
     ) {
-        canvas.move_to(x0s(info), y1(info) + 1.5 * w(info));
-        canvas.line_to(x1s(info), y1(info) + 1.5 * w(info));
+        Self::frame(info, canvas);
         canvas.apply(info.casing_color);
-        canvas.apply_line_width(Self::width(info) + w(info));
-        canvas.apply(LineCap::Round);
+        canvas.apply_line_width(w(info));
         canvas.stroke();
     }
 }
 
 impl ExStation {
-    fn y(info: &RenderInfo) -> f64 {
-        if info.detail < 4 {
-            y1(info) + 1.5 * w(info)
-        }
-        else {
-            y1(info) + 2. * w(info)
-        }
-    }
-
-    fn width(info: &RenderInfo) -> f64 {
-        if info.detail < 4 {
-            w(info)
-        }
-        else {
-            1.5 * w(info)
-        }
+    fn frame(info: &RenderInfo, canvas: &mut Group) {
+        canvas.move_to(x0(info), info.m.sh() + y0(info));
+        canvas.line_to(x0(info), 1.4 * info.m.sh());
+        canvas.line_to(x1(info), 1.4 * info.m.sh());
+        canvas.line_to(x1(info), info.m.sh() + y0(info));
     }
 }
 
