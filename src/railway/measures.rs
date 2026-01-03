@@ -376,7 +376,7 @@ pub const BASE_D5: Measures = Measures([
     2.0,    // dt
     1.2,    // main track
     1.2,    // main double
-    1.4,    // main skip
+    1.8,    // main skip
     0.8,    // light track
     0.8,    // light double
     1.2,    // light skip
