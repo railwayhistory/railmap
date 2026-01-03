@@ -402,6 +402,7 @@ const MARKERS: &[(&str, &'static dyn RenderMarker)] = &[
     ("inst", &IslandStation),
     ("jn", &Junction),
     ("opbound", &OperatorBoundary),
+    ("ref", &Reference),
     ("sbox", &SignalBox),
     ("st", &Station),
     ("sst", &ServiceStation),
@@ -807,6 +808,24 @@ impl RenderMarker for SignalBox {
         canvas.stroke();
     }
 }
+
+
+//------------ Reference -----------------------------------------------------
+
+pub struct Reference;
+
+impl RenderMarker for Reference {
+    fn base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        canvas.apply(info.color);
+        canvas.move_to(0., 0.);
+        canvas.line_to(0., 0.4 * info.m.sh());
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+}
+
 
 //------------ OperatorBoundary ----------------------------------------------
 
