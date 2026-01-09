@@ -409,6 +409,7 @@ const MARKERS: &[(&str, &'static dyn RenderMarker)] = &[
     ("tuna", &TunnelStart),
     ("tunf", &TunnelEnd),
     ("tuno", &TunnelOffset),
+    ("xo", &Crossover),
 
     ("de.abzw", &Junction),
     ("de.bbf", &ServiceStation),
@@ -418,11 +419,14 @@ const MARKERS: &[(&str, &'static dyn RenderMarker)] = &[
     ("de.exbf", &ExStation),
     ("de.gbf", &GoodsStation),
     ("de.hp", &Halt),
-    ("de.hp.bk", &Halt), // XXX Fix
+    ("de.hp.abzw", &HaltJunction),
+    ("de.hp.bk", &HaltBlock),
+    ("de.hp.uest", &HaltCrossover),
     ("de.hst", &Hst),
     ("de.inbf", &IslandStation),
     ("de.ldst", &GoodsHalt),
     ("de.stw", &SignalBox),
+    ("de.uest", &Crossover),
 ];
 
 
@@ -630,7 +634,7 @@ impl RenderMarker for Halt {
     ) {
         halt(info, canvas);
         canvas.apply(info.casing_color);
-        canvas.apply_line_width(2. * w(info));
+        canvas.apply_line_width(cw(info));
         canvas.stroke();
     }
 
@@ -755,10 +759,59 @@ impl DetailRenderMarker for Junction {
         &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
     ) {
         canvas.move_to(0.7 * x0(info), y1s(info));
-        canvas.line_to(0., 0.5 * w(info));
+        canvas.line_to(0., info.cs);
         canvas.line_to(0.7 * x1(info), y1s(info));
         canvas.apply(info.color);
         canvas.fill();
+    }
+}
+
+
+//------------ Crossover -----------------------------------------------------
+
+pub struct Crossover;
+
+impl DetailRenderMarker for Crossover {
+    fn d3_base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        Self::d3_path(info, canvas);
+        canvas.apply(info.color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+
+    fn d4_base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        Self::d4_path(info, canvas);
+        canvas.apply(info.color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+}
+
+impl Crossover {
+    fn d3_path(info: &RenderInfo, canvas: &mut  Group) {
+        canvas.move_to(
+            0.4 * info.m.sw() - 0.5 * w(info), y1s(info)
+        );
+        canvas.line_to(0., 1.5 * w(info));
+        canvas.line_to(
+            -0.4 * info.m.sw() + 0.5 * w(info), y1s(info)
+        );
+        canvas.close_path();
+    }
+
+    fn d4_path(info: &RenderInfo, canvas: &mut  Group) {
+        canvas.move_to(
+            0.7 * x0(info) + 0.5 * w(info), y1s(info)
+        );
+        canvas.line_to(0., 1.5 * w(info));
+        canvas.line_to(
+            0.7 * x1(info) - 0.5 * w(info), y1s(info)
+        );
+        canvas.close_path();
     }
 }
 
@@ -771,17 +824,163 @@ impl DetailRenderMarker for Block {
     fn d3_base(
         &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
     ) {
-        chevron(canvas, 0.4 * info.m.sw(), info.cs, info.m.sh());
+        Self::d3_path(info, canvas);
         canvas.apply(info.color);
-        canvas.fill();
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
     }
 
     fn d4_base(
         &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
     ) {
+        Self::d4_path(info, canvas);
+        canvas.apply(info.color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+}
+
+impl Block {
+    fn d3_path(info: &RenderInfo, canvas: &mut  Group) {
+        canvas.move_to(0.4 * info.m.sw() - 0.5 * w(info), y1s(info));
+        canvas.line_to(0., 1.5 * w(info));
+        canvas.line_to(-0.4 * info.m.sw() + 0.5 * w(info), y1s(info));
+    }
+
+    fn d4_path(info: &RenderInfo, canvas: &mut  Group) {
         canvas.move_to(0.7 * x0(info) + 0.5 * w(info), y1s(info));
         canvas.line_to(0., 1.5 * w(info));
         canvas.line_to(0.7 * x1(info) - 0.5 * w(info), y1s(info));
+    }
+}
+
+
+//------------ HaltJunction --------------------------------------------------
+
+pub struct HaltJunction;
+
+impl DetailRenderMarker for HaltJunction {
+    fn d3_base(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        HaltBlock.d3_base(info, extent, canvas);
+    }
+
+    fn d3_casing(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        HaltBlock.d3_casing(info, extent, canvas);
+    }
+
+    fn d4_base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        HaltBlock::d4_halt(info, canvas);
+        canvas.new_path();
+        Junction.d4_base(info, _extent, canvas);
+    }
+}
+
+
+//------------ HaltCrossover -------------------------------------------------
+
+pub struct HaltCrossover;
+
+impl DetailRenderMarker for HaltCrossover {
+    fn d3_base(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        HaltBlock.d3_base(info, extent, canvas);
+    }
+
+    fn d3_casing(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        HaltBlock.d3_casing(info, extent, canvas);
+    }
+
+    fn d4_base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        HaltBlock::d4_halt(info, canvas);
+        canvas.new_path();
+        Crossover::d4_path(info, canvas);
+        canvas.apply(Color::WHITE);
+        canvas.fill();
+        canvas.apply(info.color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+
+    fn d4_casing(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        HaltBlock::d4_halt_path(info, canvas);
+        Crossover::d4_path(info, canvas);
+        canvas.apply(info.casing_color);
+        canvas.apply_line_width(cw(info));
+        canvas.stroke();
+    }
+}
+
+
+//------------ HaltBlock------------------------------------------------------
+
+pub struct HaltBlock;
+
+impl DetailRenderMarker for HaltBlock {
+    fn d3_base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        canvas.move_to(x0s(info), y0s(info));
+        canvas.line_to(x0s(info), y1s(info));
+        canvas.line_to(0.2 * x0(info), y1s(info));
+        canvas.line_to(0., 0.8 * y1s(info));
+        canvas.line_to(0.2 * x1(info), y1s(info));
+        canvas.line_to(x1s(info), y1s(info));
+        canvas.line_to(x1s(info), y0s(info));
+        canvas.close_path();
+        canvas.apply(info.color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+
+    fn d3_casing(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        halt(info, canvas);
+        canvas.apply(info.casing_color);
+        canvas.apply_line_width(cw(info));
+        canvas.stroke();
+    }
+
+    fn d4_base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        Self::d4_halt(info, canvas);
+        canvas.new_path();
+        Block::d4_path(info, canvas);
+        canvas.apply(Color::WHITE);
+        canvas.fill();
+        canvas.apply(info.color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+}
+
+impl HaltBlock {
+    fn d4_halt_path(info: &RenderInfo, canvas: &mut Group) {
+        let y0 = y0s(info) + 0.1 * info.m.sh();
+        let y1 = y1s(info) - 0.25 * info.m.sh();
+        canvas.move_to(x0s(info), y0);
+        canvas.line_to(x0s(info), y1);
+        canvas.line_to(x1s(info), y1);
+        canvas.line_to(x1s(info), y0);
+        canvas.close_path();
+    }
+
+    fn d4_halt(info: &RenderInfo, canvas: &mut Group) {
+        Self::d4_halt_path(info, canvas);
         canvas.apply(info.color);
         canvas.apply_line_width(w(info));
         canvas.stroke();
@@ -974,6 +1173,12 @@ fn y1(info: &RenderInfo) -> f64 {
 fn w(info: &RenderInfo) -> f64 {
     info.m.station_stroke()
 }
+
+// Casing stroke width.
+fn cw(info: &RenderInfo) -> f64 {
+    2. * info.m.station_stroke()
+}
+
 
 fn x0s(info: &RenderInfo) -> f64 {
     -x1s(info)
