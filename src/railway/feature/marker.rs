@@ -395,15 +395,17 @@ impl<T: DetailRenderMarker> RenderMarker for T {
 
 const MARKERS: &[(&str, &'static dyn RenderMarker)] = &[
     ("bk", &Block),
-    ("h", &Halt),
+    ("dbridge", &Drawbridge),
     ("exst", &ExStation),
     ("gh", &GoodsHalt),
     ("gst", &GoodsStation),
+    ("h", &Halt),
     ("inst", &IslandStation),
     ("jn", &Junction),
     ("opbound", &OperatorBoundary),
     ("ref", &Reference),
     ("sbox", &SignalBox),
+    ("siding", &Siding),
     ("st", &Station),
     ("sst", &ServiceStation),
     ("tuna", &TunnelStart),
@@ -412,14 +414,19 @@ const MARKERS: &[(&str, &'static dyn RenderMarker)] = &[
     ("xo", &Crossover),
 
     ("de.abzw", &Junction),
+    ("de.anst", &Siding),
+    ("de.awanst", &ProtectedSiding),
     ("de.bbf", &ServiceStation),
     ("de.bf", &Station),
+    ("de.bft", &StationPart),
     ("de.bk", &Block),
     ("de.dirgr", &OperatorBoundary),
+    ("de.dkst", &Drawbridge),
     ("de.exbf", &ExStation),
     ("de.gbf", &GoodsStation),
     ("de.hp", &Halt),
     ("de.hp.abzw", &HaltJunction),
+    ("de.hp.bft", &HaltStationPart),
     ("de.hp.bk", &HaltBlock),
     ("de.hp.uest", &HaltCrossover),
     ("de.hst", &Hst),
@@ -742,6 +749,39 @@ impl DetailRenderMarker for GoodsHalt {
 }
 
 
+//------------ StationPart ---------------------------------------------------
+
+pub struct StationPart;
+
+impl DetailRenderMarker for StationPart {
+    fn d3_base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        chevron(canvas, 0.4 * info.m.sw(), info.cs, info.m.sh());
+        canvas.apply(info.color);
+        canvas.fill();
+    }
+
+    fn d4_base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        Self::d4_path(info, canvas);
+        canvas.apply(info.color);
+        canvas.fill();
+    }
+}
+
+impl StationPart {
+    fn d4_path(info: &RenderInfo, canvas: &mut  Group) {
+        canvas.move_to(0., y1(info) + 0.5 * w(info));
+        canvas.line_to(0.75 * x0(info), 0.8 * y1(info));
+        canvas.line_to(0., 0.);
+        canvas.line_to(0.75 * x1(info), 0.8 * y1(info));
+        canvas.close_path();
+    }
+}
+
+
 //------------ Junction ------------------------------------------------------
 
 pub struct Junction;
@@ -758,9 +798,9 @@ impl DetailRenderMarker for Junction {
     fn d4_base(
         &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
     ) {
-        canvas.move_to(0.7 * x0(info), y1s(info));
-        canvas.line_to(0., info.cs);
-        canvas.line_to(0.7 * x1(info), y1s(info));
+        canvas.move_to(0.7 * x0(info), y1(info));
+        canvas.line_to(0., 0.);
+        canvas.line_to(0.7 * x1(info), y1(info));
         canvas.apply(info.color);
         canvas.fill();
     }
@@ -816,6 +856,48 @@ impl Crossover {
 }
 
 
+//------------ Drawbridge ----------------------------------------------------
+
+pub struct Drawbridge;
+
+impl DetailRenderMarker for Drawbridge {
+    fn d3_base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        Self::d3_path(info, canvas);
+        canvas.apply(info.color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+
+    fn d4_base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        Self::d4_path(info, canvas);
+        canvas.apply(info.color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+}
+
+impl Drawbridge {
+    fn d3_path(info: &RenderInfo, canvas: &mut  Group) {
+        canvas.move_to(0.4 * info.m.sw() - 0.5 * w(info), y1s(info));
+        canvas.line_to(0., 1.5 * w(info));
+        canvas.line_to(-0.4 * info.m.sw() + 0.5 * w(info), y1s(info));
+    }
+
+    fn d4_path(info: &RenderInfo, canvas: &mut  Group) {
+        canvas.move_to(0.7 * x0(info) + 0.5 * w(info), y1(info));
+        canvas.line_to(0., 1.5 * w(info));
+        canvas.line_to(0.7 * x1(info) - 0.5 * w(info), y1(info));
+        canvas.move_to(0.35 * x0(info) + 0.5 * w(info), y1(info));
+        canvas.line_to(0., 0.8 * info.m.sh());
+        canvas.line_to(0.35 * x1(info) - 0.5 * w(info), y1(info));
+    }
+}
+
+
 //------------ Block ---------------------------------------------------------
 
 pub struct Block;
@@ -848,9 +930,40 @@ impl Block {
     }
 
     fn d4_path(info: &RenderInfo, canvas: &mut  Group) {
-        canvas.move_to(0.7 * x0(info) + 0.5 * w(info), y1s(info));
+        canvas.move_to(
+            0.7 * x0(info) + 0.5 * w(info), y1(info) -  0.25 * w(info)
+        );
         canvas.line_to(0., 1.5 * w(info));
-        canvas.line_to(0.7 * x1(info) - 0.5 * w(info), y1s(info));
+        canvas.line_to(
+            0.7 * x1(info) - 0.5 * w(info), y1(info) -  0.25 * w(info)
+        );
+    }
+}
+
+
+//------------ HaltStationPart -----------------------------------------------
+
+pub struct HaltStationPart;
+
+impl DetailRenderMarker for HaltStationPart {
+    fn d3_base(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        HaltBlock.d3_base(info, extent, canvas);
+    }
+
+    fn d3_casing(
+        &self, info: &RenderInfo, extent: Option<Point>, canvas: &mut  Group
+    ) {
+        HaltBlock.d3_casing(info, extent, canvas);
+    }
+
+    fn d4_base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        HaltBlock::d4_halt(info, canvas);
+        canvas.new_path();
+        StationPart.d4_base(info, _extent, canvas);
     }
 }
 
@@ -971,7 +1084,7 @@ impl DetailRenderMarker for HaltBlock {
 impl HaltBlock {
     fn d4_halt_path(info: &RenderInfo, canvas: &mut Group) {
         let y0 = y0s(info) + 0.1 * info.m.sh();
-        let y1 = y1s(info) - 0.25 * info.m.sh();
+        let y1 = y1s(info) - 0.2 * info.m.sh();
         canvas.move_to(x0s(info), y0);
         canvas.line_to(x0s(info), y1);
         canvas.line_to(x1s(info), y1);
@@ -984,6 +1097,60 @@ impl HaltBlock {
         canvas.apply(info.color);
         canvas.apply_line_width(w(info));
         canvas.stroke();
+    }
+}
+
+
+//------------ Siding --------------------------------------------------------
+
+pub struct Siding;
+
+impl RenderMarker for Siding {
+    fn base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        Self::path(info, canvas);
+        canvas.apply(info.color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+}
+
+impl Siding {
+    fn path(info: &RenderInfo, canvas: &mut  Group) {
+        let dx = 0.3 * info.m.sw();
+        canvas.move_to(0., 0.);
+        canvas.line_to(0., y1(info));
+        canvas.move_to(dx, y1s(info));
+        canvas.line_to(-dx, y1s(info));
+    }
+}
+
+
+//------------ ProtectedSiding -----------------------------------------------
+
+pub struct ProtectedSiding;
+
+impl RenderMarker for ProtectedSiding {
+    fn base(
+        &self, info: &RenderInfo, _extent: Option<Point>, canvas: &mut  Group
+    ) {
+        Self::path(info, canvas);
+        canvas.apply(info.color);
+        canvas.apply_line_width(w(info));
+        canvas.stroke();
+    }
+}
+
+impl ProtectedSiding {
+    fn path(info: &RenderInfo, canvas: &mut  Group) {
+        let dx = 0.3 * info.m.sw();
+        canvas.move_to(0., 0.);
+        canvas.line_to(0., y1(info));
+        canvas.move_to(dx, y1s(info));
+        canvas.line_to(-dx, y1s(info));
+        canvas.move_to(dx, y1s(info) - 2. * w(info));
+        canvas.line_to(-dx, y1s(info) - 2. * w(info));
     }
 }
 
