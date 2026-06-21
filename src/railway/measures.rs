@@ -142,7 +142,7 @@ impl Measures {
 impl Measures {
     /// The length of a cross-over between two parallel tracks.
     pub fn dl(self) -> f64 {
-        self.dt() * 2./3.
+        0.66 * self.main_offset()
     }
 
     pub fn main_offset(self) -> f64 {
@@ -355,7 +355,7 @@ pub const BASE_D4: Measures = Measures([
     0.9,    // main skip
     0.6,    // light track
     0.6,    // light double
-    1.4,    // light skip
+    0.9,    // light skip
     0.3,    // guide width
     0.4,    // border width
     12.,    // seg              = 6dt
@@ -371,7 +371,7 @@ pub const BASE_D4: Measures = Measures([
     0.8,    // station stroke
 ]);
 
-/// The standard measures for detail level 4.
+/// The standard measures for detail level 5.
 pub const BASE_D5: Measures = Measures([
     2.0,    // dt
     1.2,    // main track
