@@ -228,6 +228,11 @@ impl Railway {
         self.pax
     }
 
+    /// Has the railway explicitely been marked as no passenger?
+    pub fn no_pax(&self) -> bool {
+        matches!(self.pax, Some(Pax::None))
+    }
+
     pub fn gauge(&self) -> Gauge {
         self.gauge.unwrap_or_default()
     }

@@ -272,6 +272,9 @@ struct RenderInfo {
 
     /// The casing color for the marker.
     casing_color: Color,
+
+    /// Is this a “no pax” marker?
+    no_pax: bool,
 }
 
 impl RenderInfo {
@@ -286,6 +289,7 @@ impl RenderInfo {
             color: style.primary_marker_color(class),
             empty_color: Color::WHITE,
             casing_color: style.casing_color(),
+            no_pax: class.no_pax(),
         }
     }
 }
@@ -626,14 +630,21 @@ impl RenderMarker for Halt {
         halt(info, canvas);
         canvas.apply(info.empty_color);
         canvas.fill();
-        if let Some(extent) = extent {
-            canvas.move_to(0., y0s(info));
-            canvas.line_to(0., extent.y);
+        if info.no_pax {
+            canvas.new_path();
+            no_pax_halt(info, canvas);
         }
         canvas.apply(info.color);
         canvas.apply_line_width(w(info));
-        canvas.apply(LineCap::Round);
         canvas.stroke();
+
+        if let Some(extent) = extent {
+            canvas.new_path();
+            canvas.move_to(0., y0s(info));
+            canvas.line_to(0., extent.y);
+            canvas.apply(LineCap::Round);
+            canvas.stroke();
+        }
     }
 
     fn casing(
@@ -1383,6 +1394,32 @@ fn halt(info: &RenderInfo, canvas: &mut Group) {
     canvas.line_to(x1s(info), y1s(info));
     canvas.line_to(x1s(info), y0s(info));
     canvas.close_path();
+}
+
+fn no_pax_halt(info: &RenderInfo, canvas: &mut Group) {
+    let dx = (x1s(info) - x0s(info)) * 0.2;
+    let dy = (y1s(info) - y0s(info)) * 0.2;
+
+    canvas.move_to(x0s(info) + dx, y0s(info));
+    canvas.line_to(x0s(info), y0s(info));
+    canvas.line_to(x0s(info), y0s(info) + dy);
+    canvas.move_to(x0s(info), y0s(info) + 2. * dy);
+    canvas.line_to(x0s(info), y0s(info) + 3. * dy);
+    canvas.move_to(x0s(info), y0s(info) + 4. * dy);
+    canvas.line_to(x0s(info), y1s(info));
+    canvas.line_to(x0s(info) + dx, y1s(info));
+    canvas.move_to(x0s(info) + 2. * dx, y1s(info));
+    canvas.line_to(x0s(info) + 3. * dx, y1s(info));
+    canvas.move_to(x0s(info) + 4. * dx, y1s(info));
+    canvas.line_to(x1s(info), y1s(info));
+    canvas.line_to(x1s(info), y0s(info) + 4. * dy);
+    canvas.move_to(x1s(info), y0s(info) + 3. * dy);
+    canvas.line_to(x1s(info), y0s(info) + 2. * dy);
+    canvas.move_to(x1s(info), y0s(info) + dy);
+    canvas.line_to(x1s(info), y0s(info));
+    canvas.line_to(x0s(info) + 4. * dx, y0s(info));
+    canvas.move_to(x0s(info) + 3. * dx, y0s(info));
+    canvas.line_to(x0s(info) + 2. * dx, y0s(info));
 }
 
 
