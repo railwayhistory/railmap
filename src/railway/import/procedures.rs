@@ -833,7 +833,10 @@ fn line_label(
             },
         )
     );
-    let distance = if scope.min_detail() >= 3 { 3.5 } else { 3. };
+    let mut distance = if scope.min_detail() >= 3 { 3.5 } else { 3. };
+    if args.near {
+        distance *= 0.7
+    }
     let pos2 = args.position.sideways(
         units::dt(if args.left { distance } else { -distance })
     );
@@ -1025,6 +1028,9 @@ struct TextBoxArgs {
 
     /// The text shift distance.
     shift: (Distance, Distance),
+
+    /// Should it be near the line?
+    near: bool,
 }
 
 impl TextBoxArgs {
@@ -1137,6 +1143,8 @@ impl TextBoxArgs {
             return Err(Failed)
         };
 
+        let near = class.take("near");
+
         // box anchor
         let anchor = match Anchor::from_symbols(&mut class) {
             Some(anchor) => anchor,
@@ -1154,7 +1162,7 @@ impl TextBoxArgs {
         let double = class.take("double");
         class.check_exhausted(err)?;
 
-        Ok(Self { left, anchor, properties, double, position, shift })
+        Ok(Self { left, anchor, properties, double, position, shift, near })
     }
 
 }
