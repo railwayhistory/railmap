@@ -730,6 +730,9 @@ pub enum Pax {
     /// There is no passenger service.
     None = 0,
 
+    /// There used to be passenger service.
+    Discontinued,
+
     /// There is heritage passenger service.
     Heritage,
 
@@ -744,6 +747,9 @@ impl Pax {
     fn from_symbols(symbols: &mut SymbolSet) -> Option<Self> {
         if symbols.take("nopax") {
             Some(Pax::None)
+        }
+        else if symbols.take("expax") {
+            Some(Pax::Discontinued)
         }
         else if symbols.take("pax") {
             Some(Pax::Full)
