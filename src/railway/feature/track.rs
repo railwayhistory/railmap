@@ -402,7 +402,7 @@ impl ContourShape2 {
     fn pax_dash(
         class: &TrackClass, outline: &Outline, style: &Style
     ) -> Option<DashPattern<2>> {
-        // For historical reasons, an missing explicit pax defaults to no pax
+        // For historical reasons, a missing explicit pax defaults to no pax
         // for open lines and full pax for closed ones.
         if class.class.status().is_open() {
             if class.class.pax().is_full() {
@@ -415,7 +415,9 @@ impl ContourShape2 {
             }
         }
 
-        if matches!(class.class.pax(), Pax::None) {
+        if matches!(class.class.pax(), Pax::None)
+            || matches!(class.class.pax(), Pax::Discontinued)
+        {
             calc_seg(outline, style.measures().seg() * 0.125).map(|dist| {
                 DashPattern::new([dist * 0.7, dist * 0.3], dist * 0.35)
             })
@@ -817,7 +819,9 @@ impl ContourShape4 {
 
         let seg = calc_seg(outline, style.measures().seg());
 
-        if matches!(class.class.pax(), Pax::None) {
+        if matches!(class.class.pax(), Pax::None)
+            || matches!(class.class.pax(), Pax::Discontinued)
+        {
             let dist = match seg {
                 Some(seg) => seg / NO_PAX_DASH_RATIO,
                 None => {
