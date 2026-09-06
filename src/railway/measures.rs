@@ -275,12 +275,12 @@ impl ops::MulAssign<f64> for Measures {
 /// The standard measures for detail level 0.
 pub const BASE_D0: Measures = Measures([
     2.0,    // dt
-    1.1,    // main track
-    1.6,    // main double
-    0.4,    // main skip
-    0.7,    // light track
-    1.2,    // light double
-    0.3,    // light skip
+    0.6,    // main track
+    1.0,    // main double
+    0.2,    // main skip
+    0.4,    // light track
+    1.0,    // light double
+    0.2,    // light skip
     0.3,    // guide width
     0.4,    // border width
     12.,    // seg              = 6dt
@@ -376,7 +376,7 @@ pub const BASE_D5: Measures = Measures([
     2.0,    // dt
     1.2,    // main track
     1.2,    // main double
-    1.8,    // main skip
+    3.5,    // main skip
     0.8,    // light track
     0.8,    // light double
     1.2,    // light skip
