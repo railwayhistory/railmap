@@ -276,6 +276,30 @@ impl ops::MulAssign<f64> for Measures {
 pub const BASE_D0: Measures = Measures([
     2.0,    // dt
     0.6,    // main track
+    0.6,    // main double
+    0.2,    // main skip
+    0.4,    // light track
+    0.4,    // light double
+    0.2,    // light skip
+    0.3,    // guide width
+    0.4,    // border width
+    12.,    // seg              = 6dt
+    6.,     // sw               = 3dt
+    5.5,    // sh
+    3.7,    // insh
+    5.,     // xsmall font
+    6.,     // small font
+    7.,     // medium font
+    9.,     // large font
+    11.,    // xlarge font
+    5.4,    // badge font
+    0.9,    // station stroke
+]);
+
+/// The standard measures for detail level 1.
+pub const BASE_D1: Measures = Measures([
+    2.0,    // dt
+    0.6,    // main track
     1.0,    // main double
     0.2,    // main skip
     0.4,    // light track
@@ -295,9 +319,6 @@ pub const BASE_D0: Measures = Measures([
     5.4,    // badge font
     0.9,    // station stroke
 ]);
-
-/// The standard measures for detail level 1.
-pub const BASE_D1: Measures = BASE_D0;
 
 /// The standard measures for detail level 2.
 pub const BASE_D2: Measures = Measures([
@@ -331,7 +352,7 @@ pub const BASE_D3: Measures = Measures([
     0.4,    // main skip
     0.8,    // light track
     1.6,    // light double
-    0.3,    // light skip
+    0.4,    // light skip
     0.3,    // guide width
     0.4,    // border width
     9.0,   // seg

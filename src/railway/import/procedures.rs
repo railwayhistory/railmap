@@ -339,16 +339,17 @@ const PROCEDURES: &[(
     //   anchored.
     ("line_label", &|pos, args, scope, err| {
         let (args, layout) = TextBoxArgs::from_args(args, scope, err)?;
+        let detail = scope.detail(pos, err)?;
         let (contour, label) = line_label(args, layout, scope);
         scope.builtin().with_store(|store| {
             store.line_labels.insert(
                 contour,
-                scope.detail(pos, err)?,
+                detail,
                 scope.layer(),
             );
             store.line_labels.insert(
                 label,
-                scope.detail(pos, err)?,
+                detail,
                 scope.layer(),
             );
             Ok(())
